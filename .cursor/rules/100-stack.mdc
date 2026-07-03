@@ -1,0 +1,49 @@
+---
+description: De vastgelegde stack en versiebeleid. Altijd van toepassing.
+globs:
+alwaysApply: true
+---
+
+# Stack — vastgelegd (peildatum 2 juli 2026)
+
+Deze lijst is de bron van waarheid voor welke tools we gebruiken. De versies zijn wat
+actueel was op de peildatum, **geen harde pin**: verifieer de laatste stabiele versie
+vóór installeren of upgraden (web search aan). Wijk niet af van de *keuze* van tool
+zonder dit bestand bij te werken.
+
+## Gereedschap
+- TypeScript (strict) · Turborepo v2.x · pnpm 11.x
+- Node.js **22.13+** (minimum van Mastra 1.x)
+
+## App-laag
+- Next.js 16 · React · Tailwind · shadcn/ui
+- Next.js is UI + API-gateway + streaming. GEEN agent-/businesslogica in route-handlers.
+
+## Brein
+- Mastra `@mastra/core` 1.47.x — orkestratie, achter een eigen naad (zie 500-agents).
+- Vercel AI SDK (`ai`) — **via de versie die Mastra ondersteunt**, niet zelfstandig upgraden.
+- Mistral als default-LLM (soeverein).
+
+## Kennis / RAG
+- PostgreSQL: **Scalingo managed Postgres** + pgvector 0.8.2 (+ PostgreSQL Anonymizer).
+- Embeddings: **Scaleway Generative APIs** (EU). Kandidaten: `qwen3-embedding-8b` @ 2000 dim
+  (Scaleway's eigen pgvector-aanbeveling) of `bge-multilingual-gemma2`. Definitieve keuze
+  volgt uit de bake-off op echte NL CAO-tekst (zie 400-data-rag).
+- Drizzle als enige DB-toegang. Reranker later (naad open laten).
+
+## Runtime-safety
+- Zod op elke grens · typed tool contracts (zie 300-typescript).
+
+## Toezicht & toegang
+- Langfuse EU Cloud (tracing verplicht). Auth.js of geen auth voor de publieke demo.
+- Object storage: Scaleway/OVH (S3-compatibel).
+
+## Landmijn: AI SDK 7
+
+AI SDK 7 is eind juni 2026 uitgekomen — dagen oud. **Mastra bepaalt welke AI-SDK-versie
+compatibel is.** Adopteer v7 NIET los van Mastra. Pin de AI-SDK-versie op wat Mastra's
+peer-dependency vraagt; upgrade pas als Mastra v7 officieel ondersteunt.
+
+## Versiebeleid
+Voor élke install/upgrade: check de actuele stabiele versie en Mastra-compatibiliteit.
+Pin geen dagenoude majors in een walking skeleton. Werk dit bestand bij bij een keuze-wijziging.

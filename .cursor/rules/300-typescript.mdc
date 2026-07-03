@@ -1,0 +1,27 @@
+---
+description: TypeScript-strictheid en runtime-contracten met Zod.
+globs: **/*.ts,**/*.tsx
+alwaysApply: false
+---
+
+# TypeScript & contracten
+
+## Strict, geen ontsnappingsluiken
+- `strict: true` overal. Geen `any` — gebruik `unknown` en narrow expliciet.
+- Geen `@ts-ignore`/`@ts-expect-error` zonder een regel commentaar met de reden.
+- Geen non-null `!` op onzekere waarden; valideer in plaats daarvan.
+
+## Zod op elke grens (runtime-safety, niet alleen compile-time)
+Valideer met Zod op álle grenzen waar data binnenkomt of buitengaat:
+- API route-inputs én -outputs.
+- Agent-tool inputs én outputs (typed tool contracts).
+- Antwoorden van externe API's (Mistral, Scaleway, LMS-webhooks).
+- Environment variables (parse `process.env` één keer via een Zod-schema, exporteer typed config).
+
+## Types afleiden, niet dupliceren
+- Leid TypeScript-types af uit Zod-schemas (`z.infer`) en uit Drizzle-schema-inference.
+- Eén bron van waarheid per contract; geen handmatig bijgehouden parallelle interfaces.
+
+## Waarom
+AI-gegenereerde code en LLM-outputs zijn de grootste bron van runtime-verrassingen.
+Compile-time typing vangt dat niet; Zod wel. Dit is niet optioneel.

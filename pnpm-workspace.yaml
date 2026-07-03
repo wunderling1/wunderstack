@@ -1,0 +1,11 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "scripts/*"
+
+# Approve native build scripts (pnpm 11 blocks unapproved builds).
+# - sharp: Next.js image-optimization dependency (prebuilt binaries).
+# - esbuild: used by drizzle-kit to load the TypeScript schema; needs its native binary.
+onlyBuiltDependencies:
+  - sharp
+  - esbuild

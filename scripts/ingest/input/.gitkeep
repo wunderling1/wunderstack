@@ -1,0 +1,3 @@
+# Drop CAO source files here (.pdf, .txt, .md) and run:
+#   pnpm --filter @wunderstack/ingest ingest --fund <fund> --version <v>
+# This directory is the default ingestion source. A runnable example lives in ../sample.

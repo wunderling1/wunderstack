@@ -1,0 +1,24 @@
+{
+  "name": "@wunderstack/ingest",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "ingest": "tsx --env-file-if-exists=../../.env run.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@wunderstack/ai": "workspace:*",
+    "@wunderstack/db": "workspace:*",
+    "@wunderstack/shared": "workspace:*",
+    "unpdf": "1.6.2",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.0",
+    "eslint": "10.6.0",
+    "tsx": "4.22.4",
+    "typescript": "6.0.3"
+  }
+}

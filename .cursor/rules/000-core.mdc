@@ -1,0 +1,58 @@
+---
+description: Kernmissie, scope-discipline en harde grenzen. Altijd van toepassing.
+globs:
+alwaysApply: true
+---
+
+# Kern — waarom deze codebase bestaat
+
+Dit is **Wunderstack** — de agent-infrastructuur van een AI-boutique voor Nederlandse
+O&O fondsen. Losstaand van Qonvo, BullyLink en The Bully Agency — koppelbaar, niet verweven.
+Eerste agent: de **CAO-agent** (RAG over CAO-teksten). Doel: een catalogus van
+fonds-overstijgende agents die je één keer bouwt en per fonds configureert.
+
+## Taal & naamgeving (hard)
+
+- **Alle code is Engels**: identifiers, functie-/variabele-/typenamen, bestands- en
+  mapnamen, code-commentaar, commit-messages en package-namen. Geen Nederlandse termen
+  in code, ook niet vernederlandst (`getCaoAntwoord` → `getCaoAnswer`).
+- Package-namen zijn gescoped onder **`@wunderstack/*`** (bv. map `packages/db` →
+  package `@wunderstack/db`).
+- Nederlands mag alleen in: product-/domeindocumentatie, gesprekken en user-facing tekst
+  (de agent antwoordt de eindgebruiker in het Nederlands). De domeinterm "CAO" blijft CAO.
+
+## Scope van v1 — walking skeleton
+
+v1 is een **walking skeleton, geen platform**. Bouw de platform-primitives, maar
+bewijs ze meteen door de CAO-agent er end-to-end doorheen te draaien: vraag → retrieve
+→ (rerank later) → LLM → gestreamd antwoord, met tracing.
+
+- Bouw GEEN abstractie voordat een tweede echte usecase hem afdwingt (regel van drie).
+- De demo is **single-tenant**. Multi-tenancy pas bouwen als een fonds getekend heeft.
+- Klaar = de CAO-agent werkt live in de demo, getraceerd en getest. Niet: "het platform is af".
+
+## Leidend principe — naden, geen systemen
+
+Elke externe afhankelijkheid zit achter een **dunne eigen interface**, zodat hij later
+wisselbaar is. Maar bouw de zware systemen die je "ooit" nodig hebt NU niet. Een naad is
+goedkoop; een systeem is DevOps-last en kosten. Kies altijd de naad.
+
+## Soevereiniteit — hard, niet onderhandelbaar
+
+Het **default request-pad blijft EU-soeverein**. Geen US-provider in het standaard data-
+of inferentie-pad.
+- Fondsdata gaat NOOIT by default naar een niet-EU-model. Een fallback die stilletjes
+  CAO-data naar een US-model routeert = compliance-breuk = verboden.
+- Niet-EU-modellen mogen alleen achter een expliciete, niet-default, opt-in vlag, en
+  nooit voor fondsdata.
+
+## Bewust NIET in v1 (vraag eerst als je dit wilt toevoegen)
+
+Temporal · LangGraph · losse agent-runtime-service · interne AI-gateway-service ·
+multi-tenancy · Supabase Auth/RLS/Realtime · Inngest (Mastra-workflows volstaan) ·
+zware business-logica in Next.js route-handlers.
+
+## Ask-before-adding
+
+Een nieuwe dependency, service, provider of architectuurlaag toevoegen? Motiveer eerst
+expliciet tegen deze regels. Bij twijfel: stel de vraag, bouw niet.

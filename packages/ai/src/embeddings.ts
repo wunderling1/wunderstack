@@ -1,0 +1,93 @@
+import { env } from "@wunderstack/shared";
+import { z } from "zod";
+
+/**
+ * The single seam for embeddings, via Scaleway Generative APIs (EU, OpenAI-compatible).
+ *
+ * Returns the vectors together with the {model, dim, version} triple that the db layer
+ * stores per chunk, so a re-embed is always detectable (see .cursor/rules/400-data-rag.mdc).
+ * The definitive model + dimension are decided by the Fase 3 bake-off; this seam stays
+ * model-agnostic until then.
+ */
+
+export interface EmbedInput {
+  texts: string[];
+  /** Scaleway model id, e.g. "bge-multilingual-gemma2" or "qwen3-embedding-8b". */
+  model: string;
+  /**
+   * Requested output dimension. Only honoured by Matryoshka models (qwen3-embedding-8b);
+   * Scaleway recommends 2000 for pgvector hnsw/ivfflat indexes.
+   */
+  dimensions?: number;
+  /** Our own embedding-config version tag, stored per vector. */
+  version?: string;
+}
+
+export interface EmbeddingResult {
+  embeddings: number[][];
+  model: string;
+  dim: number;
+  version: string;
+}
+
+export const DEFAULT_EMBEDDING_VERSION = "1";
+
+const SCALEWAY_EMBEDDINGS_URL = "https://api.scaleway.ai/v1/embeddings";
+
+const embeddingResponseSchema = z.object({
+  model: z.string(),
+  data: z
+    .array(
+      z.object({
+        index: z.number(),
+        embedding: z.array(z.number()),
+      }),
+    )
+    .min(1),
+});
+
+export async function embed(input: EmbedInput): Promise<EmbeddingResult> {
+  if (input.texts.length === 0) {
+    throw new Error("embed() requires at least one text.");
+  }
+  if (!env.SCALEWAY_API_KEY) {
+    throw new Error("SCALEWAY_API_KEY is not set (see .env.example).");
+  }
+
+  const response = await fetch(SCALEWAY_EMBEDDINGS_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${env.SCALEWAY_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: input.model,
+      input: input.texts,
+      ...(input.dimensions === undefined ? {} : { dimensions: input.dimensions }),
+    }),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Scaleway embeddings request failed (${String(response.status)}): ${detail}`);
+  }
+
+  const payload: unknown = await response.json();
+  const parsed = embeddingResponseSchema.parse(payload);
+
+  // Preserve input order regardless of the order Scaleway returns.
+  const ordered = [...parsed.data].sort((a, b) => a.index - b.index);
+  const embeddings = ordered.map((entry) => entry.embedding);
+
+  const [first] = embeddings;
+  if (!first) {
+    throw new Error("Scaleway returned no embeddings.");
+  }
+
+  return {
+    embeddings,
+    model: parsed.model,
+    dim: first.length,
+    version: input.version ?? DEFAULT_EMBEDDING_VERSION,
+  };
+}

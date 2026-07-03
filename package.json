@@ -1,0 +1,24 @@
+{
+  "name": "wunderstack",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "depcruise": "depcruise apps packages",
+    "bake-off": "pnpm --filter @wunderstack/bake-off bake-off"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "22.20.0",
+    "dependency-cruiser": "18.0.0",
+    "eslint": "10.6.0",
+    "turbo": "2.10.2",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.62.1"
+  }
+}

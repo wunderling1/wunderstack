@@ -1,0 +1,39 @@
+---
+description: Mastra achter een naad, Supervisor-pattern, tracing, soevereine model-routing en evals.
+globs: packages/agents/**,packages/ai/**
+alwaysApply: false
+---
+
+# Agents & modellen
+
+## Mastra is een implementatiedetail achter een naad
+- App-, RAG- en API-code importeren **jouw** agent-interface uit `packages/agents`,
+  nooit Mastra direct. Mastra-imports leven alleen binnen `packages/agents`.
+- Moet Mastra ooit gewisseld worden (het is jong, breaking changes komen voor), dan
+  verandert alleen dit package. Dat is je bescherming tegen framework-risico — niet een
+  zwaarder framework.
+
+## Multi-agent
+- Gebruik Mastra's first-class **Supervisor-pattern**. Gebruik NIET de deprecated
+  `AgentNetwork` / `.network()`.
+
+## Tool-contracten
+- Elke agent-tool heeft een expliciet Zod input/output-schema.
+- Elke side-effect-tool (schrijven, versturen, extern aanroepen) vereist een
+  human-in-the-loop/approval-stap.
+
+## Model-toegang & soevereiniteit
+- Alle modelaanroepen lopen via de abstractie in `packages/ai`. Geen directe provider-
+  calls elders.
+- Default = Mistral (soeverein). Routing/fallback mag alleen achter expliciete config.
+- **Fondsdata gaat nooit by default naar een niet-EU-model.** Een fallback die CAO-data
+  stilletjes naar een US-model stuurt = verboden. Bouw de routing-naad wél, maar houd het
+  default-pad soeverein-by-design.
+
+## Observability — verplicht
+- Langfuse-tracing op elke agent-, model- en retrieval-call. Geen ongetracete modelcalls.
+
+## Evals — vanaf dag één
+- Houd een klein eval-setje CAO-vraag/antwoord bij (start = de bake-off-harness).
+- Draai het vóór elke wijziging aan prompts, retrieval of model. Een accuratesse-regressie
+  blokkeert release. Reranking/betere modellen bewijzen zich hier, niet op gevoel.

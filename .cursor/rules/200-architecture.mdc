@@ -1,0 +1,47 @@
+---
+description: Monorepo-structuur, importgrenzen, control-plane/data-plane en koppelvlak. Altijd van toepassing.
+globs:
+alwaysApply: true
+---
+
+# Architectuur
+
+## Monorepo
+Eén repo voor de boutique (los van Qonvo/BullyLink/Bully Agency). Turborepo + pnpm workspaces.
+
+Voorgestelde layout:
+```
+apps/
+  demo/            # Next.js: demo-UI, embeddable widget, REST/webhook API
+  _template/       # scaffold voor toekomstige apps (pas bouwen bij 2e app)
+packages/
+  ai/              # model-abstractie (de naad naar Mistral e.a.)
+  agents/          # agent-definities achter een eigen interface (Mastra erin verstopt)
+  rag/             # retrieval-pipeline (retrieve → [rerank later] → assemble)
+  db/              # Drizzle schema + client (enige DB-toegang)
+  shared/          # types, Zod-schemas, utils
+```
+Package-namen zijn gescoped onder `@wunderstack/*` (map `packages/db` → package
+`@wunderstack/db`). Map- en bestandsnamen en alle code zijn Engels; zie `000-core.mdc`.
+
+## Pijl-regel (hard, CI-afgedwongen)
+`apps/*` importeren uit `packages/*`, NOOIT andersom. Packages importeren niet uit apps.
+Handhaving: ESLint `no-restricted-imports` + dependency-cruiser in CI. Een overtreding
+faalt de build.
+
+## Regel van drie
+Promoveer code pas naar een gedeeld package na de **derde** herhaling. Niet eerder
+abstraheren — speculatieve abstractie is de vijand van het walking skeleton.
+
+## Control-plane vs data-plane (dit maakt agents "centraal onderhoudbaar")
+- **Agent-definities = code**, gehversioneerd, centraal onderhouden. Dit is de moat.
+- **Fonds-configuratie = data**, per fonds. Nooit fonds-specifieke waarden in agent-code
+  hardcoden. Een nieuwe agent bouw je één keer; per fonds configureer je hem via data.
+
+## Koppelvlak naar de kanalen van het fonds
+Alleen via: (a) embeddable widget (script/iframe) en (b) REST API + webhooks.
+De infra koppelt NIET in je eigen sites. Alle externe toegang loopt via de API van `apps/demo`.
+
+## Next.js-rol
+UI + API-entrypoint + streaming. Route-handlers zijn dunne controllers: valideren (Zod),
+delegeren naar `packages/*`, streamen terug. Geen retrieval-, agent- of modellogica in routes.

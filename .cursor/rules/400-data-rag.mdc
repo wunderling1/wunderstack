@@ -1,0 +1,36 @@
+---
+description: Databasetoegang, migraties, embeddings en RAG-conventies.
+globs: packages/db/**,packages/rag/**
+alwaysApply: false
+---
+
+# Data & RAG
+
+## Drizzle is de enige DB-toegang
+- Alle databasetoegang loopt via `packages/db`. Geen losse `pg`-clients elders, geen
+  provider-client die naar apps lekt. `packages/db` exporteert de client + het schema.
+- Dit is de naad die van database wisselen goedkoop houdt.
+
+## Migraties
+- Via Drizzle Kit, ingecheckt in de repo, gereviewd. Geen handmatige DDL op de DB.
+- Postgres = Scalingo managed (pgvector 0.8.2).
+
+## Embeddings — de enige bijna-onomkeerbare keuze
+- Pin **één embeddingmodel + één dimensie**, vastgelegd in config, niet los verspreid.
+- Sla bij elke vector het **modelnaam + dimensie + versie** op. Zo is een re-embed-
+  migratie detecteerbaar en expliciet.
+- Model of dimensie wijzigen = **volledige re-embed** + index-wijziging. Behandel dit als
+  een major, bewuste operatie — nooit terloops.
+- Definitieve keuze (`qwen3-embedding-8b` @ 2000 dim vs `bge-multilingual-gemma2`) komt uit
+  de **bake-off op echte NL CAO-tekst** (semantische recall op juridische taal). Kies op
+  meetbare retrieval-kwaliteit, met soevereiniteit als harde randvoorwaarde — niet op gevoel.
+
+## Retrieval-pipeline
+- Structuur: `retrieve → [rerank later] → assemble`. Laat de rerank-stap als expliciete,
+  nu-lege naad staan zodat `bge-reranker-v2-m3` (of alternatief) er later in schuift.
+- Accuratesse is existentieel voor de CAO-agent: elke retrieval moet traceerbaar zijn
+  (welke chunks, welke scores) via Langfuse.
+
+## Ingestion = de enige background-job in v1
+- Corpus inladen + embedden mag async (simpele queue/worker). Prima hier.
+- Generaliseer async NIET naar het chat-pad. De chat-runtime blijft request/response.
