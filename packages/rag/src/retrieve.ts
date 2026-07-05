@@ -1,6 +1,7 @@
 import { embed } from "@wunderstack/ai";
 import { chunks, cosineDistance, documents, eq, getDb, sql } from "@wunderstack/db";
 import { EMBEDDING_CONFIG } from "@wunderstack/shared";
+import { requireRerankConfig } from "@wunderstack/shared";
 import { z } from "zod";
 
 /**
@@ -14,8 +15,13 @@ import { z } from "zod";
 
 export const retrieveInputSchema = z.object({
   query: z.string().min(1, "query must not be empty"),
-  /** How many chunks to fetch as candidate context. */
-  topK: z.number().int().positive().max(50).default(8),
+  /**
+   * How many chunks to fetch from pgvector as rerank candidates. Defaults to the pinned
+   * RERANK_CONFIG.candidateK (20). The rerank step trims to `topK`.
+   */
+  candidateK: z.number().int().positive().max(50).optional(),
+  /** How many chunks to keep after reranking (fed to assemble). Defaults to RERANK_CONFIG.topK (5). */
+  topK: z.number().int().positive().max(50).optional(),
   /** Restrict to a single O&O fund's CAO (control/data-plane key). Omit to search all. */
   fund: z.string().min(1).optional(),
   /**
@@ -27,6 +33,8 @@ export const retrieveInputSchema = z.object({
 });
 
 export type RetrieveInput = z.input<typeof retrieveInputSchema>;
+/** Input after Zod parsing (defaults applied). The pipeline passes this to avoid re-parsing. */
+export type ParsedRetrieveInput = z.output<typeof retrieveInputSchema>;
 
 export interface RetrievedChunkSource {
   documentId: string;
@@ -66,13 +74,25 @@ async function embedQuery(query: string): Promise<number[]> {
 }
 
 export async function retrieve(input: RetrieveInput): Promise<RetrievedChunk[]> {
-  const { query, topK, fund, minScore } = retrieveInputSchema.parse(input);
+  return retrieveValidated(retrieveInputSchema.parse(input));
+}
+
+/**
+ * Retrieval on already-validated input. `retrieveContext` (index.ts) calls this directly so the
+ * pipeline parses the input exactly once; the public `retrieve` above validates then delegates here.
+ */
+export async function retrieveValidated(input: ParsedRetrieveInput): Promise<RetrievedChunk[]> {
+  const { query, fund, minScore } = input;
+  const config = requireRerankConfig();
+  const candidateK = input.candidateK ?? config.candidateK;
   const queryVector = await embedQuery(query);
   const db = getDb();
 
   // pgvector cosine distance = 1 - cosine similarity (0 = identical). The 4096-dim column has
   // no ANN index (exceeds pgvector's 2000-dim limit, see schema.ts), so this is an exact scan
-  // ordered by distance ascending.
+  // ordered by distance ascending: cost grows linearly with the corpus. Fine for the demo; a
+  // larger corpus needs a re-embed to <=2000 dim (or a dim-reduction step) to enable an hnsw index
+  // — a deliberate re-embed migration, not a silent change (see .cursor/rules/400-data-rag.mdc).
   const distance = cosineDistance(chunks.embedding, queryVector);
 
   const rows = await db
@@ -92,7 +112,7 @@ export async function retrieve(input: RetrieveInput): Promise<RetrievedChunk[]> 
     .innerJoin(documents, eq(chunks.documentId, documents.id))
     .where(fund === undefined ? undefined : eq(documents.fund, fund))
     .orderBy(distance)
-    .limit(topK);
+    .limit(candidateK);
 
   return rows
     .map((row) => ({

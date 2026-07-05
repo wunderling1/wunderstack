@@ -6,6 +6,9 @@
     },
     "lint": {
       "dependsOn": ["^lint"]
+    },
+    "test": {
+      "env": ["SCALEWAY_API_KEY", "MISTRAL_API_KEY"]
     }
   }
 }

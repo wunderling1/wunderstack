@@ -1,10 +1,14 @@
 export {
   DEFAULT_LLM_MODEL,
   generateText,
+  getModelPricing,
+  listModelPricing,
   type ChatMessage,
   type ChatRole,
   type GenerateTextInput,
   type GenerateTextResult,
+  type ModelPriceEntry,
+  type ModelPricing,
   type TokenUsage,
 } from "./models.js";
 
@@ -14,3 +18,10 @@ export {
   type EmbedInput,
   type EmbeddingResult,
 } from "./embeddings.js";
+
+export {
+  rerankDocuments,
+  type RerankInput,
+  type RerankResult,
+  type RerankResultItem,
+} from "./rerank.js";

@@ -30,3 +30,13 @@ jobs:
 
       - name: Depcruise (arrow rule)
         run: pnpm depcruise
+
+      # Quality gate: blocks prompt/retrieval/answer regressions (Fase 9).
+      # SCALEWAY_API_KEY enables Gate B (retrieval + rerank); MISTRAL_API_KEY enables Gate C
+      # (answer-level LLM-judge). On forks without secrets, Gate A still runs.
+      # See packages/agents/src/evals/cao.eval.ts.
+      - name: Eval (accuracy gate)
+        run: pnpm turbo run test
+        env:
+          SCALEWAY_API_KEY: ${{ secrets.SCALEWAY_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}

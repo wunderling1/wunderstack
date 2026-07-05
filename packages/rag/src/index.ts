@@ -1,21 +1,23 @@
-// @wunderstack/rag — retrieval pipeline: retrieve -> rerank (no-op seam) -> assemble.
-// See PLAN.md Fase 5 and .cursor/rules/400-data-rag.mdc.
+// @wunderstack/rag — retrieval pipeline: retrieve -> rerank -> assemble.
+// See PLAN.md Fase 5 and PLAN-v2.md Fase 9.
+
+import { requireRerankConfig } from "@wunderstack/shared";
 
 import { assemble, type AssembledContext } from "./assemble.js";
 import { rerank } from "./rerank.js";
-import { retrieve, retrieveInputSchema, type RetrieveInput } from "./retrieve.js";
+import { retrieveInputSchema, retrieveValidated, type RetrieveInput } from "./retrieve.js";
 
 /**
  * Run the full RAG retrieval pipeline for a query and return prompt-ready context + sources.
  *
- * retrieve (pgvector top-k) -> rerank (identity for now) -> assemble (context + citations).
- * The rerank step is a no-op seam today; a real reranker slots in without touching this call
- * site (see rerank.ts).
+ * retrieve (pgvector candidate pool) -> rerank (Scaleway sovereign) -> assemble (context + citations).
  */
 export async function retrieveContext(input: RetrieveInput): Promise<AssembledContext> {
   const parsed = retrieveInputSchema.parse(input);
-  const retrieved = await retrieve(parsed);
-  const reranked = await rerank({ query: parsed.query, chunks: retrieved, topK: parsed.topK });
+  const config = requireRerankConfig();
+  const topK = parsed.topK ?? config.topK;
+  const retrieved = await retrieveValidated(parsed);
+  const reranked = await rerank({ query: parsed.query, chunks: retrieved, topK });
   return assemble(reranked);
 }
 

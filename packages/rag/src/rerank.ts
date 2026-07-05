@@ -1,23 +1,64 @@
+import { rerankDocuments } from "@wunderstack/ai";
+import { requireRerankConfig } from "@wunderstack/shared";
+
 import type { RetrievedChunk } from "./retrieve.js";
 
 /**
- * Rerank step of the RAG pipeline — deliberately a **pass-through (identity)** for now.
+ * Rerank step of the RAG pipeline — reorders retrieval candidates by relevance.
  *
- * This is the open seam the rules require (see 400-data-rag.mdc): a real cross-encoder such as
- * `bge-reranker-v2-m3` slots in here later without changing the pipeline shape. It stays async
- * so swapping in a network-backed reranker does not change any call site.
+ * Calls Scaleway's sovereign `/v1/rerank` endpoint via @wunderstack/ai. On failure or when
+ * reranking is disabled, falls back to the retrieval order (identity) so the pipeline keeps
+ * working. A future cross-encoder slots in behind the same seam.
  */
 
 export interface RerankInput {
-  /** The original user query — unused by the identity reranker, kept for the future contract. */
   query: string;
   chunks: RetrievedChunk[];
-  /** Optionally trim to the top-N after reranking. */
+  /** How many chunks to keep after reranking. */
   topK?: number;
 }
 
 export async function rerank(input: RerankInput): Promise<RetrievedChunk[]> {
-  // Identity: preserve the retrieval order. A future reranker reorders by relevance here.
+  const config = requireRerankConfig();
+  const topK = input.topK ?? config.topK;
   const ranked = input.chunks;
-  return typeof input.topK === "number" ? ranked.slice(0, input.topK) : ranked;
+
+  if (ranked.length === 0) {
+    return ranked;
+  }
+
+  if (!config.enabled || ranked.length === 1) {
+    return ranked.slice(0, topK);
+  }
+
+  try {
+    const result = await rerankDocuments({
+      query: input.query,
+      documents: ranked.map((chunk) => chunk.content),
+      topN: topK,
+      model: config.model,
+    });
+
+    const reranked = result.results
+      .map((entry) => {
+        const chunk = ranked[entry.index];
+        if (!chunk) {
+          return undefined;
+        }
+        return {
+          ...chunk,
+          score: entry.relevanceScore,
+        };
+      })
+      .filter((chunk): chunk is RetrievedChunk => chunk !== undefined);
+
+    if (reranked.length === 0) {
+      return ranked.slice(0, topK);
+    }
+
+    return reranked;
+  } catch {
+    // Provider unavailable or misconfigured — preserve retrieval order rather than fail the agent.
+    return ranked.slice(0, topK);
+  }
 }
