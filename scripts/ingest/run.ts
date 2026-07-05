@@ -108,6 +108,16 @@ interface FileOutcome {
   sourceUri: string;
   status: "created" | "updated" | "unchanged" | "dry-run";
   chunkCount: number;
+  tableChunks: number;
+  structuredChunks: number;
+  sampleRefs: string[];
+}
+
+function summarize(pieces: Chunk[]): Pick<FileOutcome, "tableChunks" | "structuredChunks" | "sampleRefs"> {
+  const tableChunks = pieces.filter((piece) => piece.chunkType === "table").length;
+  const structuredChunks = pieces.filter((piece) => piece.sourceRef !== null).length;
+  const sampleRefs = [...new Set(pieces.map((piece) => piece.sourceRef).filter((ref): ref is string => ref !== null))].slice(0, 5);
+  return { tableChunks, structuredChunks, sampleRefs };
 }
 
 async function ingestFile(options: CliOptions, filePath: string): Promise<FileOutcome> {
@@ -116,9 +126,10 @@ async function ingestFile(options: CliOptions, filePath: string): Promise<FileOu
   const text = await parseFile(filePath);
   const contentHash = sha256(text);
   const pieces = chunk(text, chunkOptionsFromEnv());
+  const summary = summarize(pieces);
 
   if (options.dryRun) {
-    return { sourceUri, status: "dry-run", chunkCount: pieces.length };
+    return { sourceUri, status: "dry-run", chunkCount: pieces.length, ...summary };
   }
   if (pieces.length === 0) {
     throw new Error(`No chunks produced for ${filePath}; nothing to ingest.`);
@@ -132,7 +143,7 @@ async function ingestFile(options: CliOptions, filePath: string): Promise<FileOu
     .limit(1);
 
   if (existing[0]?.contentHash === contentHash) {
-    return { sourceUri, status: "unchanged", chunkCount: pieces.length };
+    return { sourceUri, status: "unchanged", chunkCount: pieces.length, ...summary };
   }
   const isUpdate = existing.length > 0;
 
@@ -172,6 +183,11 @@ async function ingestFile(options: CliOptions, filePath: string): Promise<FileOu
         documentId: document.id,
         ordinal: piece.ordinal,
         content: piece.content,
+        chapter: piece.chapter,
+        article: piece.article,
+        lid: piece.lid,
+        sourceRef: piece.sourceRef,
+        chunkType: piece.chunkType,
         metadata: piece.metadata,
         embedding,
         embeddingModel: EMBEDDING_CONFIG.model,
@@ -185,7 +201,7 @@ async function ingestFile(options: CliOptions, filePath: string): Promise<FileOu
     }
   });
 
-  return { sourceUri, status: isUpdate ? "updated" : "created", chunkCount: pieces.length };
+  return { sourceUri, status: isUpdate ? "updated" : "created", chunkCount: pieces.length, ...summary };
 }
 
 async function main(): Promise<void> {
@@ -205,7 +221,13 @@ async function main(): Promise<void> {
 
   for (const file of files) {
     const outcome = await ingestFile(options, file);
-    console.log(`  ${outcome.status.padEnd(9)} ${outcome.sourceUri} (${String(outcome.chunkCount)} chunks)`);
+    console.log(
+      `  ${outcome.status.padEnd(9)} ${outcome.sourceUri} (${String(outcome.chunkCount)} chunks, ` +
+        `${String(outcome.tableChunks)} table, ${String(outcome.structuredChunks)} with sourceRef)`,
+    );
+    if (outcome.sampleRefs.length > 0) {
+      console.log(`             refs: ${outcome.sampleRefs.join(" | ")}`);
+    }
   }
 
   console.log("\nDone.");

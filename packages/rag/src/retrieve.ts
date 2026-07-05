@@ -44,6 +44,15 @@ export interface RetrievedChunkSource {
   version: string;
 }
 
+/** CAO structure metadata from Fase 10 ingestion, surfaced for citations (Fase 11). */
+export interface RetrievedChunkStructure {
+  chapter: string | null;
+  article: string | null;
+  lid: string | null;
+  sourceRef: string | null;
+  chunkType: string;
+}
+
 export interface RetrievedChunk {
   chunkId: string;
   ordinal: number;
@@ -51,6 +60,7 @@ export interface RetrievedChunk {
   /** Cosine similarity in [0,1] (1 = identical); higher is more relevant. */
   score: number;
   source: RetrievedChunkSource;
+  structure: RetrievedChunkStructure;
   metadata: Record<string, unknown>;
 }
 
@@ -102,6 +112,11 @@ export async function retrieveValidated(input: ParsedRetrieveInput): Promise<Ret
       ordinal: chunks.ordinal,
       content: chunks.content,
       metadata: chunks.metadata,
+      chapter: chunks.chapter,
+      article: chunks.article,
+      lid: chunks.lid,
+      sourceRef: chunks.sourceRef,
+      chunkType: chunks.chunkType,
       title: documents.title,
       sourceUri: documents.sourceUri,
       fund: documents.fund,
@@ -127,6 +142,13 @@ export async function retrieveValidated(input: ParsedRetrieveInput): Promise<Ret
         sourceUri: row.sourceUri,
         fund: row.fund,
         version: row.version,
+      },
+      structure: {
+        chapter: row.chapter,
+        article: row.article,
+        lid: row.lid,
+        sourceRef: row.sourceRef,
+        chunkType: row.chunkType,
       },
       metadata: row.metadata,
     }))

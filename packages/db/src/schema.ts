@@ -55,6 +55,16 @@ export const chunks = pgTable(
       .references(() => documents.id, { onDelete: "cascade" }),
     ordinal: integer("ordinal").notNull(),
     content: text("content").notNull(),
+    // Structure metadata from CAO-aware chunking (Fase 10). Nullable: not every source is a
+    // cleanly structured CAO, and a chunk may sit above the article/lid level (e.g. a chapter
+    // intro). `sourceRef` is the human-readable citation anchor ("Artikel 5, lid 2").
+    chapter: text("chapter"),
+    article: text("article"),
+    lid: text("lid"),
+    sourceRef: text("source_ref"),
+    // "text" (prose) or "table" (a serialized salary/scale table kept whole). Default keeps
+    // pre-Fase-10 rows valid. Drives table-aware handling downstream.
+    chunkType: text("chunk_type").notNull().default("text"),
     metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
     embedding: vector("embedding", { dimensions: EMBEDDING_CONFIG.dim }).notNull(),
     embeddingModel: text("embedding_model").notNull(),
