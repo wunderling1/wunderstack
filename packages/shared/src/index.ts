@@ -20,4 +20,9 @@ export {
   type LabeledQuery,
 } from "./evals/cao-labeled-set.js";
 
-export { citationSourceSchema, type CitationSource } from "./contracts/citation.js";
+export {
+  citationSourceSchema,
+  citationSchema,
+  type CitationSource,
+  type Citation,
+} from "./contracts/citation.js";

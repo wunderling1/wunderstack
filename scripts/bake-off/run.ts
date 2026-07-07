@@ -1,7 +1,7 @@
 /**
  * Embedding bake-off runner (Fase 3, decision gate).
  *
- * Embeds the labeled CAO passages + questions (see dataset.ts) with each candidate model,
+ * Embeds the labeled CAO passages + questions (from @wunderstack/shared) with each candidate model,
  * scores retrieval quality with hit-rate / recall@k / MRR, prints a table, and writes
  * results.md. The winner (among sovereign EU candidates only) is picked on measured recall,
  * with sovereignty as a hard constraint — never "on feeling" (see .cursor/rules/400-data-rag.mdc).
@@ -12,9 +12,8 @@
 import { writeFile } from "node:fs/promises";
 
 import { DEFAULT_EMBEDDING_VERSION, embed } from "@wunderstack/ai";
+import { caoLabeledPassages as passages, caoLabeledQueries as queries } from "@wunderstack/shared";
 import { z } from "zod";
-
-import { passages, queries } from "./dataset.js";
 
 interface Candidate {
   /** Label shown in the results table. */
@@ -253,10 +252,10 @@ never selected and never used in the request path (see \`.cursor/rules/000-core.
 
 ## Dataset caveat
 
-The corpus in \`dataset.ts\` is a representative, authentic-style **seed** — not a specific
-fund's CAO. Before treating this result as final for a fund, replace/extend the passages with
-that fund's real CAO text and re-run. The measured winner is only as representative as the
-corpus it ran on.
+The corpus in \`@wunderstack/shared\` (\`src/evals/cao-labeled-set.ts\`) is a representative,
+authentic-style **seed** — not a specific fund's CAO. Before treating this result as final for a
+fund, replace/extend the passages with that fund's real CAO text and re-run. The measured winner is
+only as representative as the corpus it ran on.
 
 ## Results
 

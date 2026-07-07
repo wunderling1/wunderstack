@@ -26,9 +26,12 @@ zonder dit bestand bij te werken.
 
 ## Kennis / RAG
 - PostgreSQL: **Scalingo managed Postgres** + pgvector 0.8.2 (+ PostgreSQL Anonymizer).
-- Embeddings: **Scaleway Generative APIs** (EU). Kandidaten: `qwen3-embedding-8b` @ 2000 dim
-  (Scaleway's eigen pgvector-aanbeveling) of `bge-multilingual-gemma2`. Definitieve keuze
-  volgt uit de bake-off op echte NL CAO-tekst (zie 400-data-rag).
+- Embeddings: **Scaleway Generative APIs** (EU). Keuze vastgelegd door de bake-off (Fase 3,
+  zie `scripts/bake-off/results.md`): **`qwen3-embedding-8b` @ 4096 dim**, gepind in
+  `packages/shared/src/config/embedding.ts` (de bron van waarheid). Scaleway levert alleen de
+  **native max-dimensie** (geen Matryoshka-trimming naar 2000), en 4096 > pgvector's 2000-limiet
+  voor hnsw/ivfflat: daarom **flat (exact) search, geen ANN-index** — niet de eerder genoemde
+  "@ 2000 dim + hnsw"-aanname. Model of dimensie wijzigen = bewuste re-embed-migratie (zie 400-data-rag).
 - Drizzle als enige DB-toegang. Reranker later (naad open laten).
 
 ## Runtime-safety

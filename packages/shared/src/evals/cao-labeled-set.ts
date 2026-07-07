@@ -1,18 +1,20 @@
 /**
- * Bake-off dataset — representative Dutch CAO passages + a hand-labeled
- * question -> correct-passage set.
+ * Labeled CAO evaluation set — representative Dutch CAO passages + a hand-labeled
+ * question -> correct-passage mapping.
  *
- * IMPORTANT: these passages are representative, authentic-style CAO fragments written
- * as a *seed* so the bake-off harness is runnable and reproducible today. They are NOT a
- * specific fund's CAO. Before the bake-off result is treated as final for a fund, replace
- * or extend `passages` with that fund's real CAO text and expand `queries` accordingly.
- * The measured winner is only as representative as this corpus (see results.md).
+ * This is the single source of truth for the labeled set, shared by two consumers:
+ *   - the Fase 3 embedding bake-off (`scripts/bake-off`), which picks the embedding model, and
+ *   - the Fase 8 eval-suite (`packages/agents/src/evals`), which gates retrieval accuracy in CI.
+ * (Fase 3's DoD explicitly designed this set to double as the seed of the eval-suite.)
  *
- * The labeled set doubles as the seed of the eval-suite (Fase 8), per PLAN.md.
+ * IMPORTANT: these passages are representative, authentic-style CAO fragments written as a *seed*
+ * so the harness is runnable and reproducible today. They are NOT a specific fund's CAO. Before a
+ * measured result is treated as final for a fund, replace/extend `passages` with that fund's real
+ * CAO text and expand `queries` accordingly. Any measurement is only as representative as this
+ * corpus.
  *
- * Language note: the CAO content and questions are Dutch on purpose — the whole point of
- * the bake-off is semantic recall on real Dutch legal/CAO phrasing. Code and identifiers
- * stay English per .cursor/rules/000-core.mdc.
+ * Language note: the CAO content and questions are Dutch on purpose — the whole point is semantic
+ * recall on real Dutch legal/CAO phrasing. Code and identifiers stay English per 000-core.mdc.
  */
 
 export interface CaoPassage {

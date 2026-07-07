@@ -17,6 +17,9 @@ agents die je één keer bouwt en per fonds via configuratie uitrolt.
   gateways) voordat een echte usecase ze afdwingt.
 - **Soeverein-by-default.** Het standaard request-pad blijft EU-soeverein. Fondsdata gaat
   nooit by default naar een niet-EU-model.
+- **Airlock voor niet-soevereine bronnen.** Facebook, US-SaaS en andere niet-EU-bronnen
+  koppelen via één geclassificeerde adapter per bron (`packages/connectors`). Downstream
+  van die grens blijft alles EU-soeverein; de bron zelf niet. Zie `600-connectors.mdc`.
 - **Alle code in het Engels** (identifiers, comments, bestandsnamen, commits; packages onder
   `@wunderstack/*`). Nederlands alleen in docs en user-facing tekst.
 
@@ -28,7 +31,8 @@ Volledige lijst + versiebeleid: `.cursor/rules/100-stack.mdc`.
 
 ## Repo-structuur
 `apps/demo` (Next.js: demo, widget, API) · `packages/ai` (model-naad) · `packages/agents`
-(agent-defs, Mastra erin) · `packages/rag` · `packages/db` (Drizzle) · `packages/shared`.
+(agent-defs, Mastra erin) · `packages/rag` · `packages/connectors` (airlock naar niet-EU-bronnen)
+· `packages/db` (Drizzle) · `packages/shared`.
 Pijl-regel: apps importeren uit packages, nooit andersom (CI-afgedwongen).
 
 ## Bewust NIET in v1
@@ -37,5 +41,5 @@ Supabase Auth/RLS · Inngest. Wil je iets hiervan toevoegen: motiveer eerst tege
 
 ## Waar te beginnen
 Lees `.cursor/rules/000-core.mdc` eerst. Daarna 100 (stack), 200 (architectuur). De glob-
-geladen regels (300 TypeScript, 400 data/RAG, 500 agents) activeren bij het werken in de
-betreffende mappen.
+geladen regels (300 TypeScript, 400 data/RAG, 500 agents, 600 connectors) activeren bij
+het werken in de betreffende mappen.

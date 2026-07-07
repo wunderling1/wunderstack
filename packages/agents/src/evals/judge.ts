@@ -32,9 +32,16 @@ export interface AggregateScores {
   caseCount: number;
 }
 
+/** Article anchor as it appears in production context (see @wunderstack/rag assemble). */
+function articleAnchor(passage: GoldenPassage): string {
+  if (!passage.article) return "";
+  const label = /^bijlage/i.test(passage.article) ? passage.article : `Artikel ${passage.article}`;
+  return ` (${label})`;
+}
+
 function buildContext(passages: GoldenPassage[]): string {
   return passages
-    .map((passage, index) => `[${String(index + 1)}] ${passage.content.trim()}`)
+    .map((passage, index) => `[${String(index + 1)}]${articleAnchor(passage)} ${passage.content.trim()}`)
     .join("\n\n");
 }
 

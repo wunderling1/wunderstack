@@ -15,8 +15,11 @@ export interface EmbedInput {
   /** Scaleway model id, e.g. "bge-multilingual-gemma2" or "qwen3-embedding-8b". */
   model: string;
   /**
-   * Requested output dimension. Only honoured by Matryoshka models (qwen3-embedding-8b);
-   * Scaleway recommends 2000 for pgvector hnsw/ivfflat indexes.
+   * Requested output dimension. NOTE: Scaleway's Generative APIs currently return each model's
+   * NATIVE maximum dimension only and do not support Matryoshka trimming (verified in the Fase 3
+   * bake-off, see scripts/bake-off/results.md), so this is effectively a no-op on the current
+   * models. It is kept for forward-compatibility; if it is passed and the provider ignores it,
+   * `embed()` throws rather than silently returning a mismatched dimension.
    */
   dimensions?: number;
   /** Our own embedding-config version tag, stored per vector. */
@@ -82,6 +85,15 @@ export async function embed(input: EmbedInput): Promise<EmbeddingResult> {
   const [first] = embeddings;
   if (!first) {
     throw new Error("Scaleway returned no embeddings.");
+  }
+
+  // If a specific dimension was requested but the provider ignored it, fail loudly rather than
+  // storing vectors of an unexpected dimension (which would silently break the pinned-dim invariant).
+  if (input.dimensions !== undefined && first.length !== input.dimensions) {
+    throw new Error(
+      `Requested embedding dim ${String(input.dimensions)} but provider returned ` +
+        `${String(first.length)} (model ${input.model}); Scaleway returns native dim only.`,
+    );
   }
 
   return {

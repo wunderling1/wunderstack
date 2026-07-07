@@ -1,5 +1,5 @@
 import { retrieveContext } from "@wunderstack/rag";
-import { citationSourceSchema } from "@wunderstack/shared";
+import { citationSchema, citationSourceSchema } from "@wunderstack/shared";
 import { z } from "zod";
 
 /**
@@ -32,10 +32,12 @@ export const retrievalHitSchema = z.object({
 });
 
 export const retrievalOutputSchema = z.object({
-  /** Prompt-ready context block, each passage prefixed with its `[ref]`. */
+  /** Prompt-ready context block, each passage prefixed with its `[ref]` + sourceRef. */
   context: z.string(),
-  /** Deduplicated, citation-numbered sources. */
+  /** Deduplicated, citation-numbered sources (document level). */
   sources: z.array(retrievalSourceSchema),
+  /** Per-chunk citations enriched with CAO structure (article/lid) + a snippet (Fase 11). */
+  citations: z.array(citationSchema),
   /** Per-chunk hits (id + similarity score) — recorded on the Langfuse trace for observability. */
   hits: z.array(retrievalHitSchema),
 });
@@ -57,6 +59,7 @@ export async function runRetrieval(input: RetrievalInput): Promise<RetrievalOutp
   return retrievalOutputSchema.parse({
     context: result.context,
     sources: result.sources,
+    citations: result.citations,
     hits: result.chunks.map((chunk) => ({
       chunkId: chunk.chunkId,
       ordinal: chunk.ordinal,

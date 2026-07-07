@@ -1,4 +1,4 @@
-import { citationSourceSchema } from "@wunderstack/shared";
+import { citationSchema, citationSourceSchema } from "@wunderstack/shared";
 import { z } from "zod";
 
 /**
@@ -31,6 +31,11 @@ export const caoSourceSchema = citationSourceSchema;
 
 export type CaoSource = z.infer<typeof caoSourceSchema>;
 
+/** A richer, structure-aware citation (article/lid + snippet); see @wunderstack/shared. */
+export const caoCitationSchema = citationSchema;
+
+export type CaoCitation = z.infer<typeof caoCitationSchema>;
+
 export const caoUsageSchema = z.object({
   promptTokens: z.number().int().nonnegative(),
   completionTokens: z.number().int().nonnegative(),
@@ -40,12 +45,17 @@ export const caoUsageSchema = z.object({
 export type CaoUsage = z.infer<typeof caoUsageSchema>;
 
 export const caoAnswerSchema = z.object({
-  /** The Dutch answer, with `[n]` citation markers when sources were used. */
+  /** The Dutch answer, with `[n]` citation markers when sources were used. When
+   * `needsClarification` is true this holds the clarifying question instead. */
   answer: z.string(),
   /** False when nothing cleared the relevance threshold (the "niet gevonden" case). */
   found: z.boolean(),
+  /** True when the agent asked a clarifying question instead of answering (underspecified input). */
+  needsClarification: z.boolean().default(false),
   /** The documents the answer is grounded in, deduplicated and citation-numbered. */
   sources: z.array(caoSourceSchema),
+  /** Structure-aware citations (article/lid + snippet) the UI can expand (Fase 12). */
+  citations: z.array(caoCitationSchema).default([]),
   /** LLM token usage for the generation step (all zero when no LLM call was made). */
   usage: caoUsageSchema,
 });
@@ -63,7 +73,13 @@ export type CaoAnswer = z.infer<typeof caoAnswerSchema>;
  * shape does not change when that happens.
  */
 export type CaoStreamEvent =
-  | { type: "sources"; found: boolean; sources: CaoSource[] }
+  | {
+      type: "sources";
+      found: boolean;
+      needsClarification: boolean;
+      sources: CaoSource[];
+      citations: CaoCitation[];
+    }
   | { type: "text"; delta: string }
   | { type: "done"; usage: CaoUsage };
 

@@ -15,10 +15,28 @@ export default tseslint.config(
       "**/.next/**",
       "**/.turbo/**",
       "**/next-env.d.ts",
+      // Served static assets (e.g. the embeddable widget) are plain browser scripts, not
+      // TypeScript source — they are not part of any build and should not be type-linted.
+      "**/public/**",
     ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  {
+    // Plain JS/config files (next.config.mjs, *.config.cjs, ...) run in Node. TS files are already
+    // exempt from `no-undef` via typescript-eslint; these are not, so declare the Node globals.
+    files: ["**/*.{js,mjs,cjs}"],
+    languageOptions: {
+      globals: {
+        process: "readonly",
+        module: "writable",
+        require: "readonly",
+        __dirname: "readonly",
+        __filename: "readonly",
+        console: "readonly",
+      },
+    },
+  },
   {
     files: ["packages/**/*.{ts,tsx}"],
     rules: {

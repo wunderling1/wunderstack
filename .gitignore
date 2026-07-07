@@ -5,6 +5,9 @@ dist/
 out/
 *.tsbuildinfo
 
+# pnpm content-addressable store (local cache, never commit)
+.pnpm-store/
+
 # Local env files (never commit secrets)
 .env
 .env.*

@@ -2,12 +2,12 @@
 module.exports = {
   forbidden: [
     {
-      name: "no-packages-to-apps",
+      name: "no-packages-to-consumers",
       comment:
-        "Arrow rule: packages/* must never import from apps/*. Apps depend on packages, never the reverse.",
+        "Arrow rule: packages/* must never import from apps/* or scripts/*. Consumers depend on packages, never the reverse.",
       severity: "error",
       from: { path: "^packages/" },
-      to: { path: "^apps/" },
+      to: { path: "^(apps|scripts)/" },
     },
     {
       name: "no-circular",

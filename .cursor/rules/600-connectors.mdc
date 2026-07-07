@@ -1,0 +1,38 @@
+---
+description: De airlock — hoe niet-soevereine bronnen (Facebook, US-SaaS, non-EU DB) gekoppeld worden zonder de soevereine laag te breken.
+globs: packages/connectors/**,packages/agents/**,packages/ai/**
+alwaysApply: false
+---
+
+# Connectoren naar niet-soevereine bronnen — de airlock
+
+## Uitgangspunt (hard)
+Soevereiniteit is een eigenschap van de hele levensloop van data, niet van één component.
+Je kunt een niet-soevereine bron **niet soeverein maken** door er een soevereine laag voor te
+zetten. Claim daarom nooit "soevereine data" voor een niet-EU-bron.
+
+Wat we wél garanderen: een **soevereine intelligentie-laag** — vanaf het moment dat data onze
+stack binnenkomt, blijven opslag, embeddings, model, redenering en audit-spoor in de EU en gaan
+ze nooit naar een niet-EU-model. Niet-soevereine bron → soevereine verwerking.
+
+## Regels
+- **Eén airlock per bron.** Elke niet-EU-bron zit achter precies één geclassificeerde adapter
+  (in `packages/connectors`, of een duidelijk gemarkeerde tool). Dat is de enige component die
+  de grens over reikt. De grens moet auditeerbaar zijn: een compliance-officer van het fonds
+  moet exact kunnen zien wáár data soeverein wordt.
+- **Begrensd inladen boven continu live.** Verkies één gecontroleerde grensovergang (inladen +
+  embedden → daarna soeverein) boven een live per-vraag-call, waar het kan. Live koppelen mag,
+  maar erken dat er dan bij elke vraag data de grens kruist.
+- **Sovereign-default blijft gelden.** Data uit een niet-EU-bron gaat NOOIT by default naar een
+  niet-EU-model. Alles downstream van de airlock (opslag, embeddings, LLM, Langfuse) blijft EU.
+- **Per fonds geïsoleerd.** Een niet-EU-bron koppelt alleen aan de data-plane van dát fonds,
+  nooit gedeeld tussen fondsen.
+- **Expliciet, geclassificeerd, opt-in.** Elke bron draagt een soevereiniteits-classificatie
+  (EU / niet-EU) in de config/data-plane. Een connector naar een niet-EU-bron is een bewust
+  geconfigureerd ding per fonds en per agent — nooit een stille default-achterdeur.
+
+## Juridische poort (vóór er code komt)
+Een niet-EU-bron — zeker social/persoonsdata zoals Facebook/Instagram — vereist een
+gecontroleerde **AVG-grondslag** én naleving van de platform-voorwaarden van de bron. Geen
+connector wordt gebouwd voordat die poort expliciet is gecheckt. Soeverein verwerken van data
+die je niet mág gebruiken lost niets op — deze vraag gaat vóór de techniek.

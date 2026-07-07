@@ -3,9 +3,17 @@ packages:
   - "packages/*"
   - "scripts/*"
 
+# Don't auto-run `pnpm install` before every `pnpm run` script. pnpm's pre-run check treats the
+# not-yet-executed native build scripts below as "out of sync" and then aborts on the ignored-builds
+# gate, which blocks every workspace script (e.g. `sync-model-prices`, `smoke`). Run `pnpm install`
+# explicitly when dependencies change.
+verifyDepsBeforeRun: false
+
 # Approve native build scripts (pnpm 11 blocks unapproved builds).
 # - sharp: Next.js image-optimization dependency (prebuilt binaries).
 # - esbuild: used by drizzle-kit to load the TypeScript schema; needs its native binary.
+# - protobufjs: pulled in transitively by Mastra's gRPC/OpenTelemetry stack (@wunderstack/agents).
 onlyBuiltDependencies:
   - sharp
   - esbuild
+  - protobufjs

@@ -21,6 +21,7 @@
 import { embed, generateText, rerankDocuments } from "@wunderstack/ai";
 import { requireEmbeddingConfig, requireRerankConfig } from "@wunderstack/shared";
 
+import { detectClarification } from "../cao/clarify.js";
 import { CAO_SYSTEM_INSTRUCTIONS, NOT_FOUND_MESSAGE, buildAnswerPrompt } from "../cao/prompt.js";
 import { goldenCases, goldenPassages, passagesForCase } from "./golden-set.js";
 import {
@@ -96,7 +97,38 @@ function promptContractChecks(): Check[] {
       name: "prompt: user turn carries both context and question",
       ok: prompt.includes("[1] voorbeeldcontext") && prompt.includes("Voorbeeldvraag?"),
     },
+    {
+      name: "prompt: instructs to cite article + lid",
+      ok: /artikel/i.test(instructions) && /lid/i.test(instructions),
+    },
+    {
+      name: "prompt: forbids individual/legal advice (scope guard)",
+      ok: /geen (?:persoonlijk|individueel)/i.test(instructions) && /advies/i.test(instructions),
+    },
   ];
+}
+
+/**
+ * Gate A (clarify): the deterministic clarify detector asks a follow-up on underspecified salary
+ * questions, but never hijacks an answerable golden question. Pure, offline, no network.
+ */
+function clarifyContractChecks(): Check[] {
+  const underspecified = ["Hoeveel verdien ik?", "Wat is mijn salaris?", "Wat verdient een medewerker?"];
+  const checks: Check[] = underspecified.map((question) => ({
+    name: `clarify: asks a follow-up for "${question}"`,
+    ok: detectClarification(question) !== null,
+  }));
+
+  const hijacked = goldenCases.filter(
+    (testCase) => testCase.category !== "refusal" && detectClarification(testCase.question) !== null,
+  );
+  checks.push({
+    name: "clarify: does not hijack answerable golden questions",
+    ok: hijacked.length === 0,
+    detail: hijacked.length === 0 ? undefined : `hijacked: ${hijacked.map((c) => c.id).join(", ")}`,
+  });
+
+  return checks;
 }
 
 interface RecallMetrics {
@@ -325,7 +357,11 @@ function report(title: string, checks: Check[]): boolean {
 async function main(): Promise<void> {
   let allPassed = true;
 
-  allPassed = report("Gate A — prompt contract:", promptContractChecks()) && allPassed;
+  allPassed =
+    report("Gate A — prompt & clarify contract:", [
+      ...promptContractChecks(),
+      ...clarifyContractChecks(),
+    ]) && allPassed;
 
   if (process.env.SCALEWAY_API_KEY) {
     allPassed =

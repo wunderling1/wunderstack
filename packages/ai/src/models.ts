@@ -24,6 +24,8 @@ export interface GenerateTextInput {
   model?: string;
   temperature?: number;
   maxTokens?: number;
+  /** Aborts the in-flight provider request (e.g. when the client disconnects). */
+  abortSignal?: AbortSignal;
 }
 
 export interface TokenUsage {
@@ -39,20 +41,52 @@ export interface GenerateTextResult {
   usage: TokenUsage;
 }
 
+/** List price of a model, in USD per 1M tokens. Drives cost tracing (see @wunderstack/agents). */
+export interface ModelPricing {
+  /** USD per 1M input (prompt) tokens. */
+  inputPerMTok: number;
+  /** USD per 1M output (completion) tokens. */
+  outputPerMTok: number;
+}
+
 interface RegisteredModel {
   provider: "mistral";
   /** Whether the model runs on an EU-sovereign provider. */
   sovereign: boolean;
+  /** Provider list price. Kept here so cost lives next to the model definition. */
+  pricing: ModelPricing;
 }
 
-/** Only EU-sovereign (Mistral) models are registered. This is the sovereignty guarantee. */
+/**
+ * Only EU-sovereign (Mistral) models are registered. This is the sovereignty guarantee.
+ *
+ * Prices are Mistral list prices (USD per 1M tokens), verified 3 Jul 2026. They are the
+ * source of truth for cost tracing; batch usage is billed at 50% and is not modelled here.
+ * Re-check against https://mistral.ai/pricing and re-sync Langfuse when they change.
+ */
 const MODEL_REGISTRY: Record<string, RegisteredModel> = {
-  "mistral-large-latest": { provider: "mistral", sovereign: true },
-  "mistral-small-latest": { provider: "mistral", sovereign: true },
+  "mistral-large-latest": {
+    provider: "mistral",
+    sovereign: true,
+    pricing: { inputPerMTok: 0.5, outputPerMTok: 1.5 },
+  },
+  "mistral-small-latest": {
+    provider: "mistral",
+    sovereign: true,
+    pricing: { inputPerMTok: 0.15, outputPerMTok: 0.6 },
+  },
 };
 
 /** Default LLM = Mistral (sovereign). */
 export const DEFAULT_LLM_MODEL = "mistral-large-latest";
+
+/**
+ * Hard upper bound on tokens the model may emit per call when the caller does not set its own
+ * `maxTokens`. A CAO answer needs hundreds, not thousands, of tokens, so this caps runaway
+ * generations that would amplify cost/latency (see security-audit finding #4, LLM10 Unbounded
+ * Consumption). Callers can still pass a smaller `maxTokens`; they cannot silently opt out of a cap.
+ */
+export const DEFAULT_MAX_OUTPUT_TOKENS = 1024;
 
 const MISTRAL_CHAT_URL = "https://api.mistral.ai/v1/chat/completions";
 
@@ -72,6 +106,25 @@ const mistralResponseSchema = z.object({
     total_tokens: z.number(),
   }),
 });
+
+/** A registered model paired with its list price. */
+export interface ModelPriceEntry {
+  model: string;
+  pricing: ModelPricing;
+}
+
+/** All registered models with their list prices. Consumed by the Langfuse cost sync. */
+export function listModelPricing(): ModelPriceEntry[] {
+  return Object.entries(MODEL_REGISTRY).map(([model, info]) => ({
+    model,
+    pricing: info.pricing,
+  }));
+}
+
+/** List price for a single registered model. Throws for unknown or non-sovereign models. */
+export function getModelPricing(model: string): ModelPricing {
+  return resolveModel(model).pricing;
+}
 
 function resolveModel(model: string): RegisteredModel {
   const info = MODEL_REGISTRY[model];
@@ -106,8 +159,10 @@ export async function generateText(input: GenerateTextInput): Promise<GenerateTe
       model,
       messages: input.messages,
       ...(input.temperature === undefined ? {} : { temperature: input.temperature }),
-      ...(input.maxTokens === undefined ? {} : { max_tokens: input.maxTokens }),
+      // Always send a max_tokens: fall back to the seam-wide cap so no generation is unbounded.
+      max_tokens: input.maxTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
     }),
+    ...(input.abortSignal === undefined ? {} : { signal: input.abortSignal }),
   });
 
   if (!response.ok) {

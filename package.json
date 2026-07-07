@@ -9,7 +9,7 @@
   "scripts": {
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
-    "depcruise": "depcruise apps packages",
+    "depcruise": "depcruise apps packages scripts",
     "bake-off": "pnpm --filter @wunderstack/bake-off bake-off"
   },
   "devDependencies": {

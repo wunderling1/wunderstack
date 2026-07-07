@@ -18,6 +18,7 @@ packages/
   ai/              # model-abstractie (de naad naar Mistral e.a.)
   agents/          # agent-definities achter een eigen interface (Mastra erin verstopt)
   rag/             # retrieval-pipeline (retrieve → [rerank later] → assemble)
+  connectors/      # airlock: één geclassificeerde adapter per niet-soevereine bron
   db/              # Drizzle schema + client (enige DB-toegang)
   shared/          # types, Zod-schemas, utils
 ```
@@ -37,6 +38,13 @@ abstraheren — speculatieve abstractie is de vijand van het walking skeleton.
 - **Agent-definities = code**, gehversioneerd, centraal onderhouden. Dit is de moat.
 - **Fonds-configuratie = data**, per fonds. Nooit fonds-specifieke waarden in agent-code
   hardcoden. Een nieuwe agent bouw je één keer; per fonds configureer je hem via data.
+
+## Airlock voor niet-soevereine bronnen
+Niet-EU-bronnen (Facebook, US-SaaS, non-EU DB) koppelen via `packages/connectors`: precies
+één geclassificeerde adapter per bron — de enige component die de grens over reikt. Vanaf
+binnenkomst in de stack blijft opslag, embeddings, model en audit EU-soeverein; de bron
+zelf niet. Voorkeur: begrensd inladen + embed boven live per-vraag-call. Per fonds
+geïsoleerd, expliciet opt-in in de data-plane. Details en juridische poort: `600-connectors.mdc`.
 
 ## Koppelvlak naar de kanalen van het fonds
 Alleen via: (a) embeddable widget (script/iframe) en (b) REST API + webhooks.
