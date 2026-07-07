@@ -1,0 +1,21 @@
+{
+  "name": "@wunderstack/eval-scripts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "harvest-feedback": "tsx --env-file-if-exists=../../.env harvest-feedback.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@wunderstack/shared": "workspace:*",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.0",
+    "eslint": "10.6.0",
+    "tsx": "4.22.4",
+    "typescript": "6.0.3"
+  }
+}

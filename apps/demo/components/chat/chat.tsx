@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { Composer } from "./composer";
 import { MessageList } from "./message-list";
+import { Starters } from "./starters";
 import { useChat } from "./use-chat";
 
 interface ChatProps {
@@ -11,16 +12,22 @@ interface ChatProps {
   fund?: string;
   /** Compact chrome for the embeddable widget (no outer max-width / padding). */
   embedded?: boolean;
+  /** Fund-configurable starter questions (see lib/fund-theme.ts). */
+  starters?: string[];
+  /** Fund-configurable tagline shown on the empty state. */
+  tagline?: string;
 }
 
-const SUGGESTIONS = [
+const DEFAULT_STARTERS = [
   "Hoeveel vakantiedagen krijg ik volgens de CAO?",
   "Wat is de opzegtermijn bij ontslag?",
   "Heb ik recht op een reiskostenvergoeding?",
 ];
 
-export function Chat({ fund, embedded = false }: ChatProps) {
-  const { messages, isStreaming, send } = useChat(fund);
+const DEFAULT_TAGLINE = "Stel een vraag over de CAO";
+
+export function Chat({ fund, embedded = false, starters, tagline }: ChatProps) {
+  const { messages, isStreaming, send, sendFeedback } = useChat(fund);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -33,25 +40,13 @@ export function Chat({ fund, embedded = false }: ChatProps) {
     <div className={cn("flex h-full flex-col", embedded ? "" : "mx-auto w-full max-w-2xl")}>
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-6">
         {empty ? (
-          <div className="flex flex-col items-center gap-4 py-10 text-center">
-            <p className="text-sm text-muted-foreground">
-              Stel een vraag over de CAO. Ik antwoord met bronvermelding en verzin niets.
-            </p>
-            <div className="flex flex-col gap-2">
-              {SUGGESTIONS.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => send(s)}
-                  className="rounded-md border border-border bg-card px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted"
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
+          <Starters
+            tagline={tagline ?? DEFAULT_TAGLINE}
+            starters={starters ?? DEFAULT_STARTERS}
+            onPick={send}
+          />
         ) : (
-          <MessageList messages={messages} />
+          <MessageList messages={messages} onFeedback={sendFeedback} />
         )}
       </div>
 

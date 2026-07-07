@@ -103,6 +103,7 @@ export function createCaoAgent(): CaoAgent {
       const { question, fund, topK, minScore } = caoQuestionSchema.parse(input);
 
       const trace = startCaoTrace(mastra, { question, fund, topK, minScore });
+      const traceId = trace.link().traceId ?? null;
       try {
         // Underspecified question: ask one targeted follow-up before spending retrieval/LLM tokens.
         const clarification = detectClarification(question);
@@ -114,6 +115,7 @@ export function createCaoAgent(): CaoAgent {
             needsClarification: true,
             sources: [],
             citations: [],
+            traceId,
             usage: ZERO_USAGE,
           });
         }
@@ -128,6 +130,7 @@ export function createCaoAgent(): CaoAgent {
             needsClarification: false,
             sources: [],
             citations: [],
+            traceId,
             usage: ZERO_USAGE,
           });
         }
@@ -144,6 +147,7 @@ export function createCaoAgent(): CaoAgent {
           needsClarification: false,
           sources: retrieval.sources,
           citations: retrieval.citations,
+          traceId,
           usage: {
             promptTokens: result.usage.inputTokens ?? 0,
             completionTokens: result.usage.outputTokens ?? 0,
@@ -163,12 +167,13 @@ export function createCaoAgent(): CaoAgent {
       const { question, fund, topK, minScore } = caoQuestionSchema.parse(input);
 
       const trace = startCaoTrace(mastra, { question, fund, topK, minScore });
+      const traceId = trace.link().traceId ?? null;
       try {
         const clarification = detectClarification(question);
         if (clarification !== null) {
           yield { type: "sources", found: false, needsClarification: true, sources: [], citations: [] };
           yield { type: "text", delta: clarification };
-          yield { type: "done", usage: ZERO_USAGE };
+          yield { type: "done", usage: ZERO_USAGE, traceId };
           trace.end({ found: false, needsClarification: true, citationCount: 0 });
           return;
         }
@@ -178,7 +183,7 @@ export function createCaoAgent(): CaoAgent {
         if (retrieval.hits.length === 0) {
           yield { type: "sources", found: false, needsClarification: false, sources: [], citations: [] };
           yield { type: "text", delta: NOT_FOUND_MESSAGE };
-          yield { type: "done", usage: ZERO_USAGE };
+          yield { type: "done", usage: ZERO_USAGE, traceId };
           trace.end({ found: false, refused: true, citationCount: 0 });
           return;
         }
@@ -220,6 +225,7 @@ export function createCaoAgent(): CaoAgent {
             completionTokens: full.usage.outputTokens ?? 0,
             totalTokens: full.usage.totalTokens ?? 0,
           },
+          traceId,
         };
         trace.end({ found: true, citationCount: retrieval.citations.length });
       } catch (error) {

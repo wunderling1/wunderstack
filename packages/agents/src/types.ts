@@ -56,6 +56,9 @@ export const caoAnswerSchema = z.object({
   sources: z.array(caoSourceSchema),
   /** Structure-aware citations (article/lid + snippet) the UI can expand (Fase 12). */
   citations: z.array(caoCitationSchema).default([]),
+  /** Langfuse trace id for this answer, so user feedback can be scored onto it. Null when tracing
+   * is not configured. */
+  traceId: z.string().nullable().default(null),
   /** LLM token usage for the generation step (all zero when no LLM call was made). */
   usage: caoUsageSchema,
 });
@@ -81,7 +84,7 @@ export type CaoStreamEvent =
       citations: CaoCitation[];
     }
   | { type: "text"; delta: string }
-  | { type: "done"; usage: CaoUsage };
+  | { type: "done"; usage: CaoUsage; traceId: string | null };
 
 /** Per-call options for the agent seam. */
 export interface CaoAnswerOptions {

@@ -43,6 +43,8 @@ export const chatEventSchema = z.discriminatedUnion("type", [
       completionTokens: z.number().int().nonnegative(),
       totalTokens: z.number().int().nonnegative(),
     }),
+    /** Langfuse trace id (null when tracing is unconfigured); used to attach user feedback. */
+    traceId: z.string().nullable(),
   }),
   z.object({ type: z.literal("error"), message: z.string() }),
 ]);

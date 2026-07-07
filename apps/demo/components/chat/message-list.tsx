@@ -1,23 +1,36 @@
 "use client";
 
-import { FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { ChatMessage } from "./use-chat";
+import { Citations } from "./citation";
+import { Feedback } from "./feedback";
+import type { ChatMessage, FeedbackRating } from "./use-chat";
 
-/** Renders the conversation: user/assistant bubbles, streaming caret, and cited sources. */
-export function MessageList({ messages }: { messages: ChatMessage[] }) {
+interface MessageListProps {
+  messages: ChatMessage[];
+  onFeedback: (messageId: string, rating: FeedbackRating, reason?: string) => void;
+}
+
+/** Renders the conversation: user/assistant bubbles, streaming caret, citations and feedback. */
+export function MessageList({ messages, onFeedback }: MessageListProps) {
   return (
     <div className="flex flex-col gap-4">
       {messages.map((message) => (
-        <MessageBubble key={message.id} message={message} />
+        <MessageBubble key={message.id} message={message} onFeedback={onFeedback} />
       ))}
     </div>
   );
 }
 
-function MessageBubble({ message }: { message: ChatMessage }) {
+function MessageBubble({
+  message,
+  onFeedback,
+}: {
+  message: ChatMessage;
+  onFeedback: (messageId: string, rating: FeedbackRating, reason?: string) => void;
+}) {
   const isUser = message.role === "user";
   const showCaret = message.streaming && message.text.length === 0;
+  const showFeedback = !isUser && !message.streaming && message.found === true && message.traceId !== null;
 
   return (
     <div className={cn("flex", isUser ? "justify-end" : "justify-start")}>
@@ -37,35 +50,15 @@ function MessageBubble({ message }: { message: ChatMessage }) {
           <p className="whitespace-pre-wrap">{message.text}</p>
         )}
 
-        {!isUser && message.sources.length > 0 ? <Sources message={message} /> : null}
-      </div>
-    </div>
-  );
-}
+        {!isUser ? <Citations citations={message.citations} /> : null}
 
-function Sources({ message }: { message: ChatMessage }) {
-  return (
-    <div className="mt-3 border-t border-border pt-2">
-      <p className="mb-1.5 text-xs font-medium text-muted-foreground">Bronnen</p>
-      <ul className="flex flex-col gap-1">
-        {message.sources.map((source) => (
-          <li key={source.ref} className="flex items-start gap-2 text-xs text-muted-foreground">
-            <span className="mt-0.5 shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px]">
-              [{source.ref}]
-            </span>
-            <span className="flex items-center gap-1">
-              <FileText className="h-3 w-3 shrink-0" />
-              <span>
-                {source.title}
-                <span className="opacity-60">
-                  {" "}
-                  · {source.fund} · v{source.version}
-                </span>
-              </span>
-            </span>
-          </li>
-        ))}
-      </ul>
+        {showFeedback ? (
+          <Feedback
+            submitted={message.feedback}
+            onSubmit={(rating, reason) => onFeedback(message.id, rating, reason)}
+          />
+        ) : null}
+      </div>
     </div>
   );
 }

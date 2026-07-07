@@ -7,6 +7,14 @@
 export { createCaoAgent } from "./cao/agent.js";
 
 export {
+  recordFeedbackScore,
+  feedbackScoreSchema,
+  type FeedbackScore,
+  type RecordFeedbackResult,
+  type RecordFeedbackOptions,
+} from "./observability/feedback.js";
+
+export {
   caoQuestionSchema,
   caoAnswerSchema,
   caoSourceSchema,

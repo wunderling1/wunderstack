@@ -9,6 +9,8 @@ import { chatEventSchema, type ChatCitation, type ChatSource } from "@/app/api/c
  * the shared `chatEventSchema` before it mutates state.
  */
 
+export type FeedbackRating = "up" | "down";
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
@@ -19,6 +21,10 @@ export interface ChatMessage {
   found: boolean | null;
   /** True when the assistant asked a clarifying question instead of answering. */
   needsClarification: boolean;
+  /** Langfuse trace id for this answer (null when tracing is unconfigured); enables feedback. */
+  traceId: string | null;
+  /** The rating the user gave this answer, once submitted. */
+  feedback: FeedbackRating | null;
   streaming: boolean;
 }
 
@@ -33,6 +39,9 @@ export function useChat(fund?: string) {
   const [isStreaming, setIsStreaming] = useState(false);
   const streamingRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
+  // Mirror the latest messages so callbacks can read a message's traceId without stale closures.
+  const messagesRef = useRef<ChatMessage[]>([]);
+  messagesRef.current = messages;
 
   // Cancel any in-flight request when the component unmounts, so the server stops generating.
   useEffect(() => () => abortRef.current?.abort(), []);
@@ -65,6 +74,8 @@ export function useChat(fund?: string) {
           citations: [],
           found: null,
           needsClarification: false,
+          traceId: null,
+          feedback: null,
           streaming: false,
         },
         {
@@ -75,6 +86,8 @@ export function useChat(fund?: string) {
           citations: [],
           found: null,
           needsClarification: false,
+          traceId: null,
+          feedback: null,
           streaming: true,
         },
       ]);
@@ -115,6 +128,8 @@ export function useChat(fund?: string) {
             }));
           } else if (event.type === "text") {
             patchAssistant(assistantId, (m) => ({ ...m, text: m.text + event.delta }));
+          } else if (event.type === "done") {
+            patchAssistant(assistantId, (m) => ({ ...m, traceId: event.traceId }));
           } else if (event.type === "error") {
             patchAssistant(assistantId, (m) => ({ ...m, text: event.message }));
           }
@@ -155,5 +170,25 @@ export function useChat(fund?: string) {
     [fund, patchAssistant],
   );
 
-  return { messages, isStreaming, send };
+  const sendFeedback = useCallback(
+    async (messageId: string, rating: FeedbackRating, reason?: string) => {
+      const traceId = messagesRef.current.find((m) => m.id === messageId)?.traceId ?? null;
+      setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, feedback: rating } : m)));
+      if (traceId === null) {
+        return;
+      }
+      try {
+        await fetch("/api/feedback", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ traceId, rating, ...(reason ? { reason } : {}) }),
+        });
+      } catch {
+        // Feedback is best-effort; a failed submit leaves the optimistic UI state as-is.
+      }
+    },
+    [],
+  );
+
+  return { messages, isStreaming, send, sendFeedback };
 }
