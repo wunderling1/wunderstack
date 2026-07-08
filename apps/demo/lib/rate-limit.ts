@@ -81,7 +81,8 @@ export function clientKey(request: Request): string {
  * an LLM call). Independent of the per-key rate limit: it bounds total resource use under a
  * distributed flood. Always pair `acquireSlot()` with a `releaseSlot()` in a `finally`.
  */
-const MAX_IN_FLIGHT = 8;
+/** Mistral allows ~3 concurrent streams per API key; cap in-flight chat requests below that. */
+const MAX_IN_FLIGHT = 3;
 let inFlight = 0;
 
 export function acquireSlot(): boolean {

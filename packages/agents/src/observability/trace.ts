@@ -20,6 +20,7 @@ import type { Span } from "@mastra/core/observability";
 
 export interface CaoTraceInput {
   question: string;
+  retrievalQuery?: string;
   fund: string | undefined;
   topK: number;
   minScore: number;
@@ -37,6 +38,14 @@ export interface RetrievalEvidence {
   embeddingDim: number;
   hits: RetrievalHit[];
   found: boolean;
+  /** Per-phase wall-clock timings in milliseconds (Langfuse latency budget). */
+  timings?: {
+    rewriteMs: number;
+    embedMs: number;
+    searchMs: number;
+    rerankMs: number;
+    totalMs: number;
+  };
 }
 
 /** Fields merged into `tracingOptions` so a later generate()/stream() joins this trace. */
@@ -59,13 +68,23 @@ export interface CaoTraceOutcome {
   refused?: boolean;
   /** Number of citations attached to the answer. */
   citationCount?: number;
+  /** Time-to-first-token in ms (first streamed text delta after request start). */
+  ttftMs?: number;
 }
 
 export interface CaoTrace {
-  startRetrieval(meta: { topK: number; minScore: number; fund: string | undefined }): RetrievalTraceSpan;
+  startRetrieval(meta: {
+    topK: number;
+    minScore: number;
+    fund: string | undefined;
+    retrievalQuery?: string;
+    condensed: boolean;
+  }): RetrievalTraceSpan;
   link(): TraceLink;
   end(output: CaoTraceOutcome): void;
   fail(error: unknown): void;
+  /** Record time-to-first-token once the first text delta is emitted. */
+  recordTtft(ms: number): void;
 }
 
 const NOOP_RETRIEVAL: RetrievalTraceSpan = { end() {} };
@@ -74,6 +93,7 @@ const NOOP_TRACE: CaoTrace = {
   link: () => ({}),
   end() {},
   fail() {},
+  recordTtft() {},
 };
 
 /**
@@ -89,6 +109,7 @@ export function startCaoTrace(mastra: Mastra, input: CaoTraceInput): CaoTrace {
       name: "cao-agent",
       input: {
         question: input.question,
+        retrievalQuery: input.retrievalQuery ?? input.question,
         fund: input.fund ?? null,
         topK: input.topK,
         minScore: input.minScore,
@@ -105,6 +126,7 @@ export function startCaoTrace(mastra: Mastra, input: CaoTraceInput): CaoTrace {
 
   const rootSpan = root;
   let settled = false;
+  let ttftMs: number | undefined;
 
   return {
     startRetrieval(meta) {
@@ -114,7 +136,9 @@ export function startCaoTrace(mastra: Mastra, input: CaoTraceInput): CaoTrace {
           type: SpanType.RAG_VECTOR_OPERATION,
           name: "cao-retrieval",
           input: {
-            query: input.question,
+            question: input.question,
+            query: meta.retrievalQuery ?? input.retrievalQuery ?? input.question,
+            condensed: meta.condensed,
             topK: meta.topK,
             minScore: meta.minScore,
             fund: meta.fund ?? null,
@@ -151,6 +175,7 @@ export function startCaoTrace(mastra: Mastra, input: CaoTraceInput): CaoTrace {
             }
 
             const scores = evidence.hits.map((hit) => hit.score);
+            const phaseTimings = evidence.timings;
             retrievalSpan.end({
               attributes: { operation: "query", dimensions: evidence.embeddingDim, topK: meta.topK },
               metadata: {
@@ -158,6 +183,15 @@ export function startCaoTrace(mastra: Mastra, input: CaoTraceInput): CaoTrace {
                 hitCount: evidence.hits.length,
                 topScore: scores[0] ?? null,
                 scores,
+                ...(phaseTimings === undefined
+                  ? {}
+                  : {
+                      rewriteMs: phaseTimings.rewriteMs,
+                      embedMs: phaseTimings.embedMs,
+                      searchMs: phaseTimings.searchMs,
+                      rerankMs: phaseTimings.rerankMs,
+                      retrievalTotalMs: phaseTimings.totalMs,
+                    }),
               },
               output: { hits: evidence.hits },
             });
@@ -179,6 +213,10 @@ export function startCaoTrace(mastra: Mastra, input: CaoTraceInput): CaoTrace {
       return {};
     },
 
+    recordTtft(ms) {
+      ttftMs = ms;
+    },
+
     end(output) {
       if (settled) {
         return;
@@ -186,12 +224,13 @@ export function startCaoTrace(mastra: Mastra, input: CaoTraceInput): CaoTrace {
       settled = true;
       try {
         rootSpan.end({
-          output,
+          output: { ...output, ttftMs: output.ttftMs ?? ttftMs ?? null },
           metadata: {
             found: output.found,
             needsClarification: output.needsClarification ?? false,
             refused: output.refused ?? false,
             citationCount: output.citationCount ?? 0,
+            ttftMs: output.ttftMs ?? ttftMs ?? null,
           },
         });
       } catch {

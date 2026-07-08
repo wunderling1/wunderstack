@@ -42,13 +42,61 @@ export async function recordFeedbackScore(
   input: FeedbackScore,
   options: RecordFeedbackOptions = {},
 ): Promise<RecordFeedbackResult> {
+  const { traceId, value, comment, name } = feedbackScoreSchema.parse(input);
+  return recordLangfuseScore(
+    {
+      traceId,
+      name,
+      value,
+      dataType: "BOOLEAN",
+      ...(comment === undefined ? {} : { comment }),
+    },
+    options,
+  );
+}
+
+export interface NumericTraceScore {
+  traceId: string;
+  name: string;
+  value: number;
+  comment?: string;
+}
+
+/** Record a numeric Langfuse score on an existing trace (e.g. citation verification). */
+export async function recordNumericTraceScore(
+  input: NumericTraceScore,
+  options: RecordFeedbackOptions = {},
+): Promise<RecordFeedbackResult> {
+  return recordLangfuseScore(
+    {
+      traceId: input.traceId,
+      name: input.name,
+      value: input.value,
+      dataType: "NUMERIC",
+      ...(input.comment === undefined ? {} : { comment: input.comment }),
+    },
+    options,
+  );
+}
+
+interface LangfuseScorePayload {
+  traceId: string;
+  name: string;
+  value: number;
+  dataType: "BOOLEAN" | "NUMERIC";
+  comment?: string;
+}
+
+async function recordLangfuseScore(
+  input: LangfuseScorePayload,
+  options: RecordFeedbackOptions = {},
+): Promise<RecordFeedbackResult> {
   const publicKey = env.LANGFUSE_PUBLIC_KEY;
   const secretKey = env.LANGFUSE_SECRET_KEY;
   if (!publicKey || !secretKey) {
     return { recorded: false };
   }
 
-  const { traceId, value, comment, name } = feedbackScoreSchema.parse(input);
   const baseUrl = (env.LANGFUSE_BASE_URL ?? DEFAULT_LANGFUSE_BASE_URL).replace(/\/+$/, "");
   const auth = Buffer.from(`${publicKey}:${secretKey}`).toString("base64");
 
@@ -59,11 +107,11 @@ export async function recordFeedbackScore(
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      traceId,
-      name,
-      value,
-      dataType: "BOOLEAN",
-      ...(comment === undefined ? {} : { comment }),
+      traceId: input.traceId,
+      name: input.name,
+      value: input.value,
+      dataType: input.dataType,
+      ...(input.comment === undefined ? {} : { comment: input.comment }),
     }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
   });

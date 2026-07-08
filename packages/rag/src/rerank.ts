@@ -18,19 +18,33 @@ export interface RerankInput {
   topK?: number;
 }
 
-export async function rerank(input: RerankInput): Promise<RetrievedChunk[]> {
+export interface RerankResult {
+  chunks: RetrievedChunk[];
+  /** Wall-clock ms for the rerank API call (0 when skipped). */
+  rerankMs: number;
+  /** True when reranking was skipped (disabled, single candidate, or high-confidence vector hit). */
+  skipped: boolean;
+}
+
+export async function rerank(input: RerankInput): Promise<RerankResult> {
   const config = requireRerankConfig();
   const topK = input.topK ?? config.topK;
   const ranked = input.chunks;
 
   if (ranked.length === 0) {
-    return ranked;
+    return { chunks: ranked, rerankMs: 0, skipped: true };
   }
 
   if (!config.enabled || ranked.length === 1) {
-    return ranked.slice(0, topK);
+    return { chunks: ranked.slice(0, topK), rerankMs: 0, skipped: true };
   }
 
+  const topScore = ranked[0]?.score ?? 0;
+  if (config.skipAboveScore !== null && topScore >= config.skipAboveScore) {
+    return { chunks: ranked.slice(0, topK), rerankMs: 0, skipped: true };
+  }
+
+  const rerankStart = performance.now();
   try {
     const result = await rerankDocuments({
       query: input.query,
@@ -53,12 +67,12 @@ export async function rerank(input: RerankInput): Promise<RetrievedChunk[]> {
       .filter((chunk): chunk is RetrievedChunk => chunk !== undefined);
 
     if (reranked.length === 0) {
-      return ranked.slice(0, topK);
+      return { chunks: ranked.slice(0, topK), rerankMs: performance.now() - rerankStart, skipped: false };
     }
 
-    return reranked;
+    return { chunks: reranked, rerankMs: performance.now() - rerankStart, skipped: false };
   } catch {
     // Provider unavailable or misconfigured — preserve retrieval order rather than fail the agent.
-    return ranked.slice(0, topK);
+    return { chunks: ranked.slice(0, topK), rerankMs: performance.now() - rerankStart, skipped: false };
   }
 }

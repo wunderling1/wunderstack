@@ -16,6 +16,9 @@ interface FeedbackProps {
   onSubmit: (rating: FeedbackRating, reason?: string) => void;
 }
 
+/** Quick reason chips for a thumbs-down; feed Fase 9 eval data + golden-set co-creation. */
+const REASON_CHIPS = ["bron klopt niet", "antwoord onvolledig", "verkeerde CAO"] as const;
+
 export function Feedback({ submitted, onSubmit }: FeedbackProps) {
   const [showReason, setShowReason] = useState(false);
   const [reason, setReason] = useState("");
@@ -35,6 +38,11 @@ export function Feedback({ submitted, onSubmit }: FeedbackProps) {
 
   const submitReason = () => {
     onSubmit("down", reason.trim() || undefined);
+    setShowReason(false);
+  };
+
+  const submitChip = (chip: string) => {
+    onSubmit("down", chip);
     setShowReason(false);
   };
 
@@ -69,25 +77,39 @@ export function Feedback({ submitted, onSubmit }: FeedbackProps) {
       </div>
 
       {showReason ? (
-        <div className="mt-2 flex items-center gap-2">
-          <input
-            type="text"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") submitReason();
-            }}
-            maxLength={2000}
-            placeholder="Wat klopte er niet? (optioneel)"
-            className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none placeholder:text-muted-foreground"
-          />
-          <button
-            type="button"
-            onClick={submitReason}
-            className="rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:opacity-90"
-          >
-            Versturen
-          </button>
+        <div className="mt-2 flex flex-col gap-2">
+          <div className="flex flex-wrap gap-1.5">
+            {REASON_CHIPS.map((chip) => (
+              <button
+                key={chip}
+                type="button"
+                onClick={() => submitChip(chip)}
+                className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                {chip}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") submitReason();
+              }}
+              maxLength={2000}
+              placeholder="Wat klopte er niet? (optioneel)"
+              className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none placeholder:text-muted-foreground"
+            />
+            <button
+              type="button"
+              onClick={submitReason}
+              className="rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:opacity-90"
+            >
+              Versturen
+            </button>
+          </div>
         </div>
       ) : null}
     </div>

@@ -1,4 +1,4 @@
-import { citationSchema, citationSourceSchema } from "@wunderstack/shared";
+import { citationSchema } from "@wunderstack/shared";
 import { z } from "zod";
 
 /**
@@ -10,13 +10,20 @@ import { z } from "zod";
  * runtime-validated at the boundary — see .cursor/rules/300-typescript.mdc).
  */
 
+export const caoHistoryMessageSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  content: z.string().min(1).max(4000),
+});
+
 export const caoQuestionSchema = z.object({
   /** The end-user's question, answered in Dutch. */
   question: z.string().min(1, "question must not be empty"),
-  /** Restrict to a single O&O fund's CAO. Omit to search all funds (control/data-plane key). */
-  fund: z.string().min(1).optional(),
-  /** How many chunks to retrieve as candidate context. */
-  topK: z.number().int().positive().max(50).default(5),
+  /** Restrict to a single O&O fund's CAO (required for corpus isolation). */
+  fund: z.string().min(1),
+  /** Recent turns, used only to condense elliptical follow-up questions into a standalone query. */
+  history: z.array(caoHistoryMessageSchema).max(6).default([]),
+  /** How many chunks to retrieve as candidate context. Defaults to RERANK_CONFIG.topK (3). */
+  topK: z.number().int().positive().max(50).default(3),
   /**
    * Minimum cosine similarity in [0,1] a chunk must reach to count as relevant. If no chunk clears
    * this bar the agent answers "niet gevonden" instead of inventing — the anti-hallucination guard.
@@ -26,12 +33,7 @@ export const caoQuestionSchema = z.object({
 
 export type CaoQuestion = z.input<typeof caoQuestionSchema>;
 
-/** The answer's cited sources use the shared citation shape (see @wunderstack/shared). */
-export const caoSourceSchema = citationSourceSchema;
-
-export type CaoSource = z.infer<typeof caoSourceSchema>;
-
-/** A richer, structure-aware citation (article/lid + snippet); see @wunderstack/shared. */
+/** A verified, structure-aware citation (article/lid + quote + snippet). */
 export const caoCitationSchema = citationSchema;
 
 export type CaoCitation = z.infer<typeof caoCitationSchema>;
@@ -52,38 +54,47 @@ export const caoAnswerSchema = z.object({
   found: z.boolean(),
   /** True when the agent asked a clarifying question instead of answering (underspecified input). */
   needsClarification: z.boolean().default(false),
-  /** The documents the answer is grounded in, deduplicated and citation-numbered. */
-  sources: z.array(caoSourceSchema),
-  /** Structure-aware citations (article/lid + snippet) the UI can expand (Fase 12). */
+  /** Verified citations — only chunks the model cited with a verbatim quote. */
   citations: z.array(caoCitationSchema).default([]),
   /** Langfuse trace id for this answer, so user feedback can be scored onto it. Null when tracing
    * is not configured. */
   traceId: z.string().nullable().default(null),
   /** LLM token usage for the generation step (all zero when no LLM call was made). */
   usage: caoUsageSchema,
+  /** True when one or more model citations failed verbatim verification. */
+  citationVerificationFailed: z.boolean().default(false),
 });
 
 export type CaoAnswer = z.infer<typeof caoAnswerSchema>;
 
 /**
+ * Progress phases the agent passes through while answering. Emitted as `status` events so the UI can
+ * show named progress ("CAO doorzoeken…" → "N passages gevonden" → "Antwoord formuleren…") instead
+ * of an undifferentiated spinner. The phase names are language-neutral; the app maps them to
+ * user-facing (Dutch) labels. Only the normal answer path emits these; the clarify and not-found
+ * paths return too fast for a phase flash to help.
+ */
+export type CaoStreamPhase = "searching" | "retrieved" | "generating";
+
+/**
  * Streaming counterpart of `CaoAnswer`, as a sequence of events the API layer can forward to the
- * browser (see apps/demo). The contract is deliberately transport-agnostic — the app decides how to
- * serialize it (NDJSON/SSE). Order guarantee: exactly one `sources` first, then zero or more `text`
- * deltas, then exactly one `done`.
- *
- * Real token-by-token streaming lights up once @wunderstack/ai streams (its `generateText` is a
- * single call today, so the model seam currently emits the answer as one `text` delta); the event
- * shape does not change when that happens.
+ * browser (see apps/demo). Order on the normal path: zero or more `status` events, zero or more
+ * `text` deltas, exactly one `citations` (verified), then exactly one `done`. Clarify and not-found
+ * paths emit `text` → `done` directly (no citations).
  */
 export type CaoStreamEvent =
+  | { type: "status"; phase: CaoStreamPhase; count?: number }
+  | { type: "text"; delta: string }
   | {
-      type: "sources";
+      type: "citations";
       found: boolean;
       needsClarification: boolean;
-      sources: CaoSource[];
       citations: CaoCitation[];
+      citationVerificationFailed: boolean;
+      /** Final answer text (sentinel/citation block stripped, failed markers removed). The client
+       * replaces its accumulated streamed text with this to reconcile stripped citations. */
+      answer: string;
     }
-  | { type: "text"; delta: string }
   | { type: "done"; usage: CaoUsage; traceId: string | null };
 
 /** Per-call options for the agent seam. */
@@ -97,8 +108,8 @@ export interface CaoAnswerOptions {
 
 /**
  * The CAO-agent as the rest of the system sees it: a question in, a grounded, cited answer out.
- * `answer` resolves the whole answer at once; `answerStream` yields it incrementally with sources
- * up front. Mastra stays hidden behind this interface (see .cursor/rules/500-agents.mdc).
+ * `answer` resolves the whole answer at once; `answerStream` yields it incrementally with verified
+ * citations at the end. Mastra stays hidden behind this interface (see .cursor/rules/500-agents.mdc).
  */
 export interface CaoAgent {
   answer(input: CaoQuestion, options?: CaoAnswerOptions): Promise<CaoAnswer>;

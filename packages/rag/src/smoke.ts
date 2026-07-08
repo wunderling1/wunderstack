@@ -8,9 +8,10 @@ import { retrieveContext } from "./index.js";
  */
 async function main(): Promise<void> {
   const question = process.argv[2] ?? "Hoeveel vakantiedagen krijg ik volgens de CAO?";
-  console.log(`Retrieving context for: "${question}"\n`);
+  const fund = process.argv[3] ?? "demo";
+  console.log(`Retrieving context for (fund=${fund}): "${question}"\n`);
 
-  const result = await retrieveContext({ query: question, topK: 5 });
+  const result = await retrieveContext({ query: question, fund, topK: 5 });
 
   console.log(`Chunks (${String(result.chunks.length)}):`);
   result.chunks.forEach((hit, index) => {
@@ -20,11 +21,11 @@ async function main(): Promise<void> {
     );
   });
 
-  console.log(`\nSources:`);
-  for (const source of result.sources) {
+  console.log(`\nCitations:`);
+  for (const citation of result.citations) {
     console.log(
-      `  [${String(source.ref)}] ${source.title} (${source.sourceUri}) ` +
-        `v${source.version} — fund=${source.fund}`,
+      `  [${String(citation.ref)}] ${citation.sourceRef ?? citation.title} ` +
+        `(${citation.sourceUri}) v${citation.version} — fund=${citation.fund}`,
     );
   }
 

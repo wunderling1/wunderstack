@@ -9,22 +9,24 @@ import { createCaoAgent } from "./index.js";
  */
 async function main(): Promise<void> {
   const question = process.argv[2] ?? "Hoeveel vakantiedagen krijg ik volgens de CAO?";
-  console.log(`Asking the CAO-agent: "${question}"\n`);
+  const fund = process.argv[3] ?? "demo";
+  console.log(`Asking the CAO-agent (fund=${fund}): "${question}"\n`);
 
   const agent = createCaoAgent();
-  const result = await agent.answer({ question });
+  const result = await agent.answer({ question, fund });
 
   console.log(`found: ${String(result.found)}`);
+  console.log(`citationVerificationFailed: ${String(result.citationVerificationFailed)}`);
   console.log(
     `usage: prompt=${String(result.usage.promptTokens)} ` +
       `completion=${String(result.usage.completionTokens)} total=${String(result.usage.totalTokens)}`,
   );
 
-  console.log(`\nSources (${String(result.sources.length)}):`);
-  for (const source of result.sources) {
+  console.log(`\nVerified citations (${String(result.citations.length)}):`);
+  for (const citation of result.citations) {
     console.log(
-      `  [${String(source.ref)}] ${source.title} (${source.sourceUri}) ` +
-        `v${source.version} — fund=${source.fund}`,
+      `  [${String(citation.ref)}] ${citation.sourceRef ?? citation.title} — ` +
+        `"${citation.quote.slice(0, 80)}…" (fund=${citation.fund} v${citation.version})`,
     );
   }
 

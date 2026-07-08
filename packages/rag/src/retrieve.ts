@@ -17,13 +17,13 @@ export const retrieveInputSchema = z.object({
   query: z.string().min(1, "query must not be empty"),
   /**
    * How many chunks to fetch from pgvector as rerank candidates. Defaults to the pinned
-   * RERANK_CONFIG.candidateK (20). The rerank step trims to `topK`.
+   * RERANK_CONFIG.candidateK (15). The rerank step trims to `topK`.
    */
   candidateK: z.number().int().positive().max(50).optional(),
-  /** How many chunks to keep after reranking (fed to assemble). Defaults to RERANK_CONFIG.topK (5). */
+  /** How many chunks to keep after reranking (fed to assemble). Defaults to RERANK_CONFIG.topK (3). */
   topK: z.number().int().positive().max(50).optional(),
-  /** Restrict to a single O&O fund's CAO (control/data-plane key). Omit to search all. */
-  fund: z.string().min(1).optional(),
+  /** Restrict to a single O&O fund's CAO (control/data-plane key). Required on the agent path. */
+  fund: z.string().min(1),
   /**
    * Minimum cosine similarity in [0,1] a chunk must reach to be kept. This is the seed of the
    * "say not found instead of hallucinating" guard the agent enforces in Fase 6; default 0
@@ -92,19 +92,33 @@ export async function retrieve(input: RetrieveInput): Promise<RetrievedChunk[]> 
  * pipeline parses the input exactly once; the public `retrieve` above validates then delegates here.
  */
 export async function retrieveValidated(input: ParsedRetrieveInput): Promise<RetrievedChunk[]> {
+  const { chunks } = await retrieveValidatedTimed(input);
+  return chunks;
+}
+
+export interface RetrievePhaseTimings {
+  embedMs: number;
+  searchMs: number;
+}
+
+/**
+ * Retrieval with per-phase timings for Langfuse latency budgets.
+ */
+export async function retrieveValidatedTimed(
+  input: ParsedRetrieveInput,
+): Promise<{ chunks: RetrievedChunk[]; timings: RetrievePhaseTimings }> {
   const { query, fund, minScore } = input;
   const config = requireRerankConfig();
   const candidateK = input.candidateK ?? config.candidateK;
-  const queryVector = await embedQuery(query);
-  const db = getDb();
 
-  // pgvector cosine distance = 1 - cosine similarity (0 = identical). The 4096-dim column has
-  // no ANN index (exceeds pgvector's 2000-dim limit, see schema.ts), so this is an exact scan
-  // ordered by distance ascending: cost grows linearly with the corpus. Fine for the demo; a
-  // larger corpus needs a re-embed to <=2000 dim (or a dim-reduction step) to enable an hnsw index
-  // — a deliberate re-embed migration, not a silent change (see .cursor/rules/400-data-rag.mdc).
+  const embedStart = performance.now();
+  const queryVector = await embedQuery(query);
+  const embedMs = performance.now() - embedStart;
+
+  const db = getDb();
   const distance = cosineDistance(chunks.embedding, queryVector);
 
+  const searchStart = performance.now();
   const rows = await db
     .select({
       chunkId: chunks.id,
@@ -125,16 +139,16 @@ export async function retrieveValidated(input: ParsedRetrieveInput): Promise<Ret
     })
     .from(chunks)
     .innerJoin(documents, eq(chunks.documentId, documents.id))
-    .where(fund === undefined ? undefined : eq(documents.fund, fund))
+    .where(eq(documents.fund, fund))
     .orderBy(distance)
     .limit(candidateK);
+  const searchMs = performance.now() - searchStart;
 
-  return rows
+  const mapped = rows
     .map((row) => ({
       chunkId: row.chunkId,
       ordinal: row.ordinal,
       content: row.content,
-      // Driver returns numeric as string; coerce and convert distance -> similarity.
       score: 1 - Number(row.distance),
       source: {
         documentId: row.documentId,
@@ -153,4 +167,6 @@ export async function retrieveValidated(input: ParsedRetrieveInput): Promise<Ret
       metadata: row.metadata,
     }))
     .filter((hit) => hit.score >= minScore);
+
+  return { chunks: mapped, timings: { embedMs, searchMs } };
 }

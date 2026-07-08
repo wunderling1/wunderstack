@@ -1,35 +1,171 @@
-import { generateText } from "@wunderstack/ai";
+import { generateText, type ChatMessage } from "@wunderstack/ai";
+import { env } from "@wunderstack/shared";
 import { z } from "zod";
 
+import { extractCitationMarkers } from "../cao/build-citations.js";
+import { parseGenerationOutput } from "../cao/parse-generation.js";
+import { verifyCitations } from "../cao/verify-citations.js";
 import type { GoldenCase, GoldenPassage } from "./golden-set.js";
 import { retryWithBackoff } from "./retry.js";
 
 /**
  * LLM-as-judge and deterministic scorers for Gate C (answer-level eval).
  * All model calls go through @wunderstack/ai (sovereign Mistral path).
+ *
+ * Judge != generator (self-preference bias): the answer generator runs on Mistral Small
+ * (mistral-small-2603) and the LLM-judge on a DIFFERENT, pinned Mistral model, Mistral Large
+ * (mistral-large-2512). A model grading its own output is biased toward it; using a different
+ * family is hard within the sovereignty frame, so we at least separate the model and lean on the
+ * deterministic scorers (hard-hallucination, citation-correctness, refusal) which carry no such
+ * bias. This residual bias is disclosed on purpose — it is procurement-relevant.
+ *
+ * Both LLM scores (soft faithfulness, completeness) are non-deterministic even at temperature 0.
+ * EVAL_JUDGE_SAMPLES (default 1) draws N judge samples per case and takes the median — a majority
+ * vote that keeps a single flaky grade from flipping a gate. Raise it on the merge queue / nightly.
  */
 
-const JUDGE_MODEL = "mistral-small-latest";
+/** Pinned judge model — deliberately different from the generator (mistral-small-2603). */
+const JUDGE_MODEL = "mistral-large-2512";
 
 const judgeResponseSchema = z.object({
   faithfulness: z.number().min(0).max(1),
+  relevance: z.number().min(0).max(1),
   completeness: z.number().min(0).max(1),
   reasoning: z.string().optional(),
 });
 
+export type JudgeResponse = z.infer<typeof judgeResponseSchema>;
+
+/**
+ * Pure parse of a judge model response (no network, so the contract is unit-testable):
+ * extract the JSON object, `JSON.parse` it, then validate against {@link judgeResponseSchema}.
+ * Throws — never defaults a score — on any of: no JSON object present, malformed JSON, or a
+ * schema violation. Callers decide whether to retry (see {@link runJudgeWithParseRetry}).
+ */
+export function parseJudgeOutput(text: string): JudgeResponse {
+  const jsonMatch = /\{[\s\S]*\}/.exec(text);
+  if (!jsonMatch) {
+    throw new Error(`Judge returned no JSON object: ${text.slice(0, 200)}`);
+  }
+
+  let raw: unknown;
+  try {
+    raw = JSON.parse(jsonMatch[0]);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`Judge returned malformed JSON: ${reason}`, { cause: error });
+  }
+
+  return judgeResponseSchema.parse(raw);
+}
+
+/** Runs one judge turn; `extraMessages` are appended after the base prompt (used by the retry). */
+export type JudgeModelCall = (extraMessages: ChatMessage[]) => Promise<string>;
+
+/**
+ * Call the judge with exactly one targeted retry on a parse/validation failure. One malformed
+ * output no longer fails the whole run at the first attempt: the failure is fed back into the
+ * conversation ("your previous answer was not valid JSON") so the model can correct itself.
+ * A second failure throws (fail-loud, no silent default score). Each retry is logged as a warning
+ * so its frequency stays visible (input for the E9 run artefact).
+ */
+export async function runJudgeWithParseRetry(call: JudgeModelCall): Promise<JudgeResponse> {
+  const firstRaw = await call([]);
+  try {
+    return parseJudgeOutput(firstRaw);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    console.warn(`[judge] parse-retry: previous output was not valid JSON (${reason})`);
+    const retryRaw = await call([
+      { role: "assistant", content: firstRaw },
+      {
+        role: "user",
+        content: `Je vorige antwoord was geen geldig JSON: ${reason}. Antwoord uitsluitend met het JSON-object.`,
+      },
+    ]);
+    // A second failure throws here — the run fails loud, no score is defaulted.
+    return parseJudgeOutput(retryRaw);
+  }
+}
+
 export interface CaseScores {
+  /** Deterministic: 1 unless the answer states a number/amount/term absent from the context. */
+  hardHallucination: number;
+  /** LLM-judged: paraphrase drift / nuance loss (soft faithfulness). */
   faithfulness: number;
+  /** LLM-judged: answers the actual question rather than adjacent context. */
+  relevance: number;
   citationCorrectness: number;
   completeness: number;
   refusalCalibration: number;
+  /** Deterministic: 1 when every model-attested quote is verbatim in its chunk (Fase A). */
+  citationVerification: number;
+  /** Deterministic: fraction of verified citations without a matching `[n]` in the prose (0 = clean). */
+  orphanRate: number;
+  /** Deterministic: fraction of prose `[n]` markers without a verified citation behind them (0 = clean). */
+  danglingMarkerRate: number;
+  /** Whether the answer refused ("niet gevonden"); drives the two-sided refusal rates. */
+  refused: boolean;
+  category: GoldenCase["category"];
 }
 
 export interface AggregateScores {
+  hardHallucination: number;
   faithfulness: number;
+  relevance: number;
   citationCorrectness: number;
   completeness: number;
   refusalCalibration: number;
+  /** % answers where every quote verbatim-verified (deterministic; the citation-contract gate). */
+  citationVerification: number;
+  /** Mean orphan-source rate across answers (should be 0 after Fase A). */
+  orphanRate: number;
+  /** Mean dangling-marker rate across answers (should be 0 after citation reconciliation). */
+  danglingMarkerRate: number;
+  /** Answerable cases (in_scope/table) that wrongly refused, as a rate of answerable cases. */
+  overRefusalRate: number;
+  /** Refusal cases that wrongly answered, as a rate of refusal cases. */
+  underRefusalRate: number;
   caseCount: number;
+}
+
+/**
+ * Deterministic citation verification for the eval: parse the generation output, verify each quote
+ * verbatim against its passage, and measure orphan citations. Refusals are vacuously clean.
+ */
+export function scoreCitationVerification(
+  rawAnswer: string,
+  testCase: GoldenCase,
+  passages: GoldenPassage[],
+): { verification: number; orphanRate: number; danglingMarkerRate: number; prose: string } {
+  if (testCase.category === "refusal") {
+    return { verification: 1, orphanRate: 0, danglingMarkerRate: 0, prose: rawAnswer };
+  }
+
+  const parsed = parseGenerationOutput(rawAnswer);
+  if (parsed.citationParseFailed) {
+    // An answerable case that did not emit a parseable citation block violates the contract.
+    const proseMarkers = new Set(extractCitationMarkers(parsed.answerMarkdown));
+    return {
+      verification: 0,
+      orphanRate: 0,
+      danglingMarkerRate: proseMarkers.size === 0 ? 0 : 1,
+      prose: parsed.answerMarkdown,
+    };
+  }
+
+  const contentById = new Map(passages.map((passage) => [passage.id, passage.content]));
+  const result = verifyCitations(parsed.modelCitations, contentById);
+  const verification = result.strippedMarkers.length === 0 ? 1 : 0;
+
+  const proseMarkers = new Set(extractCitationMarkers(parsed.answerMarkdown));
+  const verifiedMarkers = result.verified.map((citation) => citation.marker);
+  const orphans = verifiedMarkers.filter((marker) => !proseMarkers.has(marker)).length;
+  const orphanRate = verifiedMarkers.length === 0 ? 0 : orphans / verifiedMarkers.length;
+  const dangling = [...proseMarkers].filter((marker) => !verifiedMarkers.includes(marker)).length;
+  const danglingMarkerRate = proseMarkers.size === 0 ? 0 : dangling / proseMarkers.size;
+
+  return { verification, orphanRate, danglingMarkerRate, prose: parsed.answerMarkdown };
 }
 
 /** Article anchor as it appears in production context (see @wunderstack/rag assemble). */
@@ -40,8 +176,13 @@ function articleAnchor(passage: GoldenPassage): string {
 }
 
 function buildContext(passages: GoldenPassage[]): string {
+  // Mirror production assemble: each passage carries its `[n]` marker and a `chunk_id=` anchor the
+  // model must copy into its citation block (so the verbatim-verification contract is exercised).
   return passages
-    .map((passage, index) => `[${String(index + 1)}]${articleAnchor(passage)} ${passage.content.trim()}`)
+    .map(
+      (passage, index) =>
+        `[${String(index + 1)}] chunk_id=${passage.id}${articleAnchor(passage)} ${passage.content.trim()}`,
+    )
     .join("\n\n");
 }
 
@@ -114,8 +255,13 @@ export function scoreCitationCorrectness(
   return mentionsArticle ? 0.6 : 0;
 }
 
+/** Whether an answer is a refusal ("niet gevonden") rather than a substantive answer. */
+export function answerRefuses(answer: string, notFoundMessage: string): boolean {
+  return answer.includes(notFoundMessage) || /niet terugvinden/i.test(answer);
+}
+
 export function scoreRefusalCalibration(answer: string, testCase: GoldenCase, notFoundMessage: string): number {
-  const refused = answer.includes(notFoundMessage) || /niet terugvinden/i.test(answer);
+  const refused = answerRefuses(answer, notFoundMessage);
 
   if (testCase.category === "refusal") {
     return refused ? 1 : 0;
@@ -124,55 +270,134 @@ export function scoreRefusalCalibration(answer: string, testCase: GoldenCase, no
   return refused ? 0 : 1;
 }
 
+/**
+ * Hard-hallucination check (deterministic, near-zero tolerance) — the gate that actually backs the
+ * "hij verzint niets"-promise. Extracts the load-bearing facts an answer can fabricate — money
+ * amounts (€), percentages, and quantities with a unit (uur/weken/maanden/dagen/jaar/km/trede) —
+ * and asserts each one literally appears in the supplied context. Bare article/citation numbers
+ * are excluded (they are covered by citation-correctness) to avoid false positives.
+ *
+ * Returns 1 when every hard fact is grounded (or there are none), 0 when any is invented. Binary on
+ * purpose: one fabricated salary or term is a hard fail, regardless of how fluent the answer reads.
+ */
+const HARD_FACT_PATTERNS: RegExp[] = [
+  /€\s?\d[\d.]*(?:,\d+)?/g,
+  /\d+(?:,\d+)?\s?%/g,
+  /\b\d+(?:,\d+)?\s?(?:uur|uren|week|weken|maand|maanden|dag|dagen|jaar|jaren|kilometer|km|trede|treden|periodiek|periodieke|periodieken)\b/gi,
+];
+
+function normalizeFact(text: string): string {
+  return text.toLowerCase().replace(/\s+/g, "");
+}
+
+export function scoreHardHallucination(answer: string, passages: GoldenPassage[]): { score: number; invented: string[] } {
+  const answerWithoutCitations = answer.replace(/\[\d+\]/g, " ");
+  const contextNorm = normalizeFact(passages.map((passage) => passage.content).join(" "));
+
+  const invented: string[] = [];
+  for (const pattern of HARD_FACT_PATTERNS) {
+    for (const match of answerWithoutCitations.matchAll(pattern)) {
+      const fact = match[0];
+      if (!contextNorm.includes(normalizeFact(fact))) {
+        invented.push(fact.trim());
+      }
+    }
+  }
+
+  return { score: invented.length === 0 ? 1 : 0, invented };
+}
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) {
+    return ((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2;
+  }
+  return sorted[mid] ?? 0;
+}
+
+async function judgeOnce(
+  question: string,
+  context: string,
+  answer: string,
+  referenceAnswer: string,
+): Promise<{ faithfulness: number; relevance: number; completeness: number }> {
+  const baseMessages: ChatMessage[] = [
+    {
+      role: "system",
+      content: [
+        "Je bent een strikte evaluator voor een CAO-assistent.",
+        "Beoordeel het antwoord op basis van ALLEEN de gegeven context en de referentie.",
+        "Antwoord uitsluitend met geldig JSON:",
+        '{"faithfulness":0.0,"relevance":0.0,"completeness":0.0,"reasoning":"kort"}',
+        "",
+        "faithfulness (0-1): bevat het antwoord geen feiten die niet uit de context volgen?",
+        "relevance (0-1): beantwoordt het antwoord de gestelde vraag echt, en niet alleen een verwant onderwerp?",
+        "completeness (0-1): beantwoordt het antwoord de kern van de vraag zoals de referentie?",
+      ].join("\n"),
+    },
+    {
+      role: "user",
+      content: [
+        `Vraag: ${question}`,
+        "",
+        "Context:",
+        context,
+        "",
+        `Referentie-antwoord: ${referenceAnswer}`,
+        "",
+        `Te beoordelen antwoord: ${answer}`,
+      ].join("\n"),
+    },
+  ];
+
+  const parsed = await runJudgeWithParseRetry(async (extraMessages) => {
+    const result = await retryWithBackoff(
+      () =>
+        generateText({
+          model: JUDGE_MODEL,
+          temperature: 0,
+          messages: [...baseMessages, ...extraMessages],
+        }),
+      { baseDelayMs: 5000, maxAttempts: 8 },
+    );
+    return result.text;
+  });
+
+  return {
+    faithfulness: parsed.faithfulness,
+    relevance: parsed.relevance,
+    completeness: parsed.completeness,
+  };
+}
+
+/**
+ * Judge the answer, taking the median over EVAL_JUDGE_SAMPLES draws (default 1) so a single flaky
+ * grade cannot flip a gate. Samples are sequential to respect Mistral rate limits.
+ */
 export async function judgeFaithfulnessAndCompleteness(
   question: string,
   context: string,
   answer: string,
   referenceAnswer: string,
-): Promise<{ faithfulness: number; completeness: number }> {
-  const result = await retryWithBackoff(
-    () =>
-      generateText({
-        model: JUDGE_MODEL,
-        temperature: 0,
-        messages: [
-      {
-        role: "system",
-        content: [
-          "Je bent een strikte evaluator voor een CAO-assistent.",
-          "Beoordeel het antwoord op basis van ALLEEN de gegeven context en de referentie.",
-          "Antwoord uitsluitend met geldig JSON:",
-          '{"faithfulness":0.0,"completeness":0.0,"reasoning":"kort"}',
-          "",
-          "faithfulness (0-1): bevat het antwoord geen feiten die niet uit de context volgen?",
-          "completeness (0-1): beantwoordt het antwoord de kern van de vraag zoals de referentie?",
-        ].join("\n"),
-      },
-      {
-        role: "user",
-        content: [
-          `Vraag: ${question}`,
-          "",
-          "Context:",
-          context,
-          "",
-          `Referentie-antwoord: ${referenceAnswer}`,
-          "",
-          `Te beoordelen antwoord: ${answer}`,
-        ].join("\n"),
-      },
-    ],
-      }),
-    { baseDelayMs: 5000, maxAttempts: 8 },
-  );
+): Promise<{ faithfulness: number; relevance: number; completeness: number }> {
+  const samples = env.EVAL_JUDGE_SAMPLES ?? 1;
+  const faithfulnessSamples: number[] = [];
+  const relevanceSamples: number[] = [];
+  const completenessSamples: number[] = [];
 
-  const jsonMatch = /\{[\s\S]*\}/.exec(result.text);
-  if (!jsonMatch) {
-    throw new Error(`Judge returned non-JSON: ${result.text.slice(0, 200)}`);
+  for (let i = 0; i < samples; i++) {
+    const judged = await judgeOnce(question, context, answer, referenceAnswer);
+    faithfulnessSamples.push(judged.faithfulness);
+    relevanceSamples.push(judged.relevance);
+    completenessSamples.push(judged.completeness);
   }
 
-  const parsed = judgeResponseSchema.parse(JSON.parse(jsonMatch[0]));
-  return { faithfulness: parsed.faithfulness, completeness: parsed.completeness };
+  return {
+    faithfulness: median(faithfulnessSamples),
+    relevance: median(relevanceSamples),
+    completeness: median(completenessSamples),
+  };
 }
 
 export async function scoreAnswerCase(
@@ -182,54 +407,120 @@ export async function scoreAnswerCase(
   notFoundMessage: string,
 ): Promise<CaseScores> {
   const context = buildContext(passages);
-  const citationCorrectness = scoreCitationCorrectness(answer, testCase, passages);
-  const refusalCalibration = scoreRefusalCalibration(answer, testCase, notFoundMessage);
+
+  // Split the citation block off the prose; all prose-level scorers see the answer as the user does.
+  const { verification, orphanRate, danglingMarkerRate, prose } = scoreCitationVerification(answer, testCase, passages);
+
+  const citationCorrectness = scoreCitationCorrectness(prose, testCase, passages);
+  const refusalCalibration = scoreRefusalCalibration(prose, testCase, notFoundMessage);
+  const refused = answerRefuses(prose, notFoundMessage);
+  const hardHallucination = scoreHardHallucination(prose, passages).score;
 
   if (testCase.category === "refusal") {
+    // Refusal cases now receive a real generated answer (against near-miss distractor context), so
+    // `refused` reflects whether the model actually refused — this is what makes under-refusal
+    // measurable. Faithfulness/relevance/completeness ride on refusalCalibration (there is nothing
+    // substantive to judge against a refusal reference). citationCorrectness runs through the real
+    // scorer instead of a forced 1: a correct refusal has no article to cite (scorer returns 1),
+    // while a wrong answer no longer gets a free pass.
     return {
+      hardHallucination,
       faithfulness: refusalCalibration,
-      citationCorrectness: 1,
+      relevance: refusalCalibration,
+      citationCorrectness,
       completeness: refusalCalibration,
       refusalCalibration,
+      citationVerification: verification,
+      orphanRate,
+      danglingMarkerRate,
+      refused,
+      category: testCase.category,
     };
   }
 
   const judged = await judgeFaithfulnessAndCompleteness(
     testCase.question,
     context,
-    answer,
+    prose,
     testCase.referenceAnswer,
   );
 
   return {
+    hardHallucination,
     faithfulness: judged.faithfulness,
+    relevance: judged.relevance,
     citationCorrectness,
     completeness: judged.completeness,
     refusalCalibration,
+    citationVerification: verification,
+    orphanRate,
+    danglingMarkerRate,
+    refused,
+    category: testCase.category,
   };
 }
 
 export function aggregateScores(scores: CaseScores[]): AggregateScores {
   if (scores.length === 0) {
-    return { faithfulness: 0, citationCorrectness: 0, completeness: 0, refusalCalibration: 0, caseCount: 0 };
+    return {
+      hardHallucination: 0,
+      faithfulness: 0,
+      relevance: 0,
+      citationCorrectness: 0,
+      completeness: 0,
+      refusalCalibration: 0,
+      citationVerification: 0,
+      orphanRate: 0,
+      danglingMarkerRate: 0,
+      overRefusalRate: 0,
+      underRefusalRate: 0,
+      caseCount: 0,
+    };
   }
 
   const sum = scores.reduce(
     (acc, score) => ({
+      hardHallucination: acc.hardHallucination + score.hardHallucination,
       faithfulness: acc.faithfulness + score.faithfulness,
+      relevance: acc.relevance + score.relevance,
       citationCorrectness: acc.citationCorrectness + score.citationCorrectness,
       completeness: acc.completeness + score.completeness,
       refusalCalibration: acc.refusalCalibration + score.refusalCalibration,
+      citationVerification: acc.citationVerification + score.citationVerification,
+      orphanRate: acc.orphanRate + score.orphanRate,
+      danglingMarkerRate: acc.danglingMarkerRate + score.danglingMarkerRate,
     }),
-    { faithfulness: 0, citationCorrectness: 0, completeness: 0, refusalCalibration: 0 },
+    {
+      hardHallucination: 0,
+      faithfulness: 0,
+      relevance: 0,
+      citationCorrectness: 0,
+      completeness: 0,
+      refusalCalibration: 0,
+      citationVerification: 0,
+      orphanRate: 0,
+      danglingMarkerRate: 0,
+    },
   );
+
+  const answerable = scores.filter((score) => score.category !== "refusal");
+  const refusals = scores.filter((score) => score.category === "refusal");
+  const overRefusals = answerable.filter((score) => score.refused).length;
+  const underRefusals = refusals.filter((score) => !score.refused).length;
 
   const count = scores.length;
   return {
+    hardHallucination: sum.hardHallucination / count,
     faithfulness: sum.faithfulness / count,
+    relevance: sum.relevance / count,
     citationCorrectness: sum.citationCorrectness / count,
     completeness: sum.completeness / count,
     refusalCalibration: sum.refusalCalibration / count,
+    citationVerification: sum.citationVerification / count,
+    orphanRate: sum.orphanRate / count,
+    danglingMarkerRate: sum.danglingMarkerRate / count,
+    overRefusalRate: answerable.length === 0 ? 0 : overRefusals / answerable.length,
+    underRefusalRate: refusals.length === 0 ? 0 : underRefusals / refusals.length,
     caseCount: count,
   };
 }

@@ -1,4 +1,4 @@
-import { DEFAULT_LLM_MODEL, generateText, type ChatMessage } from "@wunderstack/ai";
+import { DEFAULT_LLM_MODEL, generateText, streamText, type ChatMessage } from "@wunderstack/ai";
 import type {
   LanguageModelV2,
   LanguageModelV2CallOptions,
@@ -120,15 +120,41 @@ export function createSovereignModel(options: SovereignModelOptions = {}): Langu
     },
 
     async doStream(callOptions) {
-      const { text, finishReason, usage } = await generate(callOptions);
-      // Single-shot "stream": @wunderstack/ai does not stream yet, so we emit the whole answer as
-      // one text delta. The stream shape is correct, so real token streaming slots in here later.
+      const messages = flattenPrompt(callOptions.prompt);
+      const textId = "0";
+      let finishReason: LanguageModelV2FinishReason = "unknown";
+      let usage: LanguageModelV2Usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+
       const stream = new ReadableStream<LanguageModelV2StreamPart>({
-        start(controller) {
+        async start(controller) {
           controller.enqueue({ type: "stream-start", warnings: [] });
-          controller.enqueue({ type: "text-start", id: "0" });
-          controller.enqueue({ type: "text-delta", id: "0", delta: text });
-          controller.enqueue({ type: "text-end", id: "0" });
+          controller.enqueue({ type: "text-start", id: textId });
+          try {
+            for await (const part of streamText({
+              messages,
+              model: modelId,
+              ...(callOptions.temperature === undefined ? {} : { temperature: callOptions.temperature }),
+              ...(callOptions.maxOutputTokens === undefined
+                ? {}
+                : { maxTokens: callOptions.maxOutputTokens }),
+              ...(callOptions.abortSignal === undefined ? {} : { abortSignal: callOptions.abortSignal }),
+            })) {
+              if (part.type === "delta") {
+                controller.enqueue({ type: "text-delta", id: textId, delta: part.delta });
+              } else {
+                finishReason = mapFinishReason(part.finishReason);
+                usage = {
+                  inputTokens: part.usage.promptTokens,
+                  outputTokens: part.usage.completionTokens,
+                  totalTokens: part.usage.totalTokens,
+                };
+              }
+            }
+          } catch (error) {
+            controller.error(error);
+            return;
+          }
+          controller.enqueue({ type: "text-end", id: textId });
           controller.enqueue({ type: "finish", finishReason, usage });
           controller.close();
         },
