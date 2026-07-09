@@ -9,11 +9,11 @@ packages:
 # explicitly when dependencies change.
 verifyDepsBeforeRun: false
 
-# Approve native build scripts (pnpm 11 blocks unapproved builds).
+# Approve native build scripts (pnpm 11+ requires allowBuilds; onlyBuiltDependencies is ignored).
 # - sharp: Next.js image-optimization dependency (prebuilt binaries).
 # - esbuild: used by drizzle-kit to load the TypeScript schema; needs its native binary.
 # - protobufjs: pulled in transitively by Mastra's gRPC/OpenTelemetry stack (@wunderstack/agents).
-onlyBuiltDependencies:
-  - sharp
-  - esbuild
-  - protobufjs
+allowBuilds:
+  sharp: true
+  esbuild: true
+  protobufjs: true
