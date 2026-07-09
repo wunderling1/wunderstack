@@ -1,11 +1,12 @@
 import { generateText, type ChatMessage } from "@wunderstack/ai";
+import { assemble, type RetrievalTimings } from "@wunderstack/rag";
 import { env } from "@wunderstack/shared";
 import { z } from "zod";
 
 import { extractCitationMarkers } from "../cao/build-citations.js";
 import { parseGenerationOutput } from "../cao/parse-generation.js";
 import { verifyCitations } from "../cao/verify-citations.js";
-import type { GoldenCase, GoldenPassage } from "./golden-set.js";
+import { passageToHit, type GoldenCase, type GoldenPassage } from "./golden-set.js";
 import { retryWithBackoff } from "./retry.js";
 
 /**
@@ -168,22 +169,17 @@ export function scoreCitationVerification(
   return { verification, orphanRate, danglingMarkerRate, prose: parsed.answerMarkdown };
 }
 
-/** Article anchor as it appears in production context (see @wunderstack/rag assemble). */
-function articleAnchor(passage: GoldenPassage): string {
-  if (!passage.article) return "";
-  const label = /^bijlage/i.test(passage.article) ? passage.article : `Artikel ${passage.article}`;
-  return ` (${label})`;
-}
+const NO_TIMINGS: RetrievalTimings = {
+  rewriteMs: 0,
+  embedMs: 0,
+  searchMs: 0,
+  rerankMs: 0,
+  totalMs: 0,
+};
 
-function buildContext(passages: GoldenPassage[]): string {
-  // Mirror production assemble: each passage carries its `[n]` marker and a `chunk_id=` anchor the
-  // model must copy into its citation block (so the verbatim-verification contract is exercised).
-  return passages
-    .map(
-      (passage, index) =>
-        `[${String(index + 1)}] chunk_id=${passage.id}${articleAnchor(passage)} ${passage.content.trim()}`,
-    )
-    .join("\n\n");
+/** Gate C context, built with the exact production assembler (single source of truth). */
+export function assembleEvalContext(passages: GoldenPassage[]): string {
+  return assemble(passages.map(passageToHit), NO_TIMINGS).context;
 }
 
 function extractCitationRefs(answer: string): number[] {
@@ -406,7 +402,7 @@ export async function scoreAnswerCase(
   answer: string,
   notFoundMessage: string,
 ): Promise<CaseScores> {
-  const context = buildContext(passages);
+  const context = assembleEvalContext(passages);
 
   // Split the citation block off the prose; all prose-level scorers see the answer as the user does.
   const { verification, orphanRate, danglingMarkerRate, prose } = scoreCitationVerification(answer, testCase, passages);
@@ -524,5 +520,3 @@ export function aggregateScores(scores: CaseScores[]): AggregateScores {
     caseCount: count,
   };
 }
-
-export { buildContext };

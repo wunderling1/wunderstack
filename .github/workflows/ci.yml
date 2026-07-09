@@ -10,6 +10,9 @@ on:
   # Nightly answer-quality trend (Gate C with more judge samples), off the PR hot path.
   schedule:
     - cron: "0 3 * * *"
+  # Manual baseline refresh: writes fixtures/baseline.json under nightly config and uploads it as an
+  # artifact. Commit stays manual on purpose — baselines are reviewed, never auto-committed.
+  workflow_dispatch:
 
 jobs:
   verify:
@@ -54,3 +57,38 @@ jobs:
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
           EVAL_REQUIRE_ALL: ${{ (github.event_name == 'merge_group' || github.event_name == 'push' || github.event_name == 'schedule') && '1' || '0' }}
           EVAL_JUDGE_SAMPLES: ${{ github.event_name == 'schedule' && '3' || '1' }}
+
+  # Manual-only: refresh the recorded baseline (retrieval + answer) under nightly config and publish
+  # it as an artifact for review. Never commits — a human downloads it, inspects the deltas, and
+  # commits it with the measured values in the message (Fase E7). Median over EVAL_JUDGE_SAMPLES=3
+  # damps single-sample judge noise in the recorded numbers.
+  write-baseline:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.13.0"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Write baseline (nightly config)
+        run: pnpm turbo run test
+        env:
+          SCALEWAY_API_KEY: ${{ secrets.SCALEWAY_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          EVAL_WRITE_BASELINE: "1"
+          EVAL_JUDGE_SAMPLES: "3"
+
+      - name: Upload baseline artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-baseline
+          path: packages/agents/src/evals/fixtures/baseline.json

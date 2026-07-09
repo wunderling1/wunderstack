@@ -14,9 +14,21 @@ export function buildVerifiedCitations(
 ): Citation[] {
   const chunkById = new Map(chunks.map((chunk) => [chunk.chunkId, chunk]));
 
+  // A model can emit the same `[n]` marker more than once (e.g. two quotes for one source). The
+  // contract is one card per ref, so collapse to the first verified citation per marker; duplicates
+  // would otherwise render as sibling cards sharing a React key.
+  const seenMarkers = new Set<number>();
+
   return verified
     .slice()
     .sort((a, b) => a.marker - b.marker)
+    .filter((modelCitation) => {
+      if (seenMarkers.has(modelCitation.marker)) {
+        return false;
+      }
+      seenMarkers.add(modelCitation.marker);
+      return true;
+    })
     .map((modelCitation) => {
       const chunk = chunkById.get(modelCitation.chunkId);
       if (!chunk) {

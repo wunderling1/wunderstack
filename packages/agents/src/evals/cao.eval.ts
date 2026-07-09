@@ -30,8 +30,8 @@
  * Run: pnpm --filter @wunderstack/agents test   (loads repo-root .env automatically)
  */
 
-import { embed, generateText, rerankDocuments } from "@wunderstack/ai";
-import { listFunds, retrieveContext } from "@wunderstack/rag";
+import { embed, generateText } from "@wunderstack/ai";
+import { listFunds, rerank, retrieveContext } from "@wunderstack/rag";
 import { env, GENERATION_CONFIG, requireEmbeddingConfig, requireRerankConfig } from "@wunderstack/shared";
 
 import { detectClarification } from "../cao/clarify.js";
@@ -51,11 +51,12 @@ import {
   goldenCases,
   goldenPassages,
   passageById,
+  passageToHit,
   passagesForCase,
 } from "./golden-set.js";
 import {
   aggregateScores,
-  buildContext,
+  assembleEvalContext,
   scoreAnswerCase,
   type AggregateScores,
   type CaseScores,
@@ -65,11 +66,17 @@ import { retryWithBackoff, sleep } from "./retry.js";
 /** Pinned generator model (Mistral Small 4). Judge runs on a different pinned model (see judge.ts). */
 const EVAL_LLM_MODEL = "mistral-small-2603";
 const K_VALUES = [1, 3, 5] as const;
+/** Primary "what the model sees" metric — must match RERANK_CONFIG.topK (5) and production topK. */
 const PRIMARY_K = 5;
 
 /** True when a missing-key gate must fail rather than skip (set on the merge-to-main CI job). */
 const REQUIRE_ALL = env.EVAL_REQUIRE_ALL === "1" || env.EVAL_REQUIRE_ALL === "true";
 
+/**
+ * Gate-K = production-K = RERANK_CONFIG.topK (5): retrieval fetches candidateK (15) from pgvector,
+ * rerank trims to 5, and the model sees those 5 chunks. recall@5 is the primary comfort metric;
+ * hit@1 and recall@3 remain as additional thresholds.
+ */
 const RETRIEVAL_THRESHOLDS = {
   hitAt1: 0.85,
   recallAt3: 0.9,
@@ -294,6 +301,12 @@ async function retrievalAndRerankChecks(): Promise<Check[]> {
 
   const beforeRankings: string[][] = [];
   const afterRankings: string[][] = [];
+  const rerankedBefore: string[][] = [];
+  const rerankedAfter: string[][] = [];
+  const rerankedQueries: GoldenCase[] = [];
+  let rerankedCount = 0;
+  let skippedCount = 0;
+  let failedCount = 0;
 
   for (let queryIndex = 0; queryIndex < retrievalQueries.length; queryIndex++) {
     const queryVector = queryVectors[queryIndex] as number[];
@@ -301,40 +314,48 @@ async function retrievalAndRerankChecks(): Promise<Check[]> {
 
     const cosineRanked = goldenPassages
       .map((passage, passageIndex) => ({
-        id: passage.id,
+        passage,
         score: dot(queryVector, passageVectors[passageIndex] as number[]),
       }))
       .sort((a, b) => b.score - a.score);
 
     const candidates = cosineRanked.slice(0, rerankConfig.candidateK);
-    beforeRankings.push(candidates.map((entry) => entry.id));
+    beforeRankings.push(candidates.map((entry) => entry.passage.id));
 
     if (candidates.length === 0) {
       afterRankings.push([]);
       continue;
     }
 
-    try {
-      const reranked = await rerankDocuments({
-        query: query.question,
-        documents: candidates.map((entry) => {
-          const passage = goldenPassages.find((p) => p.id === entry.id);
-          return passage?.content ?? "";
-        }),
-        topN: rerankConfig.topK,
-        model: rerankConfig.model,
-      });
+    const candidateHits = candidates.map((entry) => ({
+      ...passageToHit(entry.passage),
+      score: entry.score,
+    }));
+    const result = await rerank({
+      query: query.question,
+      chunks: candidateHits,
+      topK: rerankConfig.topK,
+    });
+    afterRankings.push(result.chunks.map((chunk) => chunk.chunkId));
 
-      afterRankings.push(
-        reranked.results.map((result) => candidates[result.index]?.id).filter((id): id is string => id !== undefined),
-      );
-    } catch {
-      afterRankings.push(candidates.slice(0, rerankConfig.topK).map((entry) => entry.id));
+    if (result.status === "reranked") {
+      rerankedCount += 1;
+      rerankedBefore.push(candidates.map((entry) => entry.passage.id));
+      rerankedAfter.push(result.chunks.map((chunk) => chunk.chunkId));
+      rerankedQueries.push(query);
+    } else if (result.status === "skipped") {
+      skippedCount += 1;
+    } else {
+      failedCount += 1;
     }
   }
 
   const beforeMetrics = scoreRecall(beforeRankings, retrievalQueries);
   const afterMetrics = scoreRecall(afterRankings, retrievalQueries);
+  const rerankMrrDelta =
+    rerankedQueries.length > 0
+      ? scoreRecall(rerankedAfter, rerankedQueries).mrr - scoreRecall(rerankedBefore, rerankedQueries).mrr
+      : 0;
 
   console.log(
     `\nRetrieval recall — corpus v${GOLDEN_CORPUS_VERSION}, model ${embeddingConfig.model} @ ` +
@@ -343,10 +364,13 @@ async function retrievalAndRerankChecks(): Promise<Check[]> {
   );
   logRecallMetrics("before rerank (cosine top-" + String(rerankConfig.candidateK) + ")", beforeMetrics, RETRIEVAL_THRESHOLDS);
   logRecallMetrics("after rerank (top-" + String(rerankConfig.topK) + ")", afterMetrics, RETRIEVAL_THRESHOLDS);
-  const rerankMrrDelta = afterMetrics.mrr - beforeMetrics.mrr;
   console.log(
-    `  rerank delta — hit@1: ${pct((afterMetrics.recallAtK[1] ?? 0) - (beforeMetrics.recallAtK[1] ?? 0))}, ` +
-      `MRR: ${rerankMrrDelta >= 0 ? "+" : ""}${rerankMrrDelta.toFixed(3)}`,
+    `  rerank run — reranked: ${String(rerankedCount)}, skipped: ${String(skippedCount)}, failed: ${String(failedCount)} (of ${String(retrievalQueries.length)})`,
+  );
+  console.log(
+    `  rerank delta (reranked queries only) — hit@1: ${pct((afterMetrics.recallAtK[1] ?? 0) - (beforeMetrics.recallAtK[1] ?? 0))}, ` +
+      `MRR: ${rerankMrrDelta >= 0 ? "+" : ""}${rerankMrrDelta.toFixed(3)}` +
+      (rerankedQueries.length === 0 ? " (no queries reranked)" : ""),
   );
   console.log("");
 
@@ -369,9 +393,17 @@ async function retrievalAndRerankChecks(): Promise<Check[]> {
     },
     ...recallChecks("retrieval (before rerank)", beforeMetrics, RETRIEVAL_THRESHOLDS),
     {
-      name: "rerank: MRR does not regress (delta >= 0)",
+      name: "rerank: no silent failures",
+      ok: failedCount === 0,
+      detail: `${String(failedCount)} failed of ${String(retrievalQueries.length)}`,
+    },
+    {
+      name: "rerank: MRR does not regress on reranked queries (delta >= 0)",
       ok: rerankMrrDelta >= 0,
-      detail: `MRR ${beforeMetrics.mrr.toFixed(3)} -> ${afterMetrics.mrr.toFixed(3)}`,
+      detail:
+        rerankedQueries.length > 0
+          ? `MRR delta ${rerankMrrDelta >= 0 ? "+" : ""}${rerankMrrDelta.toFixed(3)} over ${String(rerankedQueries.length)} reranked queries`
+          : "no queries reranked",
     },
     ...retrievalRegressionChecks(current),
   ];
@@ -440,20 +472,29 @@ async function condensationChecks(): Promise<Check[]> {
     const [queryVector] = normalize(queryResult.embeddings);
     const cosineRanked = goldenPassages
       .map((passage, passageIndex) => ({
-        id: passage.id,
+        passage,
         score: dot(queryVector as number[], passageVectors[passageIndex] as number[]),
       }))
       .sort((a, b) => b.score - a.score);
     const candidates = cosineRanked.slice(0, rerankConfig.candidateK);
-    const reranked = await rerankDocuments({
+    const candidateHits = candidates.map((entry) => ({
+      ...passageToHit(entry.passage),
+      score: entry.score,
+    }));
+    const result = await rerank({
       query: condensed,
-      documents: candidates.map((entry) => goldenPassages.find((passage) => passage.id === entry.id)?.content ?? ""),
-      topN: rerankConfig.topK,
-      model: rerankConfig.model,
+      chunks: candidateHits,
+      topK: rerankConfig.topK,
     });
-    const rankedIds = reranked.results
-      .map((result) => candidates[result.index]?.id)
-      .filter((id): id is string => id !== undefined);
+    const rankedIds = result.chunks.map((chunk) => chunk.chunkId);
+
+    if (result.status === "failed") {
+      checks.push({
+        name: `condensation: "${testCase.id}" rerank did not fail`,
+        ok: false,
+        detail: result.reason,
+      });
+    }
 
     checks.push({
       name: `condensation: "${testCase.id}" retrieves the expected article after rewrite`,
@@ -607,7 +648,7 @@ async function answerQualityChecks(): Promise<Check[]> {
     // near-miss distractor context (see golden-set.ts), so the model must actually refuse instead
     // of receiving a hardcoded refusal. This is what makes the under-refusal rate measurable.
     const passages = passagesForCase(testCase);
-    const context = buildContext(passages);
+    const context = assembleEvalContext(passages);
     const question = await evalQuestion(testCase);
     const generated = await retryWithBackoff(
       () =>

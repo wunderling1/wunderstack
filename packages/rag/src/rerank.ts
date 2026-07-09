@@ -18,12 +18,18 @@ export interface RerankInput {
   topK?: number;
 }
 
+export type RerankStatus = "reranked" | "skipped" | "failed";
+
 export interface RerankResult {
   chunks: RetrievedChunk[];
   /** Wall-clock ms for the rerank API call (0 when skipped). */
   rerankMs: number;
   /** True when reranking was skipped (disabled, single candidate, or high-confidence vector hit). */
   skipped: boolean;
+  /** Whether rerank ran, was legitimately skipped, or failed (provider error / empty results). */
+  status: RerankStatus;
+  /** Machine-readable skip/fail reason for observability and eval gates. */
+  reason?: string;
 }
 
 export async function rerank(input: RerankInput): Promise<RerankResult> {
@@ -32,16 +38,38 @@ export async function rerank(input: RerankInput): Promise<RerankResult> {
   const ranked = input.chunks;
 
   if (ranked.length === 0) {
-    return { chunks: ranked, rerankMs: 0, skipped: true };
+    return { chunks: ranked, rerankMs: 0, skipped: true, status: "skipped", reason: "empty" };
   }
 
-  if (!config.enabled || ranked.length === 1) {
-    return { chunks: ranked.slice(0, topK), rerankMs: 0, skipped: true };
+  if (!config.enabled) {
+    return {
+      chunks: ranked.slice(0, topK),
+      rerankMs: 0,
+      skipped: true,
+      status: "skipped",
+      reason: "disabled",
+    };
+  }
+
+  if (ranked.length === 1) {
+    return {
+      chunks: ranked.slice(0, topK),
+      rerankMs: 0,
+      skipped: true,
+      status: "skipped",
+      reason: "single-candidate",
+    };
   }
 
   const topScore = ranked[0]?.score ?? 0;
   if (config.skipAboveScore !== null && topScore >= config.skipAboveScore) {
-    return { chunks: ranked.slice(0, topK), rerankMs: 0, skipped: true };
+    return {
+      chunks: ranked.slice(0, topK),
+      rerankMs: 0,
+      skipped: true,
+      status: "skipped",
+      reason: "high-confidence",
+    };
   }
 
   const rerankStart = performance.now();
@@ -66,13 +94,28 @@ export async function rerank(input: RerankInput): Promise<RerankResult> {
       })
       .filter((chunk): chunk is RetrievedChunk => chunk !== undefined);
 
+    const rerankMs = performance.now() - rerankStart;
+
     if (reranked.length === 0) {
-      return { chunks: ranked.slice(0, topK), rerankMs: performance.now() - rerankStart, skipped: false };
+      return {
+        chunks: ranked.slice(0, topK),
+        rerankMs,
+        skipped: false,
+        status: "failed",
+        reason: "empty-results",
+      };
     }
 
-    return { chunks: reranked, rerankMs: performance.now() - rerankStart, skipped: false };
-  } catch {
+    return { chunks: reranked, rerankMs, skipped: false, status: "reranked" };
+  } catch (error) {
     // Provider unavailable or misconfigured — preserve retrieval order rather than fail the agent.
-    return { chunks: ranked.slice(0, topK), rerankMs: performance.now() - rerankStart, skipped: false };
+    const reason = error instanceof Error ? error.message : String(error);
+    return {
+      chunks: ranked.slice(0, topK),
+      rerankMs: performance.now() - rerankStart,
+      skipped: false,
+      status: "failed",
+      reason,
+    };
   }
 }

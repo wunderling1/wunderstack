@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import type { RetrievedChunk } from "@wunderstack/rag";
 import { z } from "zod";
 
 const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
@@ -90,4 +91,35 @@ export function passagesForCase(testCase: GoldenCase): GoldenPassage[] {
   return ids
     .map((id) => passageById(id))
     .filter((passage): passage is GoldenPassage => passage !== undefined);
+}
+
+/** Anchor shown in context, mirroring production sourceRef: "Artikel 3" / "Bijlage 1". */
+function sourceRefFor(passage: GoldenPassage): string | null {
+  if (!passage.article) return null;
+  return /^bijlage/i.test(passage.article) ? passage.article : `Artikel ${passage.article}`;
+}
+
+/** Map a fixture passage to the production hit shape so Gate C can use assemble(). */
+export function passageToHit(passage: GoldenPassage): RetrievedChunk {
+  return {
+    chunkId: passage.id,
+    ordinal: 0,
+    content: passage.content,
+    score: 1,
+    source: {
+      documentId: "",
+      title: passage.source,
+      sourceUri: "",
+      fund: "eval",
+      version: GOLDEN_CORPUS_VERSION,
+    },
+    structure: {
+      chapter: null,
+      article: passage.article ?? null,
+      lid: passage.lid ?? null,
+      sourceRef: sourceRefFor(passage),
+      chunkType: passage.chunkType,
+    },
+    metadata: {},
+  };
 }

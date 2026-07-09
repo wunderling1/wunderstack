@@ -16,7 +16,8 @@ export const retrievalInputSchema = z.object({
   query: z.string().min(1, "query must not be empty"),
   /** O&O fund key — required for corpus isolation on the agent path. */
   fund: z.string().min(1),
-  topK: z.number().int().positive().max(50).default(3),
+  /** How many chunks to keep after reranking (fed to the agent). Defaults to RERANK_CONFIG.topK (5). */
+  topK: z.number().int().positive().max(50).default(5),
   minScore: z.number().min(0).max(1).default(0),
 });
 

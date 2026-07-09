@@ -51,7 +51,7 @@ export {
   type RetrievedChunkSource,
   type RetrievedChunkStructure,
 } from "./retrieve.js";
-export { rerank, type RerankInput } from "./rerank.js";
+export { rerank, type RerankInput, type RerankResult, type RerankStatus } from "./rerank.js";
 export { rewriteQuery, type RewriteResult } from "./rewrite.js";
 export { assemble, type AssembledContext, type RetrievalTimings } from "./assemble.js";
 export {

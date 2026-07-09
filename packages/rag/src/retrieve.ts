@@ -20,7 +20,7 @@ export const retrieveInputSchema = z.object({
    * RERANK_CONFIG.candidateK (15). The rerank step trims to `topK`.
    */
   candidateK: z.number().int().positive().max(50).optional(),
-  /** How many chunks to keep after reranking (fed to assemble). Defaults to RERANK_CONFIG.topK (3). */
+  /** How many chunks to keep after reranking (fed to assemble). Defaults to RERANK_CONFIG.topK (5). */
   topK: z.number().int().positive().max(50).optional(),
   /** Restrict to a single O&O fund's CAO (control/data-plane key). Required on the agent path. */
   fund: z.string().min(1),

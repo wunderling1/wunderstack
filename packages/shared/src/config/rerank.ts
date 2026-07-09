@@ -34,7 +34,7 @@ export const RERANK_CONFIG: RerankConfig = {
   model: "qwen3-embedding-8b",
   version: "1",
   candidateK: 15,
-  topK: 3,
+  topK: 5,
   enabled: true,
   /** Skip rerank when the top vector score is already this confident (saves a Scaleway round-trip). */
   skipAboveScore: 0.85,

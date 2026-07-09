@@ -22,8 +22,8 @@ export const caoQuestionSchema = z.object({
   fund: z.string().min(1),
   /** Recent turns, used only to condense elliptical follow-up questions into a standalone query. */
   history: z.array(caoHistoryMessageSchema).max(6).default([]),
-  /** How many chunks to retrieve as candidate context. Defaults to RERANK_CONFIG.topK (3). */
-  topK: z.number().int().positive().max(50).default(3),
+  /** How many chunks to keep after reranking (fed to the agent). Defaults to RERANK_CONFIG.topK (5). */
+  topK: z.number().int().positive().max(50).default(5),
   /**
    * Minimum cosine similarity in [0,1] a chunk must reach to count as relevant. If no chunk clears
    * this bar the agent answers "niet gevonden" instead of inventing — the anti-hallucination guard.
