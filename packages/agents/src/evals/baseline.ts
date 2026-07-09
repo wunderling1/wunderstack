@@ -41,6 +41,9 @@ const answerSectionSchema = z.object({
 
 export const baselineSchema = z.object({
   corpusVersion: z.string().optional(),
+  // SHA-256 over both golden fixture files at record time (see golden-set.ts GOLDEN_FIXTURE_HASH).
+  // Lets the gate detect a fixture edit that skipped a GOLDEN_CORPUS_VERSION bump.
+  fixtureHash: z.string().optional(),
   retrieval: retrievalSectionSchema.optional(),
   answer: answerSectionSchema.optional(),
 });

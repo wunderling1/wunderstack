@@ -26,7 +26,7 @@ import { retryWithBackoff } from "./retry.js";
  */
 
 /** Pinned judge model — deliberately different from the generator (mistral-small-2603). */
-const JUDGE_MODEL = "mistral-large-2512";
+export const JUDGE_MODEL = "mistral-large-2512";
 
 const judgeResponseSchema = z.object({
   faithfulness: z.number().min(0).max(1),
@@ -64,6 +64,22 @@ export function parseJudgeOutput(text: string): JudgeResponse {
 export type JudgeModelCall = (extraMessages: ChatMessage[]) => Promise<string>;
 
 /**
+ * How often {@link runJudgeWithParseRetry} had to fire its targeted retry (a first judge output
+ * failed to parse). Surfaced in the E9 run artefact so judge-flakiness stays a visible trend rather
+ * than a silently-swallowed warning. Module-level: the eval is a single-run process.
+ */
+let judgeParseRetryCount = 0;
+
+export function getJudgeParseRetryCount(): number {
+  return judgeParseRetryCount;
+}
+
+/** Reset the counter (used by unit tests; the eval process never reuses the module). */
+export function resetJudgeParseRetryCount(): void {
+  judgeParseRetryCount = 0;
+}
+
+/**
  * Call the judge with exactly one targeted retry on a parse/validation failure. One malformed
  * output no longer fails the whole run at the first attempt: the failure is fed back into the
  * conversation ("your previous answer was not valid JSON") so the model can correct itself.
@@ -75,6 +91,7 @@ export async function runJudgeWithParseRetry(call: JudgeModelCall): Promise<Judg
   try {
     return parseJudgeOutput(firstRaw);
   } catch (error) {
+    judgeParseRetryCount += 1;
     const reason = error instanceof Error ? error.message : String(error);
     console.warn(`[judge] parse-retry: previous output was not valid JSON (${reason})`);
     const retryRaw = await call([

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { goldenCaseSchema, goldenCases, passagesForCase } from "./golden-set.js";
+import { goldenCaseSchema, goldenCases, passageById, passagesForCase } from "./golden-set.js";
 
 describe("goldenCaseSchema refusal refinement", () => {
   const base = {
@@ -49,6 +49,23 @@ describe("golden fixtures", () => {
         distractorCount,
         `${testCase.id} distractors all resolve to real passages`,
       );
+    }
+  });
+
+  it("every referenced passage id resolves to a real passage", () => {
+    for (const testCase of goldenCases) {
+      for (const id of [...testCase.expectedPassageIds, ...(testCase.distractorPassageIds ?? [])]) {
+        assert.ok(passageById(id) !== undefined, `${testCase.id} references unknown passage "${id}"`);
+      }
+    }
+  });
+
+  it("answerable cases with an expectedArticle include a matching passage", () => {
+    const answerable = goldenCases.filter((testCase) => testCase.category !== "refusal" && testCase.expectedArticle);
+    assert.ok(answerable.length > 0, "there is at least one answerable case with an expectedArticle");
+    for (const testCase of answerable) {
+      const hasMatch = passagesForCase(testCase).some((passage) => passage.article === testCase.expectedArticle);
+      assert.ok(hasMatch, `${testCase.id} has a passage for article ${String(testCase.expectedArticle)}`);
     }
   });
 });

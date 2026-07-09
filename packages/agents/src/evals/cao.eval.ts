@@ -47,6 +47,7 @@ import {
 } from "./baseline.js";
 import {
   GOLDEN_CORPUS_VERSION,
+  GOLDEN_FIXTURE_HASH,
   type GoldenCase,
   goldenCases,
   goldenPassages,
@@ -57,10 +58,20 @@ import {
 import {
   aggregateScores,
   assembleEvalContext,
+  getJudgeParseRetryCount,
+  JUDGE_MODEL,
   scoreAnswerCase,
   type AggregateScores,
   type CaseScores,
 } from "./judge.js";
+import {
+  EVAL_REPORT_SCHEMA_VERSION,
+  writeEvalReport,
+  type EvalReport,
+  type GateReport,
+  type RetrievalReport,
+  type AnswerReport,
+} from "./report-writer.js";
 import { retryWithBackoff, sleep } from "./retry.js";
 
 /** Pinned generator model (Mistral Small 4). Judge runs on a different pinned model (see judge.ts). */
@@ -113,6 +124,16 @@ interface Check {
   ok: boolean;
   detail?: string;
 }
+
+/**
+ * Run accumulators for the E9 artefact. Filled as gates execute; serialized once at the end of
+ * main() (also on failure). Module-level because the eval is a single-run process — no reuse.
+ */
+const gateResults: GateReport[] = [];
+let retrievalReport: RetrievalReport | null = null;
+let answerReport: AnswerReport | null = null;
+let embeddingModelId: string | null = null;
+let rerankModelId: string | null = null;
 
 function normalize(vectors: number[][]): number[][] {
   return vectors.map((vector) => {
@@ -190,6 +211,34 @@ function clarifyContractChecks(): Check[] {
   });
 
   return checks;
+}
+
+/**
+ * Fixture-hygiene guard (Gate A, offline). The golden set is hand-curated (the generator was
+ * removed in E10); nothing else forces a GOLDEN_CORPUS_VERSION bump when a fixture is edited. If the
+ * content hash drifts from the recorded baseline while the version is unchanged, the baseline no
+ * longer describes the fixtures it was measured on — so we fail loud with the fix instructions.
+ *
+ * Only checks when a baseline for the CURRENT version exists: a deliberate version bump makes the
+ * old hash intentionally stale (resolved by re-recording), and a baseline without a hash predates
+ * this mechanism (nothing to compare).
+ */
+function fixtureHashChecks(): Check[] {
+  const baseline = readBaseline();
+  if (!baseline?.fixtureHash || baseline.corpusVersion !== GOLDEN_CORPUS_VERSION) {
+    return [];
+  }
+  const match = baseline.fixtureHash === GOLDEN_FIXTURE_HASH;
+  return [
+    {
+      name: "fixtures: golden set matches the recorded baseline (or GOLDEN_CORPUS_VERSION was bumped)",
+      ok: match,
+      detail: match
+        ? undefined
+        : `fixture hash ${GOLDEN_FIXTURE_HASH.slice(0, 12)}… != baseline ${baseline.fixtureHash.slice(0, 12)}… at the same corpusVersion "${GOLDEN_CORPUS_VERSION}". ` +
+          "Bump GOLDEN_CORPUS_VERSION and re-record the baseline (EVAL_WRITE_BASELINE=1).",
+    },
+  ];
 }
 
 async function evalQuestion(testCase: GoldenCase): Promise<string> {
@@ -381,9 +430,36 @@ async function retrievalAndRerankChecks(): Promise<Check[]> {
     mrr: beforeMetrics.mrr,
   };
   if (env.EVAL_WRITE_BASELINE === "1" || env.EVAL_WRITE_BASELINE === "true") {
-    updateBaselineSection({ corpusVersion: GOLDEN_CORPUS_VERSION, retrieval: current });
+    updateBaselineSection({ corpusVersion: GOLDEN_CORPUS_VERSION, fixtureHash: GOLDEN_FIXTURE_HASH, retrieval: current });
     console.log("  baseline: retrieval section recorded.\n");
   }
+
+  embeddingModelId = embeddingConfig.model;
+  rerankModelId = rerankConfig.model;
+  retrievalReport = {
+    embeddingDim: passageResult.dim,
+    passages: goldenPassages.length,
+    queries: retrievalQueries.length,
+    before: {
+      hitAt1: beforeMetrics.recallAtK[1] ?? 0,
+      recallAt3: beforeMetrics.recallAtK[3] ?? 0,
+      recallAt5: beforeMetrics.recallAtK[PRIMARY_K] ?? 0,
+      mrr: beforeMetrics.mrr,
+    },
+    after: {
+      hitAt1: afterMetrics.recallAtK[1] ?? 0,
+      recallAt3: afterMetrics.recallAtK[3] ?? 0,
+      recallAt5: afterMetrics.recallAtK[PRIMARY_K] ?? 0,
+      mrr: afterMetrics.mrr,
+    },
+    rerank: {
+      reranked: rerankedCount,
+      skipped: skippedCount,
+      failed: failedCount,
+      total: retrievalQueries.length,
+      mrrDeltaOnReranked: rerankMrrDelta,
+    },
+  };
 
   return [
     {
@@ -671,6 +747,7 @@ async function answerQualityChecks(): Promise<Check[]> {
   }
 
   const aggregate = aggregateScores(caseScores);
+  answerReport = { aggregate, cases: caseScores };
   if (env.EVAL_WRITE_BASELINE === "1" || env.EVAL_WRITE_BASELINE === "true") {
     const answerBaseline: AnswerBaseline = {
       hardHallucination: aggregate.hardHallucination,
@@ -685,7 +762,7 @@ async function answerQualityChecks(): Promise<Check[]> {
       overRefusalRate: aggregate.overRefusalRate,
       underRefusalRate: aggregate.underRefusalRate,
     };
-    updateBaselineSection({ corpusVersion: GOLDEN_CORPUS_VERSION, answer: answerBaseline });
+    updateBaselineSection({ corpusVersion: GOLDEN_CORPUS_VERSION, fixtureHash: GOLDEN_FIXTURE_HASH, answer: answerBaseline });
     console.log("  baseline: answer section recorded.\n");
   }
 
@@ -747,7 +824,13 @@ function report(title: string, checks: Check[]): boolean {
     const status = check.ok ? "PASS" : "FAIL";
     console.log(`  [${status}] ${check.name}${check.detail ? ` — ${check.detail}` : ""}`);
   }
-  return checks.every((check) => check.ok);
+  const passed = checks.every((check) => check.ok);
+  gateResults.push({
+    name: title,
+    passed,
+    checks: checks.map((check) => ({ name: check.name, ok: check.ok, ...(check.detail === undefined ? {} : { detail: check.detail }) })),
+  });
+  return passed;
 }
 
 /**
@@ -757,58 +840,106 @@ function report(title: string, checks: Check[]): boolean {
 function reportUnavailable(gate: string, requirement: string): boolean {
   if (REQUIRE_ALL) {
     console.log(`\n${gate}: REQUIRED-BUT-UNAVAILABLE — ${requirement} (EVAL_REQUIRE_ALL is set).`);
+    gateResults.push({
+      name: gate,
+      passed: false,
+      checks: [{ name: `REQUIRED-BUT-UNAVAILABLE: ${requirement}`, ok: false }],
+    });
     return false;
   }
   console.log(`\n${gate}: SKIPPED (${requirement}). Set the key(s) to run this gate; required on merge to main.`);
+  gateResults.push({
+    name: gate,
+    passed: true,
+    checks: [{ name: `SKIPPED: ${requirement}`, ok: true }],
+  });
   return true;
+}
+
+/** Assemble the E9 run artefact from the accumulators and write it (also on failure). */
+function writeRunArtefact(passed: boolean): void {
+  const report: EvalReport = {
+    schemaVersion: EVAL_REPORT_SCHEMA_VERSION,
+    generatedAt: new Date().toISOString(),
+    commitSha: env.GITHUB_SHA ?? null,
+    corpusVersion: GOLDEN_CORPUS_VERSION,
+    passed,
+    config: {
+      requireAll: REQUIRE_ALL,
+      judgeSamples: env.EVAL_JUDGE_SAMPLES ?? 1,
+      writeBaseline: env.EVAL_WRITE_BASELINE === "1" || env.EVAL_WRITE_BASELINE === "true",
+    },
+    models: {
+      generator: EVAL_LLM_MODEL,
+      judge: JUDGE_MODEL,
+      embedding: embeddingModelId,
+      rerank: rerankModelId,
+    },
+    gates: gateResults,
+    retrieval: retrievalReport,
+    answer: answerReport,
+    judge: { parseRetryCount: getJudgeParseRetryCount() },
+  };
+  const path = writeEvalReport(report);
+  console.log(`\nRun artefact written: ${path}`);
 }
 
 async function main(): Promise<void> {
   let allPassed = true;
+  let completed = false;
 
-  // Gate A — corpus-agnostic base layer (contract-test, always runs).
-  allPassed =
-    report("Gate A — prompt & clarify CONTRACT (change-detector, not a behavioral gate):", [
-      ...promptContractChecks(),
-      ...clarifyContractChecks(),
-    ]) && allPassed;
+  try {
+    // Gate A — corpus-agnostic base layer (contract-test, always runs).
+    allPassed =
+      report("Gate A — prompt & clarify CONTRACT (change-detector, not a behavioral gate):", [
+        ...promptContractChecks(),
+        ...clarifyContractChecks(),
+        ...fixtureHashChecks(),
+      ]) && allPassed;
 
-  // Gate B — fund-specific layer (retrieval is corpus/fund-bound).
-  if (env.SCALEWAY_API_KEY) {
-    allPassed =
-      report("Gate B — retrieval recall + rerank [fund-specific layer]:", await retrievalAndRerankChecks()) &&
-      allPassed;
-  } else {
-    allPassed = reportUnavailable("Gate B — retrieval recall", "SCALEWAY_API_KEY not set") && allPassed;
-  }
+    // Gate B — fund-specific layer (retrieval is corpus/fund-bound).
+    if (env.SCALEWAY_API_KEY) {
+      allPassed =
+        report("Gate B — retrieval recall + rerank [fund-specific layer]:", await retrievalAndRerankChecks()) &&
+        allPassed;
+    } else {
+      allPassed = reportUnavailable("Gate B — retrieval recall", "SCALEWAY_API_KEY not set") && allPassed;
+    }
 
-  if (env.SCALEWAY_API_KEY && env.MISTRAL_API_KEY) {
-    allPassed =
-      report("Gate B2 — multi-turn condensation retrieval:", await condensationChecks()) &&
-      allPassed;
-  } else {
-    allPassed =
-      reportUnavailable("Gate B2 — multi-turn condensation retrieval", "SCALEWAY_API_KEY and MISTRAL_API_KEY required") &&
-      allPassed;
-  }
+    if (env.SCALEWAY_API_KEY && env.MISTRAL_API_KEY) {
+      allPassed =
+        report("Gate B2 — multi-turn condensation retrieval:", await condensationChecks()) &&
+        allPassed;
+    } else {
+      allPassed =
+        reportUnavailable("Gate B2 — multi-turn condensation retrieval", "SCALEWAY_API_KEY and MISTRAL_API_KEY required") &&
+        allPassed;
+    }
 
-  // Gate C — behavioral layer (answer quality; correctness checks are fund-specific).
-  if (env.SCALEWAY_API_KEY && env.MISTRAL_API_KEY) {
-    allPassed = report("Gate C — answer-level quality:", await answerQualityChecks()) && allPassed;
-  } else {
-    allPassed =
-      reportUnavailable("Gate C — answer-level quality", "SCALEWAY_API_KEY and MISTRAL_API_KEY required") &&
-      allPassed;
-  }
+    // Gate C — behavioral layer (answer quality; correctness checks are fund-specific).
+    if (env.SCALEWAY_API_KEY && env.MISTRAL_API_KEY) {
+      allPassed = report("Gate C — answer-level quality:", await answerQualityChecks()) && allPassed;
+    } else {
+      allPassed =
+        reportUnavailable("Gate C — answer-level quality", "SCALEWAY_API_KEY and MISTRAL_API_KEY required") &&
+        allPassed;
+    }
 
-  // Gate D — corpus isolation. The contract layer always runs; the live cross-fund test needs a DB.
-  allPassed = report("Gate D — corpus isolation (contract):", corpusIsolationContractChecks()) && allPassed;
-  if (env.DATABASE_URL && env.SCALEWAY_API_KEY) {
-    allPassed = report("Gate D — corpus isolation (integration):", await corpusIsolationLiveChecks()) && allPassed;
-  } else {
-    allPassed =
-      reportUnavailable("Gate D — corpus isolation (integration)", "DATABASE_URL and SCALEWAY_API_KEY required") &&
-      allPassed;
+    // Gate D — corpus isolation. The contract layer always runs; the live cross-fund test needs a DB.
+    allPassed = report("Gate D — corpus isolation (contract):", corpusIsolationContractChecks()) && allPassed;
+    if (env.DATABASE_URL && env.SCALEWAY_API_KEY) {
+      allPassed = report("Gate D — corpus isolation (integration):", await corpusIsolationLiveChecks()) && allPassed;
+    } else {
+      allPassed =
+        reportUnavailable("Gate D — corpus isolation (integration)", "DATABASE_URL and SCALEWAY_API_KEY required") &&
+        allPassed;
+    }
+
+    completed = true;
+  } finally {
+    // Always leave a downloadable artefact — a crashed or failed run is exactly when it matters.
+    // If a gate threw, the run did not complete, so it is recorded as not passed.
+    writeRunArtefact(completed && allPassed);
   }
 
   if (!allPassed) {

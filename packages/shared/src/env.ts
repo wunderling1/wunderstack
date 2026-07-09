@@ -56,6 +56,9 @@ const envSchema = z.object({
   // When truthy, a known-good eval run records the current metrics as the regression baseline
   // (packages/agents/src/evals/fixtures/baseline.json) instead of comparing against it.
   EVAL_WRITE_BASELINE: optional(z.enum(["1", "true", "0", "false"])),
+  // Commit SHA of the checked-out revision (GitHub Actions sets this). Recorded in the per-run eval
+  // artefact (E9) so a report is traceable to an exact commit; null on local runs without it.
+  GITHUB_SHA: optional(z.string().min(1)),
 });
 
 export type Env = z.infer<typeof envSchema>;

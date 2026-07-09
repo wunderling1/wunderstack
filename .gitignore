@@ -13,4 +13,7 @@ out/
 .env.*
 !.env.example
 
+# Per-run eval artefact (E9) — uploaded by CI, never committed.
+eval-report.json
+
 .DS_Store

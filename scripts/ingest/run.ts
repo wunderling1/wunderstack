@@ -8,6 +8,7 @@
  * Usage:
  *   pnpm --filter @wunderstack/ingest ingest [path] --fund <fund> --version <v>
  *   pnpm --filter @wunderstack/ingest ingest [path] --dry-run    # parse + chunk only, no DB/API
+ *   pnpm --filter @wunderstack/ingest ingest [path] --force      # re-chunk + re-embed unchanged source
  *
  * `path` is a file or directory (default: scripts/ingest/input). DATABASE_URL + SCALEWAY_API_KEY
  * are read from the repo-root .env automatically (except in --dry-run).
@@ -34,6 +35,7 @@ interface CliOptions {
   fund: string;
   version: string;
   dryRun: boolean;
+  force: boolean;
 }
 
 function parseCli(): CliOptions {
@@ -43,6 +45,7 @@ function parseCli(): CliOptions {
       fund: { type: "string" },
       version: { type: "string" },
       "dry-run": { type: "boolean", default: false },
+      force: { type: "boolean", default: false },
     },
   });
   return {
@@ -50,6 +53,7 @@ function parseCli(): CliOptions {
     fund: values.fund ?? "demo",
     version: values.version ?? "1",
     dryRun: values["dry-run"] ?? false,
+    force: values.force ?? false,
   };
 }
 
@@ -142,7 +146,9 @@ async function ingestFile(options: CliOptions, filePath: string): Promise<FileOu
     .where(eq(documents.sourceUri, sourceUri))
     .limit(1);
 
-  if (existing[0]?.contentHash === contentHash) {
+  // Idempotency is keyed on the parsed SOURCE TEXT, not the chunk output. A chunker/config change
+  // (same PDF) therefore looks "unchanged" and would be skipped; --force re-chunks and re-embeds.
+  if (existing[0]?.contentHash === contentHash && !options.force) {
     return { sourceUri, status: "unchanged", chunkCount: pieces.length, ...summary };
   }
   const isUpdate = existing.length > 0;
