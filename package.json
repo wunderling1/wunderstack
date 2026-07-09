@@ -7,6 +7,8 @@
     "node": ">=22.13.0"
   },
   "scripts": {
+    "build": "pnpm --filter demo build",
+    "start": "pnpm --filter demo start",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
     "depcruise": "depcruise apps packages scripts",
