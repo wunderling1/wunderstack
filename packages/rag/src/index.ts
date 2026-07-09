@@ -3,9 +3,9 @@
 
 import { requireRerankConfig } from "@wunderstack/shared";
 
-import { assemble, type AssembledContext } from "./assemble.js";
+import { assemble, type AssembledContext, type RetrievalTimings } from "./assemble.js";
 import { rerank } from "./rerank.js";
-import { retrieveInputSchema, retrieveValidated, type RetrieveInput } from "./retrieve.js";
+import { retrieveInputSchema, retrieveValidatedTimed, type RetrieveInput } from "./retrieve.js";
 import { rewriteQuery } from "./rewrite.js";
 
 /**
@@ -16,13 +16,31 @@ import { rewriteQuery } from "./rewrite.js";
  * both retrieval and rerank use the rewritten form so they stay consistent.
  */
 export async function retrieveContext(input: RetrieveInput): Promise<AssembledContext> {
+  const totalStart = performance.now();
   const parsed = retrieveInputSchema.parse(input);
   const config = requireRerankConfig();
   const topK = parsed.topK ?? config.topK;
+
+  const rewriteStart = performance.now();
   const { rewritten } = rewriteQuery(parsed.query);
-  const retrieved = await retrieveValidated({ ...parsed, query: rewritten });
-  const reranked = await rerank({ query: rewritten, chunks: retrieved, topK });
-  return assemble(reranked);
+  const rewriteMs = performance.now() - rewriteStart;
+
+  const { chunks: retrieved, timings: retrieveTimings } = await retrieveValidatedTimed({
+    ...parsed,
+    query: rewritten,
+  });
+
+  const { chunks: reranked, rerankMs } = await rerank({ query: rewritten, chunks: retrieved, topK });
+
+  const timings: RetrievalTimings = {
+    rewriteMs,
+    embedMs: retrieveTimings.embedMs,
+    searchMs: retrieveTimings.searchMs,
+    rerankMs,
+    totalMs: performance.now() - totalStart,
+  };
+
+  return assemble(reranked, timings);
 }
 
 export {
@@ -33,6 +51,13 @@ export {
   type RetrievedChunkSource,
   type RetrievedChunkStructure,
 } from "./retrieve.js";
-export { rerank, type RerankInput } from "./rerank.js";
+export { rerank, type RerankInput, type RerankResult, type RerankStatus } from "./rerank.js";
 export { rewriteQuery, type RewriteResult } from "./rewrite.js";
-export { assemble, type AssembledContext, type Source } from "./assemble.js";
+export { assemble, type AssembledContext, type RetrievalTimings } from "./assemble.js";
+export {
+  fetchParentPassage,
+  listFunds,
+  passageInputSchema,
+  type PassageInput,
+  type PassageResult,
+} from "./passage.js";

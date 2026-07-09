@@ -1,6 +1,7 @@
 export {
   DEFAULT_LLM_MODEL,
   generateText,
+  streamText,
   getModelPricing,
   listModelPricing,
   type ChatMessage,
@@ -9,6 +10,10 @@ export {
   type GenerateTextResult,
   type ModelPriceEntry,
   type ModelPricing,
+  type StreamTextDelta,
+  type StreamTextFinish,
+  type StreamTextInput,
+  type StreamTextPart,
   type TokenUsage,
 } from "./models.js";
 
@@ -18,6 +23,8 @@ export {
   type EmbedInput,
   type EmbeddingResult,
 } from "./embeddings.js";
+
+export { ensureHttpKeepAlive } from "./http.js";
 
 export {
   rerankDocuments,

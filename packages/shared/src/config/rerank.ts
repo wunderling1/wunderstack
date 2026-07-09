@@ -23,14 +23,21 @@ export interface RerankConfig {
   readonly topK: number;
   /** When false, the pipeline skips the rerank call and uses retrieval order. */
   readonly enabled: boolean;
+  /**
+   * When the top vector score is >= this value, skip rerank and use retrieval order.
+   * Null disables conditional skip (always rerank when enabled).
+   */
+  readonly skipAboveScore: number | null;
 }
 
 export const RERANK_CONFIG: RerankConfig = {
   model: "qwen3-embedding-8b",
   version: "1",
-  candidateK: 20,
+  candidateK: 15,
   topK: 5,
   enabled: true,
+  /** Skip rerank when the top vector score is already this confident (saves a Scaleway round-trip). */
+  skipAboveScore: 0.85,
 };
 
 /**
@@ -44,5 +51,10 @@ export function requireRerankConfig(): RerankConfig {
     candidateK: env.RERANK_CANDIDATE_K ?? RERANK_CONFIG.candidateK,
     topK: env.RERANK_TOP_K ?? RERANK_CONFIG.topK,
     enabled: env.RERANK_ENABLED === undefined ? RERANK_CONFIG.enabled : env.RERANK_ENABLED === "true",
+    skipAboveScore: env.RERANK_SKIP_ABOVE_SCORE === undefined
+      ? RERANK_CONFIG.skipAboveScore
+      : env.RERANK_SKIP_ABOVE_SCORE === "null"
+        ? null
+        : Number(env.RERANK_SKIP_ABOVE_SCORE),
   };
 }

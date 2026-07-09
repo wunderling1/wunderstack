@@ -14,6 +14,11 @@ export {
 } from "./config/rerank.js";
 
 export {
+  GENERATION_CONFIG,
+  type GenerationConfig,
+} from "./config/generation.js";
+
+export {
   passages as caoLabeledPassages,
   queries as caoLabeledQueries,
   type CaoPassage,
@@ -23,6 +28,10 @@ export {
 export {
   citationSourceSchema,
   citationSchema,
+  modelCitationSchema,
   type CitationSource,
   type Citation,
+  type ModelCitation,
 } from "./contracts/citation.js";
+
+export { parseCaoFunds, isFundScopeConfigured } from "./config/funds.js";

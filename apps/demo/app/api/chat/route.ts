@@ -59,7 +59,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const agent = getCaoAgent();
-  const { question } = parsed.data;
+  const { question, history } = parsed.data;
   const { fund } = scope;
 
   // Bound total concurrent expensive requests, independent of per-client rate limiting.
@@ -83,10 +83,7 @@ export async function POST(request: Request): Promise<Response> {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        for await (const event of agent.answerStream(
-          { question, ...(fund ? { fund } : {}) },
-          { signal: abort.signal },
-        )) {
+        for await (const event of agent.answerStream({ question, fund, history }, { signal: abort.signal })) {
           if (abort.signal.aborted) break;
           controller.enqueue(line(event));
         }

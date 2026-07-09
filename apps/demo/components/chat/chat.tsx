@@ -26,11 +26,24 @@ const DEFAULT_STARTERS = [
 
 const DEFAULT_TAGLINE = "Stel een vraag over de CAO";
 
+/** Distance from the bottom (px) within which we consider the user "pinned" to the latest message. */
+const NEAR_BOTTOM_THRESHOLD = 80;
+
 export function Chat({ fund, embedded = false, starters, tagline }: ChatProps) {
   const { messages, isStreaming, send, sendFeedback } = useChat(fund);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Whether the user was at the bottom before the latest update. Only then do we auto-scroll, so
+  // streaming text does not yank the viewport away from someone reading earlier content.
+  const pinnedToBottom = useRef(true);
+
+  const onScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    pinnedToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight <= NEAR_BOTTOM_THRESHOLD;
+  };
 
   useEffect(() => {
+    if (!pinnedToBottom.current) return;
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
@@ -38,7 +51,7 @@ export function Chat({ fund, embedded = false, starters, tagline }: ChatProps) {
 
   return (
     <div className={cn("flex h-full flex-col", embedded ? "" : "mx-auto w-full max-w-2xl")}>
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-6">
+      <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto px-4 py-6">
         {empty ? (
           <Starters
             tagline={tagline ?? DEFAULT_TAGLINE}
@@ -46,7 +59,7 @@ export function Chat({ fund, embedded = false, starters, tagline }: ChatProps) {
             onPick={send}
           />
         ) : (
-          <MessageList messages={messages} onFeedback={sendFeedback} />
+          <MessageList messages={messages} {...(fund ? { fund } : {})} onFeedback={sendFeedback} />
         )}
       </div>
 

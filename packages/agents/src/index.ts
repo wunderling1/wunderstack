@@ -8,24 +8,30 @@ export { createCaoAgent } from "./cao/agent.js";
 
 export {
   recordFeedbackScore,
+  recordNumericTraceScore,
   feedbackScoreSchema,
   type FeedbackScore,
   type RecordFeedbackResult,
   type RecordFeedbackOptions,
+  type NumericTraceScore,
 } from "./observability/feedback.js";
 
 export {
   caoQuestionSchema,
   caoAnswerSchema,
-  caoSourceSchema,
   caoCitationSchema,
   caoUsageSchema,
   type CaoAgent,
   type CaoAnswerOptions,
   type CaoQuestion,
   type CaoAnswer,
-  type CaoSource,
   type CaoCitation,
   type CaoUsage,
   type CaoStreamEvent,
 } from "./types.js";
+
+export { fetchPassage, type PassageInput, type PassageResult } from "./cao/passage.js";
+
+export { orphanSourceRate, extractCitationMarkers } from "./cao/build-citations.js";
+export { verifyCitations, normalizeWhitespace } from "./cao/verify-citations.js";
+export { parseGenerationOutput, splitStreamBuffer, CITATIONS_SENTINEL } from "./cao/parse-generation.js";

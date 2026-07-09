@@ -1,7 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { chatEventSchema, type ChatCitation, type ChatSource } from "@/app/api/chat/contract";
+import {
+  chatEventSchema,
+  type ChatCitation,
+  type ChatStatusPhase,
+} from "@/app/api/chat/contract";
 
 /**
  * Client-side chat state + the NDJSON stream reader. Talks only to `/api/chat`; it never touches the
@@ -10,14 +14,16 @@ import { chatEventSchema, type ChatCitation, type ChatSource } from "@/app/api/c
  */
 
 export type FeedbackRating = "up" | "down";
+type ChatHistoryMessage = { role: "user" | "assistant"; content: string };
 
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   text: string;
-  sources: ChatSource[];
-  /** Structure-aware citations (article/lid + snippet); rendered by Citation.tsx (Fase 12). */
+  /** Verified, structure-aware citations (article/lid + quote + snippet); rendered by Citation.tsx. */
   citations: ChatCitation[];
+  /** True when one or more model citations failed verbatim verification. */
+  citationVerificationFailed: boolean;
   found: boolean | null;
   /** True when the assistant asked a clarifying question instead of answering. */
   needsClarification: boolean;
@@ -26,12 +32,26 @@ export interface ChatMessage {
   /** The rating the user gave this answer, once submitted. */
   feedback: FeedbackRating | null;
   streaming: boolean;
+  /** Current progress phase while waiting for the answer; drives the status line + skeleton. */
+  phase: ChatStatusPhase | null;
+  /** Number of retrieved passages (from the `retrieved` phase), for the status label. */
+  retrievedCount: number | null;
 }
 
 const GENERIC_ERROR = "Er ging iets mis bij het beantwoorden van je vraag. Probeer het opnieuw.";
 
 function newId(): string {
   return globalThis.crypto?.randomUUID?.() ?? String(Date.now() + Math.random());
+}
+
+function buildHistory(messages: ChatMessage[]): ChatHistoryMessage[] {
+  return messages
+    .filter((message) => message.text.trim().length > 0)
+    .slice(-6)
+    .map((message) => ({
+      role: message.role,
+      content: message.text.trim(),
+    }));
 }
 
 export function useChat(fund?: string) {
@@ -64,31 +84,66 @@ export function useChat(fund?: string) {
       abortRef.current = controller;
 
       const assistantId = newId();
+      const history = buildHistory(messagesRef.current);
+
+      // Coalesce token deltas: with real streaming the answer arrives as many small chunks, and
+      // re-parsing the growing Markdown on every token janks. Buffer incoming text and flush it to
+      // state at most once per animation frame.
+      let pendingText = "";
+      let rafId: number | null = null;
+      // When the closing `citations` event reconciles the answer (stripped markers), further token
+      // deltas must not re-append to the corrected text.
+      let reconciled = false;
+      const applyPending = () => {
+        rafId = null;
+        if (pendingText.length === 0 || reconciled) {
+          return;
+        }
+        const chunk = pendingText;
+        pendingText = "";
+        patchAssistant(assistantId, (m) => ({ ...m, text: m.text + chunk }));
+      };
+      const scheduleFlush = () => {
+        rafId ??= requestAnimationFrame(applyPending);
+      };
+      const flushNow = () => {
+        if (rafId !== null) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
+        }
+        applyPending();
+      };
+
       setMessages((prev) => [
         ...prev,
         {
           id: newId(),
           role: "user",
           text: trimmed,
-          sources: [],
           citations: [],
+          citationVerificationFailed: false,
           found: null,
           needsClarification: false,
           traceId: null,
           feedback: null,
           streaming: false,
+          phase: null,
+          retrievedCount: null,
         },
         {
           id: assistantId,
           role: "assistant",
           text: "",
-          sources: [],
           citations: [],
+          citationVerificationFailed: false,
           found: null,
           needsClarification: false,
           traceId: null,
           feedback: null,
           streaming: true,
+          // Optimistic first phase so a named status shows <100ms after send, before any server event.
+          phase: "searching",
+          retrievedCount: null,
         },
       ]);
 
@@ -96,7 +151,7 @@ export function useChat(fund?: string) {
         const response = await fetch("/api/chat", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ question: trimmed, ...(fund ? { fund } : {}) }),
+          body: JSON.stringify({ question: trimmed, history, ...(fund ? { fund } : {}) }),
           signal: controller.signal,
         });
 
@@ -118,19 +173,40 @@ export function useChat(fund?: string) {
             return;
           }
           const event = parsed.data;
-          if (event.type === "sources") {
+          if (event.type === "status") {
             patchAssistant(assistantId, (m) => ({
               ...m,
-              sources: event.sources,
+              phase: event.phase,
+              retrievedCount: event.count ?? m.retrievedCount,
+            }));
+          } else if (event.type === "citations") {
+            // Reconcile: replace streamed text with the final answer (failed markers stripped),
+            // and attach the verified citations. Stop any pending token flush from re-appending.
+            reconciled = true;
+            pendingText = "";
+            if (rafId !== null) {
+              cancelAnimationFrame(rafId);
+              rafId = null;
+            }
+            patchAssistant(assistantId, (m) => ({
+              ...m,
+              text: event.answer,
               citations: event.citations,
+              citationVerificationFailed: event.citationVerificationFailed,
               found: event.found,
               needsClarification: event.needsClarification,
             }));
           } else if (event.type === "text") {
-            patchAssistant(assistantId, (m) => ({ ...m, text: m.text + event.delta }));
+            pendingText += event.delta;
+            scheduleFlush();
           } else if (event.type === "done") {
             patchAssistant(assistantId, (m) => ({ ...m, traceId: event.traceId }));
           } else if (event.type === "error") {
+            pendingText = "";
+            if (rafId !== null) {
+              cancelAnimationFrame(rafId);
+              rafId = null;
+            }
             patchAssistant(assistantId, (m) => ({ ...m, text: event.message }));
           }
         };
@@ -150,13 +226,18 @@ export function useChat(fund?: string) {
         if (buffer.length > 0) {
           handleLine(buffer);
         }
+        flushNow();
       } catch {
         // A deliberate abort (unmount) is not an error; leave the partial answer as-is.
         if (!controller.signal.aborted) {
+          flushNow();
           patchAssistant(assistantId, (m) => ({
             ...m,
             text: m.text.length > 0 ? m.text : GENERIC_ERROR,
           }));
+        } else if (rafId !== null) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
         }
       } finally {
         patchAssistant(assistantId, (m) => ({ ...m, streaming: false }));

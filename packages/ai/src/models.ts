@@ -1,6 +1,8 @@
 import { env } from "@wunderstack/shared";
 import { z } from "zod";
 
+import { ensureHttpKeepAlive } from "./http.js";
+
 /**
  * The single seam for LLM calls. Everything else in the codebase talks to this,
  * never to a provider directly (see .cursor/rules/500-agents.mdc).
@@ -41,6 +43,25 @@ export interface GenerateTextResult {
   usage: TokenUsage;
 }
 
+/** Input for streaming generation — same shape as {@link GenerateTextInput}. */
+export type StreamTextInput = GenerateTextInput;
+
+/** One streamed text fragment from the provider. */
+export interface StreamTextDelta {
+  type: "delta";
+  delta: string;
+}
+
+/** Final event after all deltas; carries token usage for cost tracing. */
+export interface StreamTextFinish {
+  type: "finish";
+  model: string;
+  finishReason: string | null;
+  usage: TokenUsage;
+}
+
+export type StreamTextPart = StreamTextDelta | StreamTextFinish;
+
 /** List price of a model, in USD per 1M tokens. Drives cost tracing (see @wunderstack/agents). */
 export interface ModelPricing {
   /** USD per 1M input (prompt) tokens. */
@@ -63,9 +84,20 @@ interface RegisteredModel {
  * Prices are Mistral list prices (USD per 1M tokens), verified 3 Jul 2026. They are the
  * source of truth for cost tracing; batch usage is billed at 50% and is not modelled here.
  * Re-check against https://mistral.ai/pricing and re-sync Langfuse when they change.
+ *
+ * Both the floating `-latest` aliases and their pinned, date-stamped snapshots are registered
+ * so reproducibility-sensitive callers (the eval suite) can pin a frozen checkpoint while the
+ * production default may track `-latest`. Pins verified against Mistral's changelog 7 Jul 2026:
+ *   mistral-large-latest -> mistral-large-2512 (Mistral Large 3)
+ *   mistral-small-latest -> mistral-small-2603 (Mistral Small 4)
  */
 const MODEL_REGISTRY: Record<string, RegisteredModel> = {
   "mistral-large-latest": {
+    provider: "mistral",
+    sovereign: true,
+    pricing: { inputPerMTok: 0.5, outputPerMTok: 1.5 },
+  },
+  "mistral-large-2512": {
     provider: "mistral",
     sovereign: true,
     pricing: { inputPerMTok: 0.5, outputPerMTok: 1.5 },
@@ -75,10 +107,15 @@ const MODEL_REGISTRY: Record<string, RegisteredModel> = {
     sovereign: true,
     pricing: { inputPerMTok: 0.15, outputPerMTok: 0.6 },
   },
+  "mistral-small-2603": {
+    provider: "mistral",
+    sovereign: true,
+    pricing: { inputPerMTok: 0.15, outputPerMTok: 0.6 },
+  },
 };
 
-/** Default LLM = Mistral (sovereign). */
-export const DEFAULT_LLM_MODEL = "mistral-large-latest";
+/** Default LLM = Mistral Small 4 (pinned). Gate C validates answer quality on this model. */
+export const DEFAULT_LLM_MODEL = "mistral-small-2603";
 
 /**
  * Hard upper bound on tokens the model may emit per call when the caller does not set its own
@@ -90,6 +127,12 @@ export const DEFAULT_MAX_OUTPUT_TOKENS = 1024;
 
 const MISTRAL_CHAT_URL = "https://api.mistral.ai/v1/chat/completions";
 
+const mistralUsageSchema = z.object({
+  prompt_tokens: z.number(),
+  completion_tokens: z.number(),
+  total_tokens: z.number(),
+});
+
 const mistralResponseSchema = z.object({
   model: z.string(),
   choices: z
@@ -100,11 +143,27 @@ const mistralResponseSchema = z.object({
       }),
     )
     .min(1),
-  usage: z.object({
-    prompt_tokens: z.number(),
-    completion_tokens: z.number(),
-    total_tokens: z.number(),
-  }),
+  usage: mistralUsageSchema,
+});
+
+/** One SSE chunk from Mistral's streaming chat completions endpoint. */
+const mistralStreamChunkSchema = z.object({
+  model: z.string().optional(),
+  choices: z
+    .array(
+      z.object({
+        index: z.number().optional(),
+        delta: z
+          .object({
+            role: z.string().optional(),
+            content: z.string().optional(),
+          })
+          .optional(),
+        finish_reason: z.string().nullable().optional(),
+      }),
+    )
+    .default([]),
+  usage: mistralUsageSchema.nullable().optional(),
 });
 
 /** A registered model paired with its list price. */
@@ -142,6 +201,7 @@ function resolveModel(model: string): RegisteredModel {
 }
 
 export async function generateText(input: GenerateTextInput): Promise<GenerateTextResult> {
+  ensureHttpKeepAlive();
   const model = input.model ?? DEFAULT_LLM_MODEL;
   resolveModel(model);
 
@@ -155,13 +215,7 @@ export async function generateText(input: GenerateTextInput): Promise<GenerateTe
       "Content-Type": "application/json",
       Authorization: `Bearer ${env.MISTRAL_API_KEY}`,
     },
-    body: JSON.stringify({
-      model,
-      messages: input.messages,
-      ...(input.temperature === undefined ? {} : { temperature: input.temperature }),
-      // Always send a max_tokens: fall back to the seam-wide cap so no generation is unbounded.
-      max_tokens: input.maxTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
-    }),
+    body: JSON.stringify(buildMistralRequestBody(input, false)),
     ...(input.abortSignal === undefined ? {} : { signal: input.abortSignal }),
   });
 
@@ -182,10 +236,137 @@ export async function generateText(input: GenerateTextInput): Promise<GenerateTe
     text: choice.message.content,
     model: parsed.model,
     finishReason: choice.finish_reason ?? null,
-    usage: {
-      promptTokens: parsed.usage.prompt_tokens,
-      completionTokens: parsed.usage.completion_tokens,
-      totalTokens: parsed.usage.total_tokens,
+    usage: mapUsage(parsed.usage),
+  };
+}
+
+function mapUsage(usage: z.infer<typeof mistralUsageSchema>): TokenUsage {
+  return {
+    promptTokens: usage.prompt_tokens,
+    completionTokens: usage.completion_tokens,
+    totalTokens: usage.total_tokens,
+  };
+}
+
+function buildMistralRequestBody(input: GenerateTextInput, stream: boolean): Record<string, unknown> {
+  const model = input.model ?? DEFAULT_LLM_MODEL;
+  return {
+    model,
+    messages: input.messages,
+    ...(input.temperature === undefined ? {} : { temperature: input.temperature }),
+    max_tokens: input.maxTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+    ...(stream ? { stream: true, stream_options: { include_usage: true } } : {}),
+  };
+}
+
+async function* parseMistralSseStream(
+  body: ReadableStream<Uint8Array>,
+): AsyncGenerator<z.infer<typeof mistralStreamChunkSchema>> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      buffer += decoder.decode(value, { stream: true });
+
+      let lineBreak = buffer.indexOf("\n");
+      while (lineBreak !== -1) {
+        const line = buffer.slice(0, lineBreak).trimEnd();
+        buffer = buffer.slice(lineBreak + 1);
+        lineBreak = buffer.indexOf("\n");
+
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data:")) {
+          continue;
+        }
+        const payload = trimmed.slice("data:".length).trim();
+        if (payload === "[DONE]") {
+          return;
+        }
+        if (payload.length === 0) {
+          continue;
+        }
+
+        let json: unknown;
+        try {
+          json = JSON.parse(payload);
+        } catch {
+          throw new Error(`Mistral stream returned invalid JSON: ${payload.slice(0, 120)}`);
+        }
+        yield mistralStreamChunkSchema.parse(json);
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+/**
+ * Stream Mistral chat completions token-by-token (EU-sovereign default path).
+ * Yields `delta` parts for each text fragment and a final `finish` with usage.
+ * Requires `stream_options.include_usage` so cost tracing receives token counts.
+ */
+export async function* streamText(input: StreamTextInput): AsyncGenerator<StreamTextPart> {
+  ensureHttpKeepAlive();
+  const model = input.model ?? DEFAULT_LLM_MODEL;
+  resolveModel(model);
+
+  if (!env.MISTRAL_API_KEY) {
+    throw new Error("MISTRAL_API_KEY is not set (see .env.example).");
+  }
+
+  const response = await fetch(MISTRAL_CHAT_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${env.MISTRAL_API_KEY}`,
+      Accept: "text/event-stream",
     },
+    body: JSON.stringify(buildMistralRequestBody(input, true)),
+    ...(input.abortSignal === undefined ? {} : { signal: input.abortSignal }),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Mistral stream request failed (${String(response.status)}): ${detail}`);
+  }
+
+  if (!response.body) {
+    throw new Error("Mistral stream response has no body.");
+  }
+
+  let resolvedModel = model;
+  let finishReason: string | null = null;
+  let usage: TokenUsage | undefined;
+
+  for await (const chunk of parseMistralSseStream(response.body)) {
+    if (chunk.model) {
+      resolvedModel = chunk.model;
+    }
+
+    const [choice] = chunk.choices;
+    if (choice?.finish_reason) {
+      finishReason = choice.finish_reason;
+    }
+    const delta = choice?.delta?.content;
+    if (delta) {
+      yield { type: "delta", delta };
+    }
+
+    if (chunk.usage) {
+      usage = mapUsage(chunk.usage);
+    }
+  }
+
+  yield {
+    type: "finish",
+    model: resolvedModel,
+    finishReason,
+    usage: usage ?? { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
   };
 }

@@ -1,6 +1,8 @@
 import { env } from "@wunderstack/shared";
 import { z } from "zod";
 
+import { ensureHttpKeepAlive } from "./http.js";
+
 /**
  * The single seam for embeddings, via Scaleway Generative APIs (EU, OpenAI-compatible).
  *
@@ -50,6 +52,7 @@ const embeddingResponseSchema = z.object({
 });
 
 export async function embed(input: EmbedInput): Promise<EmbeddingResult> {
+  ensureHttpKeepAlive();
   if (input.texts.length === 0) {
     throw new Error("embed() requires at least one text.");
   }

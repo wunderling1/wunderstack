@@ -1,0 +1,22 @@
+{
+  "corpusVersion": "1",
+  "retrieval": {
+    "hitAt1": 0.9777777777777777,
+    "recallAt3": 1,
+    "recallAt5": 1,
+    "mrr": 0.9888888888888889
+  },
+  "answer": {
+    "hardHallucination": 0.9827586206896551,
+    "faithfulness": 0.9396551724137931,
+    "relevance": 0.9448275862068966,
+    "citationCorrectness": 0.9655172413793104,
+    "completeness": 0.9275862068965517,
+    "refusalCalibration": 0.9482758620689655,
+    "citationVerification": 0.5344827586206896,
+    "orphanRate": 0,
+    "danglingMarkerRate": 0.43103448275862066,
+    "overRefusalRate": 0,
+    "underRefusalRate": 0.3
+  }
+}

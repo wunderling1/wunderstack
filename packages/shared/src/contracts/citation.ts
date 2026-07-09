@@ -18,12 +18,27 @@ export const citationSourceSchema = z.object({
 export type CitationSource = z.infer<typeof citationSourceSchema>;
 
 /**
- * A richer citation (Fase 11): a document-level source enriched with the CAO structure anchor
- * (chapter/article/lid + a human-readable `sourceRef`) and a short text snippet. This is what lets
- * the agent cite "Artikel 5, lid 2 [1]" and lets the UI (Fase 12) expand a citation to the real
- * CAO text. Multiple citations may share a `ref` when one document contributes several articles.
+ * A model-attested citation entry parsed from the generation sentinel block.
+ * Each marker maps to exactly one chunk and a verbatim quote the model claims supports a fact.
+ */
+export const modelCitationSchema = z.object({
+  marker: z.number().int().positive(),
+  /** Chunk identifier the model copied from the context (a uuid in production; a slug in evals). */
+  chunkId: z.string().min(1),
+  quote: z.string().min(1),
+});
+
+export type ModelCitation = z.infer<typeof modelCitationSchema>;
+
+/**
+ * A verified citation shown in the UI: one `[ref]` → one chunk, with a model-attested quote that
+ * passed verbatim verification and a snippet centred on that quote for display.
  */
 export const citationSchema = citationSourceSchema.extend({
+  /** The chunk this citation refers to (per-citation ref model). */
+  chunkId: z.string().uuid(),
+  /** Verbatim quote from the chunk, attested by the model and verified server-side. */
+  quote: z.string(),
   /** Chapter number/label, null above chapter level. */
   chapter: z.string().nullable(),
   /** Article number ("5", "6a") or bijlage label ("Bijlage 1"), null when unknown. */
@@ -32,7 +47,9 @@ export const citationSchema = citationSourceSchema.extend({
   lid: z.string().nullable(),
   /** Human-readable citation anchor ("Artikel 5, lid 2"), null when no structure was detected. */
   sourceRef: z.string().nullable(),
-  /** Short excerpt of the cited chunk, for a UI to show/expand. */
+  /** Card heading ("Artikel 12 — Vakantie") from structure or a content regex; null when unknown. */
+  heading: z.string().nullable(),
+  /** Short excerpt centred on `quote`, for the collapsed source card. */
   snippet: z.string(),
 });
 

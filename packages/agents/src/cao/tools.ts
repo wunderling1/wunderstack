@@ -1,5 +1,5 @@
-import { retrieveContext } from "@wunderstack/rag";
-import { citationSchema, citationSourceSchema } from "@wunderstack/shared";
+import { retrieveContext, type RetrievedChunk } from "@wunderstack/rag";
+import { citationSchema } from "@wunderstack/shared";
 import { z } from "zod";
 
 /**
@@ -14,15 +14,14 @@ import { z } from "zod";
 
 export const retrievalInputSchema = z.object({
   query: z.string().min(1, "query must not be empty"),
-  fund: z.string().min(1).optional(),
+  /** O&O fund key — required for corpus isolation on the agent path. */
+  fund: z.string().min(1),
+  /** How many chunks to keep after reranking (fed to the agent). Defaults to RERANK_CONFIG.topK (5). */
   topK: z.number().int().positive().max(50).default(5),
   minScore: z.number().min(0).max(1).default(0),
 });
 
 export type RetrievalInput = z.input<typeof retrievalInputSchema>;
-
-/** The citation source shape is shared across seams (see @wunderstack/shared). */
-export const retrievalSourceSchema = citationSourceSchema;
 
 export const retrievalHitSchema = z.object({
   chunkId: z.string(),
@@ -31,18 +30,35 @@ export const retrievalHitSchema = z.object({
   title: z.string(),
 });
 
-export const retrievalOutputSchema = z.object({
-  /** Prompt-ready context block, each passage prefixed with its `[ref]` + sourceRef. */
+export const retrievalMetaSchema = z.object({
+  /** Prompt-ready context block, each passage prefixed with its `[ref]` + chunk_id + sourceRef. */
   context: z.string(),
-  /** Deduplicated, citation-numbered sources (document level). */
-  sources: z.array(retrievalSourceSchema),
-  /** Per-chunk citations enriched with CAO structure (article/lid) + a snippet (Fase 11). */
+  /** Per-chunk retrieval placeholders (filtered to verified citations after generation). */
   citations: z.array(citationSchema),
   /** Per-chunk hits (id + similarity score) — recorded on the Langfuse trace for observability. */
   hits: z.array(retrievalHitSchema),
+  /** Per-phase retrieval timings for Langfuse latency budgets. */
+  timings: z.object({
+    rewriteMs: z.number(),
+    embedMs: z.number(),
+    searchMs: z.number(),
+    rerankMs: z.number(),
+    totalMs: z.number(),
+  }),
 });
 
-export type RetrievalOutput = z.infer<typeof retrievalOutputSchema>;
+export type RetrievalMeta = z.infer<typeof retrievalMetaSchema>;
+
+/**
+ * Full tool output. The serializable metadata is Zod-validated; the ranked chunks pass through
+ * unvalidated (they carry the full text needed for verbatim citation verification and stay inside
+ * this package — they are never sent over a wire).
+ */
+export interface RetrievalOutput extends RetrievalMeta {
+  chunks: RetrievedChunk[];
+  /** chunkId -> full chunk content, for verbatim quote verification. */
+  fullChunkContent: [string, string][];
+}
 
 /**
  * Run retrieval and shape it into the tool's output contract. Called directly by the agent in v1.
@@ -51,14 +67,13 @@ export async function runRetrieval(input: RetrievalInput): Promise<RetrievalOutp
   const parsed = retrievalInputSchema.parse(input);
   const result = await retrieveContext({
     query: parsed.query,
+    fund: parsed.fund,
     topK: parsed.topK,
     minScore: parsed.minScore,
-    ...(parsed.fund === undefined ? {} : { fund: parsed.fund }),
   });
 
-  return retrievalOutputSchema.parse({
+  const meta = retrievalMetaSchema.parse({
     context: result.context,
-    sources: result.sources,
     citations: result.citations,
     hits: result.chunks.map((chunk) => ({
       chunkId: chunk.chunkId,
@@ -66,5 +81,12 @@ export async function runRetrieval(input: RetrievalInput): Promise<RetrievalOutp
       score: chunk.score,
       title: chunk.source.title,
     })),
+    timings: result.timings,
   });
+
+  return {
+    ...meta,
+    chunks: result.chunks,
+    fullChunkContent: result.chunks.map((chunk) => [chunk.chunkId, chunk.content]),
+  };
 }

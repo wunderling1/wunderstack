@@ -1,6 +1,8 @@
 import { env } from "@wunderstack/shared";
 import { z } from "zod";
 
+import { ensureHttpKeepAlive } from "./http.js";
+
 /**
  * The single seam for reranking, via Scaleway Generative APIs (EU).
  *
@@ -80,6 +82,7 @@ function resolveRerankModel(model: string): RegisteredRerankModel {
 }
 
 export async function rerankDocuments(input: RerankInput): Promise<RerankResult> {
+  ensureHttpKeepAlive();
   if (input.documents.length === 0) {
     return { model: input.model ?? "none", results: [] };
   }
