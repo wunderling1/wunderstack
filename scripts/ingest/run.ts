@@ -123,7 +123,9 @@ function summarize(pieces: Chunk[]): Pick<FileOutcome, "tableChunks" | "structur
 }
 
 async function ingestFile(options: CliOptions, filePath: string): Promise<FileOutcome> {
-  const sourceUri = basename(filePath);
+  // Namespace the source URI by fund so the same filename ingested under two funds produces two
+  // distinct documents (source_uri is globally unique) instead of silently overwriting each other.
+  const sourceUri = `${options.fund}/${basename(filePath)}`;
   const title = basename(filePath, extname(filePath));
   const text = await parseFile(filePath);
   const contentHash = sha256(text);
