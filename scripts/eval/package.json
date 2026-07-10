@@ -5,10 +5,13 @@
   "type": "module",
   "scripts": {
     "harvest-feedback": "tsx --env-file-if-exists=../../.env harvest-feedback.ts",
+    "rerank-ablation": "tsx --env-file-if-exists=../../.env rerank-ablation.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
   },
   "dependencies": {
+    "@wunderstack/ai": "workspace:*",
+    "@wunderstack/rag": "workspace:*",
     "@wunderstack/shared": "workspace:*",
     "zod": "4.4.3"
   },

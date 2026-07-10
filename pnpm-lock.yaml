@@ -261,6 +261,12 @@ importers:
 
   scripts/eval:
     dependencies:
+      '@wunderstack/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
+      '@wunderstack/rag':
+        specifier: workspace:*
+        version: link:../../packages/rag
       '@wunderstack/shared':
         specifier: workspace:*
         version: link:../../packages/shared
