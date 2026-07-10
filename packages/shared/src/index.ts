@@ -35,3 +35,5 @@ export {
 } from "./contracts/citation.js";
 
 export { parseCaoFunds, isFundScopeConfigured } from "./config/funds.js";
+
+export { EVAL_FIXTURE_FUND } from "./config/eval.js";

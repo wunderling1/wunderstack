@@ -35,6 +35,14 @@ const scoresResponseSchema = z.object({
   meta: z.object({ page: z.number(), totalPages: z.number() }),
 });
 
+type Score = z.infer<typeof scoreSchema>;
+/** A score we have confirmed carries a traceId, so downstream code needs no cast. */
+type ScoreWithTrace = Score & { traceId: string };
+
+function hasTraceId(score: Score): score is ScoreWithTrace {
+  return typeof score.traceId === "string";
+}
+
 interface Candidate {
   status: "needs_review";
   sourceTraceId: string;
@@ -87,8 +95,8 @@ function findString(value: unknown, keys: string[], depth = 0): string | null {
   return null;
 }
 
-async function fetchDownvotedScores(auth: string): Promise<z.infer<typeof scoreSchema>[]> {
-  const downvoted: z.infer<typeof scoreSchema>[] = [];
+async function fetchDownvotedScores(auth: string): Promise<ScoreWithTrace[]> {
+  const downvoted: ScoreWithTrace[] = [];
   let page = 1;
   for (;;) {
     const raw = await getJson(
@@ -97,7 +105,7 @@ async function fetchDownvotedScores(auth: string): Promise<z.infer<typeof scoreS
     );
     const parsed = scoresResponseSchema.parse(raw);
     for (const score of parsed.data) {
-      if (score.traceId && (score.value ?? 1) <= 0) {
+      if (hasTraceId(score) && (score.value ?? 1) <= 0) {
         downvoted.push(score);
       }
     }
@@ -110,10 +118,10 @@ async function fetchDownvotedScores(auth: string): Promise<z.infer<typeof scoreS
 }
 
 async function toCandidate(
-  score: z.infer<typeof scoreSchema>,
+  score: ScoreWithTrace,
   auth: string,
 ): Promise<Candidate> {
-  const traceId = score.traceId as string;
+  const traceId = score.traceId;
   let question: string | null = null;
   let answer: string | null = null;
   try {

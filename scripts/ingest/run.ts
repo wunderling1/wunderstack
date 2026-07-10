@@ -240,9 +240,6 @@ async function main(): Promise<void> {
 }
 
 main()
-  .then(() => {
-    process.exitCode = 0;
-  })
   .catch((error: unknown) => {
     console.error(error instanceof Error ? error.message : error);
     process.exitCode = 1;
