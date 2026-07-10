@@ -107,8 +107,11 @@ export const GOLDEN_FIXTURE_HASH = createHash("sha256")
   .update(casesRaw)
   .digest("hex");
 
+// Built once at module load so lookups are O(1) instead of a linear scan per call.
+const passageMap = new Map(goldenPassages.map((passage) => [passage.id, passage] as const));
+
 export function passageById(id: string): GoldenPassage | undefined {
-  return goldenPassages.find((passage) => passage.id === id);
+  return passageMap.get(id);
 }
 
 export function passagesForCase(testCase: GoldenCase): GoldenPassage[] {
