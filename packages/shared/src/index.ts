@@ -1,4 +1,4 @@
-export { env } from "./env.js";
+export { env, envSchema } from "./env.js";
 export type { Env } from "./env.js";
 
 export {

@@ -21,7 +21,7 @@ import { parseArgs } from "node:util";
 
 import { embed } from "@wunderstack/ai";
 import { chunks as chunksTable, documents, eq, getDb } from "@wunderstack/db";
-import { EMBEDDING_CONFIG } from "@wunderstack/shared";
+import { EMBEDDING_CONFIG, env } from "@wunderstack/shared";
 
 import { chunk, type Chunk } from "./chunk.js";
 import { parseFile, SUPPORTED_EXTENSIONS } from "./parse.js";
@@ -58,11 +58,9 @@ function parseCli(): CliOptions {
 }
 
 function chunkOptionsFromEnv(): { targetChars?: number; overlapChars?: number } {
-  const target = process.env.INGEST_CHUNK_CHARS;
-  const overlap = process.env.INGEST_OVERLAP_CHARS;
   return {
-    targetChars: target ? Number(target) : undefined,
-    overlapChars: overlap ? Number(overlap) : undefined,
+    targetChars: env.INGEST_CHUNK_CHARS,
+    overlapChars: env.INGEST_OVERLAP_CHARS,
   };
 }
 

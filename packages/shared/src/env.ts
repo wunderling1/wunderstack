@@ -59,8 +59,15 @@ const envSchema = z.object({
   // Commit SHA of the checked-out revision (GitHub Actions sets this). Recorded in the per-run eval
   // artefact (E9) so a report is traceable to an exact commit; null on local runs without it.
   GITHUB_SHA: optional(z.string().min(1)),
+  // Ingestion chunker overrides (scripts/ingest). Optional; the chunker falls back to its defaults
+  // when unset. Coerced + validated so a non-numeric value fails loud here instead of flowing into
+  // the chunker as NaN.
+  INGEST_CHUNK_CHARS: optional(z.coerce.number().int().positive()),
+  INGEST_OVERLAP_CHARS: optional(z.coerce.number().int().positive()),
 });
 
 export type Env = z.infer<typeof envSchema>;
+
+export { envSchema };
 
 export const env: Env = envSchema.parse(process.env);
