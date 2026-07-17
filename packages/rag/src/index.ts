@@ -61,3 +61,6 @@ export {
   type PassageInput,
   type PassageResult,
 } from "./passage.js";
+// Re-exported so short-lived callers (the eval run) can close the DB pool and exit cleanly without
+// depending on @wunderstack/db directly. Long-lived servers keep the pool and never call this.
+export { closeDb } from "@wunderstack/db";

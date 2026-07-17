@@ -17,7 +17,8 @@ import type { AggregateScores, CaseScores } from "./judge.js";
 const reportPath = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "eval-report.json");
 
 /** Current on-disk schema version — bump when the report shape changes in a breaking way. */
-export const EVAL_REPORT_SCHEMA_VERSION = 1;
+// v1: initial (E9). v2: retrievalIntegration (E11). v3: funds[] (E12).
+export const EVAL_REPORT_SCHEMA_VERSION = 3;
 
 export interface ReportCheck {
   name: string;
@@ -58,6 +59,56 @@ export interface AnswerReport {
   cases: CaseScores[];
 }
 
+export interface RecallThresholds {
+  hitAt1: number;
+  recallAt3: number;
+  recallAt5: number;
+  mrr: number;
+}
+
+/**
+ * Gate B-integration (E11): the REAL retrieval pipeline (rewrite -> pgvector -> rerank -> assemble)
+ * measured against ingested fixtures on the nightly job. `thresholds` are recorded on every run so
+ * the provisional bar is visible as a trend (measure ~2 weeks, then tighten). `minScoreGuard` tracks
+ * the refuse-without-LLM check: how many out-of-corpus probes returned 0 hits at the production
+ * minScore floor.
+ */
+export interface RetrievalIntegrationReport {
+  fund: string;
+  queries: number;
+  topK: number;
+  minScore: number;
+  metrics: RecallSnapshot;
+  thresholds: RecallThresholds;
+  minScoreGuard: {
+    probes: number;
+    empty: number;
+    required: number;
+  };
+}
+
+/**
+ * Fund layer (E12) — per fund-specific golden set, scored against the REAL ingested corpus of that
+ * fund via the integration path (retrieveContext), matched on article/lid. Reported SEPARATELY from
+ * the base (corpus-agnostic) scores so a fund's correctness is a distinct, per-corpus trend. Each
+ * fund set carries its own `corpusVersion` (independent of the base one). `refusalGuard` tracks the
+ * minScore refuse-without-LLM check: how many out-of-corpus refusal probes returned 0 hits.
+ */
+export interface FundLayerReport {
+  key: string;
+  fund: string;
+  corpusVersion: string;
+  fixtureHash: string;
+  answerableQueries: number;
+  metrics: RecallSnapshot;
+  thresholds: RecallThresholds;
+  refusalGuard: {
+    probes: number;
+    empty: number;
+    required: number;
+  };
+}
+
 export interface EvalReport {
   schemaVersion: number;
   generatedAt: string;
@@ -77,7 +128,10 @@ export interface EvalReport {
   };
   gates: GateReport[];
   retrieval: RetrievalReport | null;
+  retrievalIntegration: RetrievalIntegrationReport | null;
   answer: AnswerReport | null;
+  /** Per-fund correctness layers (E12); empty when no fund set ran (e.g. no DB on the PR hot path). */
+  funds: FundLayerReport[];
   judge: {
     parseRetryCount: number;
   };

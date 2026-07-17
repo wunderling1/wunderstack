@@ -19,6 +19,7 @@ import {
 import { buildVerifiedCitations } from "./build-citations.js";
 import { detectClarification } from "./clarify.js";
 import { condenseQuery, isElliptical } from "./condense.js";
+import { containsHardFact } from "./hard-facts.js";
 import { parseGenerationOutput, splitStreamBuffer } from "./parse-generation.js";
 import { CAO_SYSTEM_INSTRUCTIONS, NOT_FOUND_MESSAGE, buildAnswerPrompt } from "./prompt.js";
 import { runRetrieval, type RetrievalOutput } from "./tools.js";
@@ -109,11 +110,20 @@ function tracingOptionsFor(
  * Turn raw model output + retrieval into verified citations and a cleaned answer.
  * Model citations whose quote is not verbatim in their chunk are stripped (O2 default), verified
  * against the FULL chunk content (not the truncated snippet).
+ *
+ * E13 runtime guard: an answer that asserts a hard fact — a money amount, percentage, or quantity
+ * with a unit (the same regex family as the eval's hard-hallucination scorer, shared via
+ * `hard-facts.js`) — but survives with ZERO verified citations is an ungrounded numeric claim. That
+ * is exactly the "verzint een bedrag" failure (e.g. a pro-rata "€ 6,25" or an invented "312 uur"
+ * with no source). Serving it minus the stripped marker would still leak the number, so we refuse
+ * instead: the answer is replaced with the not-found message and callers mark the turn as unfound.
+ * A grounded answer (>=1 verified citation) is unaffected; the eval's Gate C still catches invented
+ * numbers that slip in alongside a valid citation.
  */
 function verifyAndBuild(
   raw: string,
   retrieval: RetrievalOutput,
-): { answer: string; citations: CaoCitation[]; verificationFailed: boolean } {
+): { answer: string; citations: CaoCitation[]; verificationFailed: boolean; hardFactGuardTriggered: boolean } {
   const parsed = parseGenerationOutput(raw);
   const fullContentById = new Map(retrieval.fullChunkContent);
   const verification = verifyCitations(parsed.modelCitations, fullContentById);
@@ -124,7 +134,12 @@ function verifyAndBuild(
     verifiedMarkers,
   );
   const verificationFailed = parsed.citationParseFailed || verification.strippedMarkers.length > 0;
-  return { answer, citations, verificationFailed };
+
+  if (citations.length === 0 && containsHardFact(answer)) {
+    return { answer: NOT_FOUND_MESSAGE, citations: [], verificationFailed: true, hardFactGuardTriggered: true };
+  }
+
+  return { answer, citations, verificationFailed, hardFactGuardTriggered: false };
 }
 
 async function resolveRetrievalQuestion(input: CaoQuestion, signal?: AbortSignal): Promise<{
@@ -222,13 +237,17 @@ export function createCaoAgent(): CaoAgent {
           ...(options.signal === undefined ? {} : { abortSignal: options.signal }),
         });
 
-        const { answer, citations, verificationFailed } = verifyAndBuild(result.text, retrieval);
+        const { answer, citations, verificationFailed, hardFactGuardTriggered } = verifyAndBuild(
+          result.text,
+          retrieval,
+        );
         recordCitationScore(traceId, verificationFailed);
 
-        trace.end({ found: true, citationCount: citations.length });
+        const found = !hardFactGuardTriggered;
+        trace.end({ found, citationCount: citations.length, ...(hardFactGuardTriggered ? { refused: true } : {}) });
         return caoAnswerSchema.parse({
           answer,
-          found: true,
+          found,
           needsClarification: false,
           citations,
           traceId,
@@ -336,14 +355,16 @@ export function createCaoAgent(): CaoAgent {
           reader.releaseLock();
         }
 
-        const { answer, citations, verificationFailed } = verifyAndBuild(raw, retrieval);
+        const { answer, citations, verificationFailed, hardFactGuardTriggered } = verifyAndBuild(raw, retrieval);
         recordCitationScore(traceId, verificationFailed);
 
         // Emit verified citations as the closing structured event (after prose, before done). The
-        // final `answer` lets the client reconcile any stripped markers with what it streamed.
+        // final `answer` lets the client reconcile any stripped markers with what it streamed — and,
+        // when the E13 guard trips, replace the streamed ungrounded number with the not-found message.
+        const found = !hardFactGuardTriggered;
         yield {
           type: "citations",
-          found: true,
+          found,
           needsClarification: false,
           citations,
           citationVerificationFailed: verificationFailed,
@@ -360,7 +381,12 @@ export function createCaoAgent(): CaoAgent {
           },
           traceId,
         };
-        trace.end({ found: true, citationCount: citations.length, ...(ttftMs === undefined ? {} : { ttftMs }) });
+        trace.end({
+          found,
+          citationCount: citations.length,
+          ...(hardFactGuardTriggered ? { refused: true } : {}),
+          ...(ttftMs === undefined ? {} : { ttftMs }),
+        });
       } catch (error) {
         trace.fail(error);
         throw error;

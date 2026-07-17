@@ -16,4 +16,7 @@ out/
 # Per-run eval artefact (E9) — uploaded by CI, never committed.
 eval-report.json
 
+# Local baseline diagnostic dumps (throwaway; regenerated on demand).
+baseline-v4-*-dump.json
+
 .DS_Store

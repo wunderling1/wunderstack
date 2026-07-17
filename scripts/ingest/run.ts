@@ -20,7 +20,7 @@ import { basename, extname, join } from "node:path";
 import { parseArgs } from "node:util";
 
 import { embed } from "@wunderstack/ai";
-import { chunks as chunksTable, documents, eq, getDb } from "@wunderstack/db";
+import { chunks as chunksTable, closeDb, documents, eq, getDb } from "@wunderstack/db";
 import { EMBEDDING_CONFIG, env } from "@wunderstack/shared";
 
 import { chunk, type Chunk } from "./chunk.js";
@@ -243,4 +243,6 @@ main()
   .catch((error: unknown) => {
     console.error(error instanceof Error ? error.message : error);
     process.exitCode = 1;
-  });
+  })
+  // Close the pool so the process exits (postgres.js keeps sockets open otherwise) — matters in CI.
+  .finally(closeDb);

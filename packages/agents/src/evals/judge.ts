@@ -4,6 +4,7 @@ import { env } from "@wunderstack/shared";
 import { z } from "zod";
 
 import { extractCitationMarkers } from "../cao/build-citations.js";
+import { findUngroundedFacts } from "../cao/hard-facts.js";
 import { parseGenerationOutput } from "../cao/parse-generation.js";
 import { verifyCitations } from "../cao/verify-citations.js";
 import { passageToHit, type GoldenCase, type GoldenPassage } from "./golden-set.js";
@@ -285,38 +286,23 @@ export function scoreRefusalCalibration(answer: string, testCase: GoldenCase, no
 
 /**
  * Hard-hallucination check (deterministic, near-zero tolerance) — the gate that actually backs the
- * "hij verzint niets"-promise. Extracts the load-bearing facts an answer can fabricate — money
- * amounts (€), percentages, and quantities with a unit (uur/weken/maanden/dagen/jaar/km/trede) —
- * and asserts each one literally appears in the supplied context. Bare article/citation numbers
- * are excluded (they are covered by citation-correctness) to avoid false positives.
+ * "hij verzint niets"-promise. The hard-fact regexes live in `../cao/hard-facts.js` (shared with the
+ * production runtime guard, so the gate and the guard cannot drift). Each load-bearing fact — money
+ * amounts (€), percentages, and quantities with a unit — must literally appear in the grounding.
  *
  * Returns 1 when every hard fact is grounded (or there are none), 0 when any is invented. Binary on
  * purpose: one fabricated salary or term is a hard fail, regardless of how fluent the answer reads.
  */
-const HARD_FACT_PATTERNS: RegExp[] = [
-  /€\s?\d[\d.]*(?:,\d+)?/g,
-  /\d+(?:,\d+)?\s?%/g,
-  /\b\d+(?:,\d+)?\s?(?:uur|uren|week|weken|maand|maanden|dag|dagen|jaar|jaren|kilometer|km|trede|treden|periodiek|periodieke|periodieken)\b/gi,
-];
-
-function normalizeFact(text: string): string {
-  return text.toLowerCase().replace(/\s+/g, "");
-}
-
-export function scoreHardHallucination(answer: string, passages: GoldenPassage[]): { score: number; invented: string[] } {
-  const answerWithoutCitations = answer.replace(/\[\d+\]/g, " ");
-  const contextNorm = normalizeFact(passages.map((passage) => passage.content).join(" "));
-
-  const invented: string[] = [];
-  for (const pattern of HARD_FACT_PATTERNS) {
-    for (const match of answerWithoutCitations.matchAll(pattern)) {
-      const fact = match[0];
-      if (!contextNorm.includes(normalizeFact(fact))) {
-        invented.push(fact.trim());
-      }
-    }
-  }
-
+export function scoreHardHallucination(
+  answer: string,
+  passages: GoldenPassage[],
+  userSupplied = "",
+): { score: number; invented: string[] } {
+  // Grounding = retrieved context + what the user themselves put on the table. A `derived` case asks
+  // "en bij 24 uur?"; the agent echoing "24 uur" is not a hallucination, so the user's question/history
+  // count as grounding. What stays forbidden is an invented *result* (a pro-rata total not in the CAO).
+  const grounding = `${passages.map((passage) => passage.content).join(" ")} ${userSupplied}`;
+  const invented = findUngroundedFacts(answer, grounding);
   return { score: invented.length === 0 ? 1 : 0, invented };
 }
 
@@ -427,7 +413,10 @@ export async function scoreAnswerCase(
   const citationCorrectness = scoreCitationCorrectness(prose, testCase, passages);
   const refusalCalibration = scoreRefusalCalibration(prose, testCase, notFoundMessage);
   const refused = answerRefuses(prose, notFoundMessage);
-  const hardHallucination = scoreHardHallucination(prose, passages).score;
+  // User-supplied numbers (this turn's question + prior history) count as grounding: a `derived` case
+  // like "en bij 24 uur?" must not flag the agent for echoing the 24 the user provided.
+  const userSupplied = [testCase.question, ...(testCase.history ?? []).map((message) => message.content)].join(" ");
+  const hardHallucination = scoreHardHallucination(prose, passages, userSupplied).score;
 
   if (testCase.category === "refusal") {
     // Refusal cases now receive a real generated answer (against near-miss distractor context), so

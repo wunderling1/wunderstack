@@ -46,6 +46,16 @@ jobs:
       - name: Unit tests
         run: pnpm turbo run test:unit
 
+      # Nightly only (E11): ingest the golden passages into the reserved "eval-fixtures" fund on the
+      # staging DB so Gate B-integration can run the REAL pipeline against them. Idempotent, so it is
+      # a fast no-op once ingested. PRs never touch the DB (see the eval step's DATABASE_URL below).
+      - name: Ingest golden fixtures (nightly integration gate)
+        if: github.event_name == 'schedule'
+        run: pnpm --filter @wunderstack/ingest ingest:fixtures
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SCALEWAY_API_KEY: ${{ secrets.SCALEWAY_API_KEY }}
+
       # Quality gate: blocks prompt/retrieval/answer regressions (Fase 9).
       # SCALEWAY_API_KEY enables Gate B (retrieval + rerank); MISTRAL_API_KEY enables Gate C
       # (answer-level LLM-judge). On fork PRs without secrets, Gate A still runs and B/C skip.
@@ -57,6 +67,11 @@ jobs:
         env:
           SCALEWAY_API_KEY: ${{ secrets.SCALEWAY_API_KEY }}
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          # DB-backed integration gates (Gate B-integration + Gate D integration) run ONLY nightly:
+          # the staging DB is wired here just for the schedule, so PRs run with no DATABASE_URL and
+          # those gates skip. EVAL_REQUIRE_DB makes them required (fail-if-missing) on the nightly.
+          DATABASE_URL: ${{ github.event_name == 'schedule' && secrets.DATABASE_URL || '' }}
+          EVAL_REQUIRE_DB: ${{ github.event_name == 'schedule' && '1' || '0' }}
           # Same-repo PRs have secrets, so a missing/expired key must FAIL rather than silently pass
           # with only Gate A + D-contract. Fork PRs (head repo != this repo) have no secrets and keep
           # skipping B/C. See audit point #13.

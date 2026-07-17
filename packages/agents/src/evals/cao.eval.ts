@@ -1,7 +1,13 @@
 /**
  * CAO-agent eval-suite (Fase 9) — the CI quality gate that blocks accuracy regressions.
  *
- * Three gates on the golden set (packages/agents/src/evals/fixtures/golden-set.jsonl):
+ * The golden set is split into two physical layers (see golden-set.ts):
+ *   BASE — golden-set.base.jsonl + golden-passages.jsonl: corpus-agnostic behavioral cases that run
+ *     on the committed FIXTURES, reproducible from the repo on every PR (Gates A, B, B2, C below).
+ *   FUND — golden-set.<fund>.jsonl: fund-specific correctness scored against the REAL ingested corpus
+ *     via the production pipeline (Gate B-integration + Gate F). Needs a DB, so nightly-only.
+ *
+ * The gates (each with its own doc-comment at its definition):
  *
  *   Gate A — Prompt & clarify CONTRACT (offline, deterministic, always runs).
  *     A change-detector, NOT a behavioral gate: it asserts the system prompt still carries its
@@ -31,12 +37,19 @@
  */
 
 import { embed, generateText } from "@wunderstack/ai";
-import { listFunds, rerank, retrieveContext } from "@wunderstack/rag";
-import { env, GENERATION_CONFIG, requireEmbeddingConfig, requireRerankConfig } from "@wunderstack/shared";
+import { closeDb, listFunds, rerank, retrieveContext, type RetrievedChunk } from "@wunderstack/rag";
+import {
+  env,
+  EVAL_FIXTURE_FUND,
+  GENERATION_CONFIG,
+  requireEmbeddingConfig,
+  requireRerankConfig,
+} from "@wunderstack/shared";
 
 import { detectClarification } from "../cao/clarify.js";
 import { condenseQuery, isElliptical } from "../cao/condense.js";
 import { retrievalInputSchema } from "../cao/tools.js";
+import { caoQuestionSchema } from "../types.js";
 import { CAO_SYSTEM_INSTRUCTIONS, NOT_FOUND_MESSAGE, buildAnswerPrompt } from "../cao/prompt.js";
 import {
   type AnswerBaseline,
@@ -49,7 +62,10 @@ import {
   GOLDEN_CORPUS_VERSION,
   GOLDEN_FIXTURE_HASH,
   type GoldenCase,
+  type GoldenFundCase,
+  type GoldenFundSet,
   goldenCases,
+  goldenFundSets,
   goldenPassages,
   passageById,
   passageToHit,
@@ -68,8 +84,10 @@ import {
   EVAL_REPORT_SCHEMA_VERSION,
   writeEvalReport,
   type EvalReport,
+  type FundLayerReport,
   type GateReport,
   type RetrievalReport,
+  type RetrievalIntegrationReport,
   type AnswerReport,
 } from "./report-writer.js";
 import { retryWithBackoff, sleep } from "./retry.js";
@@ -82,6 +100,56 @@ const PRIMARY_K = 5;
 
 /** True when a missing-key gate must fail rather than skip (set on the merge-to-main CI job). */
 const REQUIRE_ALL = env.EVAL_REQUIRE_ALL === "1" || env.EVAL_REQUIRE_ALL === "true";
+
+/** Recall/MRR bar shape, shared by the in-memory Gate B and the nightly Gate B-integration. */
+type RetrievalThresholds = {
+  readonly hitAt1: number;
+  readonly recallAt3: number;
+  readonly recallAt5: number;
+  readonly mrr: number;
+};
+
+/**
+ * Like REQUIRE_ALL but for the DB-backed integration gates (Gate B-integration + Gate D integration).
+ * Set only on the nightly job, which wires a staging DATABASE_URL; on PRs the DB is absent by design,
+ * so those gates skip rather than fail. This keeps the DB requirement off the fast PR hot path (E11).
+ */
+const REQUIRE_DB = env.EVAL_REQUIRE_DB === "1" || env.EVAL_REQUIRE_DB === "true";
+
+/**
+ * The exact request defaults the production chat path uses, read straight from the agent contract
+ * (caoQuestionSchema). Gate B-integration passes these to `retrieveContext` so it measures what
+ * production actually does — topK (5) and minScore (0.35) — closing divergences #3/#6 for the nightly.
+ */
+const PRODUCTION_DEFAULTS = caoQuestionSchema.parse({ question: "_", fund: EVAL_FIXTURE_FUND });
+
+/**
+ * Gate B-integration thresholds. Deliberately LOWER than the in-memory Gate B thresholds: the real
+ * pipeline adds query rewrite, pgvector flat search, the minScore (0.35) floor and production
+ * skip-rerank — it behaves differently from clean in-memory cosine. PROVISIONAL: measure ~2 weeks of
+ * nightly runs (recorded in eval-report.json), then tighten. See PLAN Fase E11.
+ */
+const RETRIEVAL_INTEGRATION_THRESHOLDS: RetrievalThresholds = {
+  hitAt1: 0.7,
+  recallAt3: 0.8,
+  recallAt5: 0.8,
+  mrr: 0.75,
+};
+
+/**
+ * Out-of-corpus probes for the minScore refuse-without-LLM guard (divergence #6). None of these are
+ * in the ETD CAO, so at the production minScore (0.35) the real pipeline should return zero chunks —
+ * exercising the "nothing clears the floor -> refuse without calling the LLM" path that no gate
+ * covered. The golden refusal cases cannot serve here: by design (E3) they carry in-corpus near-miss
+ * distractors, which DO clear the floor. We require MIN_SCORE_GUARD_REQUIRED of them empty (one slot
+ * of slack for embedding noise).
+ */
+const MIN_SCORE_PROBES = [
+  "Hoeveel zonuren waren er gemiddeld in Valencia afgelopen zomer?",
+  "Wat is het recept voor een klassieke tarte tatin met karamel?",
+  "Welke schroefdraadmaat hoort bij een M8-bout in de ruimtevaart?",
+] as const;
+const MIN_SCORE_GUARD_REQUIRED = 2;
 
 /**
  * Gate-K = production-K = RERANK_CONFIG.topK (5): retrieval fetches candidateK (15) from pgvector,
@@ -131,7 +199,9 @@ interface Check {
  */
 const gateResults: GateReport[] = [];
 let retrievalReport: RetrievalReport | null = null;
+let retrievalIntegrationReport: RetrievalIntegrationReport | null = null;
 let answerReport: AnswerReport | null = null;
+const fundLayerReports: FundLayerReport[] = [];
 let embeddingModelId: string | null = null;
 let rerankModelId: string | null = null;
 
@@ -295,7 +365,7 @@ function scoreRecall(rankedPassageIds: string[][], queries: GoldenCase[]): Recal
   return { recallAtK, mrr: reciprocalRankSum / queries.length };
 }
 
-function recallChecks(label: string, metrics: RecallMetrics, thresholds: typeof RETRIEVAL_THRESHOLDS): Check[] {
+function recallChecks(label: string, metrics: RecallMetrics, thresholds: RetrievalThresholds): Check[] {
   return [
     {
       name: `${label}: hit@1 >= ${pct(thresholds.hitAt1)}`,
@@ -316,7 +386,7 @@ function recallChecks(label: string, metrics: RecallMetrics, thresholds: typeof 
   ];
 }
 
-function logRecallMetrics(label: string, metrics: RecallMetrics, thresholds: typeof RETRIEVAL_THRESHOLDS): void {
+function logRecallMetrics(label: string, metrics: RecallMetrics, thresholds: RetrievalThresholds): void {
   console.log(`  ${label}:`);
   console.log(`    hit@1     ${pct(metrics.recallAtK[1] ?? 0)}  (min ${pct(thresholds.hitAt1)})`);
   console.log(`    recall@3  ${pct(metrics.recallAtK[3] ?? 0)}  (min ${pct(thresholds.recallAt3)})`);
@@ -510,6 +580,213 @@ function retrievalRegressionChecks(current: RetrievalBaseline): Check[] {
     ok: now >= was - REL_TOLERANCE,
     detail: `${now.toFixed(3)} vs baseline ${was.toFixed(3)}`,
   }));
+}
+
+/** The article/lid a case expects — the only fields integration relevance is matched on. */
+interface ExpectedStructure {
+  expectedArticle?: string;
+  expectedLid?: string;
+}
+
+/**
+ * Integration relevance: ingested chunk ids are DB uuids, not fixture ids, so a returned chunk is
+ * relevant when its OWN article/lid structure matches the case's expected article/lid — the same
+ * article/lid rule Gate B uses, just read off the pipeline's chunk instead of a fixture lookup.
+ * Works for both base cases (Gate B-integration) and fund cases (Gate F), which share these fields.
+ */
+function chunkMatchesCase(chunk: RetrievedChunk, testCase: ExpectedStructure): boolean {
+  const article = chunk.structure.article;
+  if (!article || !testCase.expectedArticle) {
+    return false;
+  }
+  if (normalizeRef(article) !== normalizeRef(testCase.expectedArticle)) {
+    return false;
+  }
+  if (testCase.expectedLid && chunk.structure.lid) {
+    return normalizeRef(chunk.structure.lid) === normalizeRef(testCase.expectedLid);
+  }
+  return true;
+}
+
+function scoreIntegrationRecall(rankedChunks: RetrievedChunk[][], queries: ExpectedStructure[]): RecallMetrics {
+  const recallHits: Record<number, number> = {};
+  for (const k of K_VALUES) recallHits[k] = 0;
+  let reciprocalRankSum = 0;
+
+  queries.forEach((query, queryIndex) => {
+    const ranked = rankedChunks[queryIndex] ?? [];
+    const rank = ranked.findIndex((chunk) => chunkMatchesCase(chunk, query)) + 1;
+    if (rank > 0) {
+      reciprocalRankSum += 1 / rank;
+      for (const k of K_VALUES) if (rank <= k) recallHits[k] = (recallHits[k] ?? 0) + 1;
+    }
+  });
+
+  const recallAtK: Record<number, number> = {};
+  for (const k of K_VALUES) recallAtK[k] = (recallHits[k] ?? 0) / queries.length;
+  return { recallAtK, mrr: reciprocalRankSum / queries.length };
+}
+
+/**
+ * Gate B-integration (Fase E11) — the nightly gate on the REAL retrieval pipeline. Where Gate B does
+ * in-memory cosine on fixtures, this drives `retrieveContext` (rewrite -> pgvector -> rerank ->
+ * assemble) against the golden passages ingested into a reserved fund, using the exact production
+ * topK/minScore. That closes open question 5 and retrieval-side divergences #3/#6/#8 for the nightly.
+ *
+ * Two things are checked: (1) recall/MRR of the end-to-end pipeline against provisional (lower)
+ * thresholds; (2) the minScore refuse-without-LLM guard — out-of-corpus probes must return 0 hits.
+ * Needs the fixtures ingested first (scripts/ingest/fixtures.ts) and DATABASE_URL + SCALEWAY_API_KEY.
+ */
+async function retrievalIntegrationChecks(): Promise<Check[]> {
+  const queries = goldenCases.filter(
+    (testCase) => testCase.category !== "refusal" && (!testCase.history || testCase.history.length === 0),
+  );
+
+  const rankedChunks: RetrievedChunk[][] = [];
+  for (const testCase of queries) {
+    const result = await retrieveContext({
+      query: testCase.question,
+      fund: EVAL_FIXTURE_FUND,
+      topK: PRODUCTION_DEFAULTS.topK,
+      minScore: PRODUCTION_DEFAULTS.minScore,
+    });
+    rankedChunks.push(result.chunks);
+  }
+  const metrics = scoreIntegrationRecall(rankedChunks, queries);
+
+  let emptyProbes = 0;
+  for (const probe of MIN_SCORE_PROBES) {
+    const result = await retrieveContext({
+      query: probe,
+      fund: EVAL_FIXTURE_FUND,
+      topK: PRODUCTION_DEFAULTS.topK,
+      minScore: PRODUCTION_DEFAULTS.minScore,
+    });
+    if (result.chunks.length === 0) emptyProbes += 1;
+  }
+
+  console.log(
+    `\nGate B-integration — REAL pipeline (rewrite → pgvector → rerank → assemble), fund ` +
+      `"${EVAL_FIXTURE_FUND}", topK=${String(PRODUCTION_DEFAULTS.topK)}, minScore=${String(PRODUCTION_DEFAULTS.minScore)}, ` +
+      `${String(queries.length)} queries:`,
+  );
+  logRecallMetrics("integration (after full pipeline)", metrics, RETRIEVAL_INTEGRATION_THRESHOLDS);
+  console.log(
+    `  minScore guard — ${String(emptyProbes)}/${String(MIN_SCORE_PROBES.length)} out-of-corpus probes returned 0 hits ` +
+      `(need >= ${String(MIN_SCORE_GUARD_REQUIRED)})\n`,
+  );
+
+  retrievalIntegrationReport = {
+    fund: EVAL_FIXTURE_FUND,
+    queries: queries.length,
+    topK: PRODUCTION_DEFAULTS.topK,
+    minScore: PRODUCTION_DEFAULTS.minScore,
+    metrics: {
+      hitAt1: metrics.recallAtK[1] ?? 0,
+      recallAt3: metrics.recallAtK[3] ?? 0,
+      recallAt5: metrics.recallAtK[PRIMARY_K] ?? 0,
+      mrr: metrics.mrr,
+    },
+    thresholds: { ...RETRIEVAL_INTEGRATION_THRESHOLDS },
+    minScoreGuard: { probes: MIN_SCORE_PROBES.length, empty: emptyProbes, required: MIN_SCORE_GUARD_REQUIRED },
+  };
+
+  return [
+    ...recallChecks("integration retrieval", metrics, RETRIEVAL_INTEGRATION_THRESHOLDS),
+    {
+      name: `integration minScore-guard: >= ${String(MIN_SCORE_GUARD_REQUIRED)} out-of-corpus probes return 0 hits (refuse-without-LLM)`,
+      ok: emptyProbes >= MIN_SCORE_GUARD_REQUIRED,
+      detail: `${String(emptyProbes)}/${String(MIN_SCORE_PROBES.length)} probes empty at minScore ${String(PRODUCTION_DEFAULTS.minScore)}`,
+    },
+  ];
+}
+
+/**
+ * Gate F (Fase E12) — FUND-SPECIFIC correctness layer. For each discovered fund set
+ * (golden-set.<fund>.jsonl) this drives the REAL pipeline (rewrite → pgvector → rerank → assemble)
+ * against that fund's ingested corpus, scored on article/lid — NOT against fixtures, which is the
+ * whole point of the fund layer (the audit's "two-layer split is only a console label" is closed by
+ * making it a physical, separately-reported layer). Answerable cases feed recall/MRR; refusal cases
+ * are out-of-corpus minScore probes that must return 0 hits (the refuse-without-LLM guard). Reported
+ * per fund (per corpus snapshot) in eval-report.json — base-scores vs fund-scores stay apart.
+ *
+ * Nightly-only like Gate B-integration, but ALSO needs MISTRAL_API_KEY: multi-turn fund cases are
+ * condensed via the LLM before retrieval (fundCaseQuery), mirroring production. Uses production
+ * topK/minScore.
+ */
+async function fundLayerChecks(set: GoldenFundSet): Promise<Check[]> {
+  const answerable = set.cases.filter((testCase) => testCase.category !== "refusal");
+  const refusals = set.cases.filter((testCase) => testCase.category === "refusal");
+
+  const rankedChunks: RetrievedChunk[][] = [];
+  for (const testCase of answerable) {
+    const query = await fundCaseQuery(testCase);
+    const result = await retrieveContext({
+      query,
+      fund: set.fund,
+      topK: PRODUCTION_DEFAULTS.topK,
+      minScore: PRODUCTION_DEFAULTS.minScore,
+    });
+    rankedChunks.push(result.chunks);
+  }
+  const metrics = scoreIntegrationRecall(rankedChunks, answerable);
+
+  let emptyProbes = 0;
+  for (const testCase of refusals) {
+    const result = await retrieveContext({
+      query: testCase.question,
+      fund: set.fund,
+      topK: PRODUCTION_DEFAULTS.topK,
+      minScore: PRODUCTION_DEFAULTS.minScore,
+    });
+    if (result.chunks.length === 0) emptyProbes += 1;
+  }
+  // One slot of slack for embedding noise, mirroring the base minScore guard.
+  const requiredEmpty = refusals.length === 0 ? 0 : Math.max(1, refusals.length - 1);
+
+  console.log(
+    `\nGate F — fund "${set.key}" correctness on the REAL pipeline, fund "${set.fund}", ` +
+      `corpus v${set.corpusVersion}, topK=${String(PRODUCTION_DEFAULTS.topK)}, ` +
+      `minScore=${String(PRODUCTION_DEFAULTS.minScore)}, ${String(answerable.length)} queries:`,
+  );
+  logRecallMetrics(`fund "${set.key}" (after full pipeline)`, metrics, RETRIEVAL_INTEGRATION_THRESHOLDS);
+  console.log(
+    `  refusal guard — ${String(emptyProbes)}/${String(refusals.length)} out-of-corpus probes returned 0 hits ` +
+      `(need >= ${String(requiredEmpty)})\n`,
+  );
+
+  fundLayerReports.push({
+    key: set.key,
+    fund: set.fund,
+    corpusVersion: set.corpusVersion,
+    fixtureHash: set.fixtureHash,
+    answerableQueries: answerable.length,
+    metrics: {
+      hitAt1: metrics.recallAtK[1] ?? 0,
+      recallAt3: metrics.recallAtK[3] ?? 0,
+      recallAt5: metrics.recallAtK[PRIMARY_K] ?? 0,
+      mrr: metrics.mrr,
+    },
+    thresholds: { ...RETRIEVAL_INTEGRATION_THRESHOLDS },
+    refusalGuard: { probes: refusals.length, empty: emptyProbes, required: requiredEmpty },
+  });
+
+  return [
+    ...recallChecks(`fund "${set.key}" retrieval`, metrics, RETRIEVAL_INTEGRATION_THRESHOLDS),
+    {
+      name: `fund "${set.key}" refusal-guard: >= ${String(requiredEmpty)} out-of-corpus probes return 0 hits (refuse-without-LLM)`,
+      ok: emptyProbes >= requiredEmpty,
+      detail: `${String(emptyProbes)}/${String(refusals.length)} probes empty at minScore ${String(PRODUCTION_DEFAULTS.minScore)}`,
+    },
+  ];
+}
+
+/** Condense an elliptical fund follow-up before retrieval, mirroring the production multi-turn path. */
+async function fundCaseQuery(testCase: GoldenFundCase): Promise<string> {
+  if (!testCase.history || !isElliptical(testCase.question, testCase.history)) {
+    return testCase.question;
+  }
+  return condenseQuery(testCase.history, testCase.question);
 }
 
 async function condensationChecks(): Promise<Check[]> {
@@ -834,12 +1111,14 @@ function report(title: string, checks: Check[]): boolean {
 }
 
 /**
- * Handle a gate that cannot run because its API keys are missing. Under EVAL_REQUIRE_ALL (the
- * merge-to-main job) this is a FAIL — skipped != passed; otherwise it is an explicit dev skip.
+ * Handle a gate that cannot run because its API keys (or DB) are missing. When `required` this is a
+ * FAIL — skipped != passed; otherwise it is an explicit dev skip. API-key gates pass the default
+ * (REQUIRE_ALL); the DB-integration gates pass REQUIRE_DB, so they are required only on the nightly
+ * job that wires DATABASE_URL and skip (never fail) on the PR hot path.
  */
-function reportUnavailable(gate: string, requirement: string): boolean {
-  if (REQUIRE_ALL) {
-    console.log(`\n${gate}: REQUIRED-BUT-UNAVAILABLE — ${requirement} (EVAL_REQUIRE_ALL is set).`);
+function reportUnavailable(gate: string, requirement: string, required: boolean = REQUIRE_ALL): boolean {
+  if (required) {
+    console.log(`\n${gate}: REQUIRED-BUT-UNAVAILABLE — ${requirement} (required on this job).`);
     gateResults.push({
       name: gate,
       passed: false,
@@ -877,7 +1156,9 @@ function writeRunArtefact(passed: boolean): void {
     },
     gates: gateResults,
     retrieval: retrievalReport,
+    retrievalIntegration: retrievalIntegrationReport,
     answer: answerReport,
+    funds: fundLayerReports,
     judge: { parseRetryCount: getJudgeParseRetryCount() },
   };
   const path = writeEvalReport(report);
@@ -925,14 +1206,59 @@ async function main(): Promise<void> {
         allPassed;
     }
 
+    // Gate B-integration — nightly: the REAL retrieval pipeline end-to-end on ingested fixtures
+    // (rewrite → pgvector → rerank → assemble). Needs a DB; PRs skip, the nightly requires it
+    // (REQUIRE_DB). Fixtures must be ingested first — scripts/ingest/fixtures.ts.
+    if (env.DATABASE_URL && env.SCALEWAY_API_KEY) {
+      allPassed =
+        report("Gate B-integration — production retrieval pipeline (nightly):", await retrievalIntegrationChecks()) &&
+        allPassed;
+    } else {
+      allPassed =
+        reportUnavailable(
+          "Gate B-integration — production retrieval pipeline",
+          "DATABASE_URL and SCALEWAY_API_KEY required",
+          REQUIRE_DB,
+        ) && allPassed;
+    }
+
+    // Gate F — fund-specific correctness layer (E12). One gate per discovered fund set, each scored
+    // against its own ingested corpus via the real pipeline. Nightly-only (needs a DB), like Gate
+    // B-integration; on the PR hot path it skips (required only under REQUIRE_DB). base-scores vs
+    // fund-scores are reported apart in the run artefact.
+    if (goldenFundSets.length > 0) {
+      // Needs MISTRAL_API_KEY too (not just DB + Scaleway): fund sets may contain multi-turn cases
+      // that fundCaseQuery condenses via the LLM, exactly like Gate B2/C. Without it the gate would
+      // crash on an elliptical case instead of skipping. On the nightly all three are present.
+      if (env.DATABASE_URL && env.SCALEWAY_API_KEY && env.MISTRAL_API_KEY) {
+        for (const set of goldenFundSets) {
+          allPassed =
+            report(
+              `Gate F — fund-specific correctness [${set.key}] (corpus v${set.corpusVersion}):`,
+              await fundLayerChecks(set),
+            ) && allPassed;
+        }
+      } else {
+        allPassed =
+          reportUnavailable(
+            `Gate F — fund-specific correctness (${goldenFundSets.map((set) => set.key).join(", ")})`,
+            "DATABASE_URL, SCALEWAY_API_KEY and MISTRAL_API_KEY required",
+            REQUIRE_DB,
+          ) && allPassed;
+      }
+    }
+
     // Gate D — corpus isolation. The contract layer always runs; the live cross-fund test needs a DB.
     allPassed = report("Gate D — corpus isolation (contract):", corpusIsolationContractChecks()) && allPassed;
     if (env.DATABASE_URL && env.SCALEWAY_API_KEY) {
       allPassed = report("Gate D — corpus isolation (integration):", await corpusIsolationLiveChecks()) && allPassed;
     } else {
       allPassed =
-        reportUnavailable("Gate D — corpus isolation (integration)", "DATABASE_URL and SCALEWAY_API_KEY required") &&
-        allPassed;
+        reportUnavailable(
+          "Gate D — corpus isolation (integration)",
+          "DATABASE_URL and SCALEWAY_API_KEY required",
+          REQUIRE_DB,
+        ) && allPassed;
     }
 
     completed = true;
@@ -950,7 +1276,11 @@ async function main(): Promise<void> {
   console.log("\nEval PASSED.");
 }
 
-main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : error);
-  process.exitCode = 1;
-});
+main()
+  .catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  })
+  // Close the DB pool (used by the nightly integration gates) so the process exits instead of
+  // hanging on postgres.js's open sockets. No-op when no gate touched the DB.
+  .finally(closeDb);

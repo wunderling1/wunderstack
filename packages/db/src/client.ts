@@ -6,6 +6,7 @@ import * as schema from "./schema.js";
 
 export type Database = PostgresJsDatabase<typeof schema>;
 
+let client: ReturnType<typeof postgres> | undefined;
 let cached: Database | undefined;
 
 /**
@@ -24,7 +25,20 @@ export function getDb(): Database {
     );
   }
 
-  const client = postgres(env.DATABASE_URL, { max: 10 });
+  client = postgres(env.DATABASE_URL, { max: 10 });
   cached = drizzle(client, { schema });
   return cached;
+}
+
+/**
+ * Close the pooled connection so a short-lived process (ingest script, eval run) can exit cleanly.
+ * The postgres.js pool keeps open sockets that otherwise hold the event loop open forever. No-op when
+ * the DB was never used. Long-lived servers never need this — they keep the pool for the process.
+ */
+export async function closeDb(): Promise<void> {
+  if (client) {
+    await client.end({ timeout: 5 });
+    client = undefined;
+    cached = undefined;
+  }
 }

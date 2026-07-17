@@ -10,8 +10,10 @@ import { z } from "zod";
  *
  * Manual utility (not CI): it reads "user-feedback" scores via the Langfuse public API, keeps the
  * thumbs-down ones (value 0), fetches each trace for the question + answer, and writes a JSONL of
- * candidate cases. A human reviews and curates these into `packages/agents/src/evals/fixtures/
- * golden-set.jsonl` — feedback never enters the eval automatically.
+ * candidate cases. A human reviews and curates these into a golden set layer under
+ * `packages/agents/src/evals/fixtures/` — the behavioral `golden-set.base.jsonl` or a fund-specific
+ * `golden-set.<fund>.jsonl` (see docs/golden-set-cocreation.md). Feedback never enters the eval
+ * automatically.
  *
  *   pnpm --filter @wunderstack/eval-scripts harvest-feedback
  *
@@ -161,7 +163,7 @@ async function main(): Promise<void> {
   await writeFile(outPath, body.length > 0 ? `${body}\n` : "", "utf8");
 
   console.log(`Wrote ${String(candidates.length)} candidate case(s) to ${outPath}`);
-  console.log("Review these by hand before adding any to golden-set.jsonl.");
+  console.log("Review these by hand before adding any to a golden set layer (see docs/golden-set-cocreation.md).");
 }
 
 main().catch((error: unknown) => {

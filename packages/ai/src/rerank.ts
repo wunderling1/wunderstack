@@ -1,7 +1,7 @@
 import { env } from "@wunderstack/shared";
 import { z } from "zod";
 
-import { ensureHttpKeepAlive } from "./http.js";
+import { ensureHttpKeepAlive, fetchWithRetry } from "./http.js";
 
 /**
  * The single seam for reranking, via Scaleway Generative APIs (EU).
@@ -94,19 +94,23 @@ export async function rerankDocuments(input: RerankInput): Promise<RerankResult>
     throw new Error("SCALEWAY_API_KEY is not set (see .env.example).");
   }
 
-  const response = await fetch(SCALEWAY_RERANK_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${env.SCALEWAY_API_KEY}`,
+  const response = await fetchWithRetry(
+    SCALEWAY_RERANK_URL,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${env.SCALEWAY_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model,
+        query: input.query,
+        documents: input.documents,
+        ...(input.topN === undefined ? {} : { top_n: input.topN }),
+      }),
     },
-    body: JSON.stringify({
-      model,
-      query: input.query,
-      documents: input.documents,
-      ...(input.topN === undefined ? {} : { top_n: input.topN }),
-    }),
-  });
+    "Scaleway rerank",
+  );
 
   if (!response.ok) {
     const detail = await response.text();

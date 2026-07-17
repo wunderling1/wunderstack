@@ -50,6 +50,10 @@ const envSchema = z.object({
   // run because its API keys are missing FAILS instead of skipping — "skipped != passed". Set on
   // the merge-to-main job so Gate B/C are genuinely required; unset locally so dev runs may skip.
   EVAL_REQUIRE_ALL: optional(z.enum(["1", "true", "0", "false"])),
+  // Like EVAL_REQUIRE_ALL but for the DB-backed integration gates (Gate B-integration and Gate D
+  // integration, which need DATABASE_URL). Set only on the nightly job, which wires a staging DB; on
+  // PRs the DB is intentionally absent, so those gates skip rather than fail. See cao.eval.ts (E11).
+  EVAL_REQUIRE_DB: optional(z.enum(["1", "true", "0", "false"])),
   // Number of LLM-judge samples per case for Gate C; the median is taken (majority vote against
   // judge non-determinism). Defaults to 1; raise to 3 on the merge queue / nightly run.
   EVAL_JUDGE_SAMPLES: optional(z.coerce.number().int().positive().max(9)),

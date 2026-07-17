@@ -1,5 +1,5 @@
 export * from "./schema.js";
-export { getDb, type Database } from "./client.js";
+export { getDb, closeDb, type Database } from "./client.js";
 
 // Re-export the query operators consumers need, so the ORM stays behind this seam
 // (no package/script imports drizzle-orm directly). Extend as new operators are needed.

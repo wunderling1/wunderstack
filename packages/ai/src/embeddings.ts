@@ -1,7 +1,7 @@
 import { env } from "@wunderstack/shared";
 import { z } from "zod";
 
-import { ensureHttpKeepAlive } from "./http.js";
+import { ensureHttpKeepAlive, fetchWithRetry } from "./http.js";
 
 /**
  * The single seam for embeddings, via Scaleway Generative APIs (EU, OpenAI-compatible).
@@ -60,18 +60,22 @@ export async function embed(input: EmbedInput): Promise<EmbeddingResult> {
     throw new Error("SCALEWAY_API_KEY is not set (see .env.example).");
   }
 
-  const response = await fetch(SCALEWAY_EMBEDDINGS_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${env.SCALEWAY_API_KEY}`,
+  const response = await fetchWithRetry(
+    SCALEWAY_EMBEDDINGS_URL,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${env.SCALEWAY_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: input.model,
+        input: input.texts,
+        ...(input.dimensions === undefined ? {} : { dimensions: input.dimensions }),
+      }),
     },
-    body: JSON.stringify({
-      model: input.model,
-      input: input.texts,
-      ...(input.dimensions === undefined ? {} : { dimensions: input.dimensions }),
-    }),
-  });
+    "Scaleway embeddings",
+  );
 
   if (!response.ok) {
     const detail = await response.text();
