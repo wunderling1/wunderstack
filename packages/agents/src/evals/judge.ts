@@ -175,10 +175,17 @@ export function scoreCitationVerification(
 
   const contentById = new Map(passages.map((passage) => [passage.id, passage.content]));
   const result = verifyCitations(parsed.modelCitations, contentById);
-  const verification = result.strippedMarkers.length === 0 ? 1 : 0;
 
   const proseMarkers = new Set(extractCitationMarkers(parsed.answerMarkdown));
   const verifiedMarkers = result.verified.map((citation) => citation.marker);
+
+  // Verification passes only when nothing was stripped AND no prose `[n]` is left without a verified
+  // citation behind it. Without the second clause, an answer that keeps `[1]` in the prose but emits
+  // an empty citations array scores a vacuous 1 (baseline v4 etd-021): there is nothing to strip, yet
+  // the marker is unsupported — exactly the answer the citation contract is supposed to fail.
+  const hasUnbackedMarker = proseMarkers.size > 0 && verifiedMarkers.length === 0;
+  const verification = result.strippedMarkers.length === 0 && !hasUnbackedMarker ? 1 : 0;
+
   const orphans = verifiedMarkers.filter((marker) => !proseMarkers.has(marker)).length;
   const orphanRate = verifiedMarkers.length === 0 ? 0 : orphans / verifiedMarkers.length;
   const dangling = [...proseMarkers].filter((marker) => !verifiedMarkers.includes(marker)).length;
@@ -302,7 +309,7 @@ export function scoreHardHallucination(
   // "en bij 24 uur?"; the agent echoing "24 uur" is not a hallucination, so the user's question/history
   // count as grounding. What stays forbidden is an invented *result* (a pro-rata total not in the CAO).
   const grounding = `${passages.map((passage) => passage.content).join(" ")} ${userSupplied}`;
-  const invented = findUngroundedFacts(answer, grounding);
+  const invented = findUngroundedFacts(answer, grounding, userSupplied);
   return { score: invented.length === 0 ? 1 : 0, invented };
 }
 

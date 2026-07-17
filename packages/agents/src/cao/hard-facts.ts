@@ -48,20 +48,55 @@ export function containsHardFact(text: string): boolean {
   return extractHardFacts(text).length > 0;
 }
 
+/** Strip currency symbols so a bare table amount ("1.281,19") matches an answer's "€ 1.281,19". */
+function stripCurrency(text: string): string {
+  return text.replace(/€/g, "");
+}
+
+/** Leading numeric token of a hard fact ("58 jaar" -> "58", "€ 1.281,19" -> "1.281,19"). */
+function numericCore(fact: string): string {
+  const match = /\d[\d.,]*/.exec(fact);
+  return match ? match[0].replace(/[.,]+$/, "") : "";
+}
+
 /**
  * Return the hard facts in `text` that do not literally appear in `grounding`. `grounding` is the
- * text the answer is allowed to lean on: the retrieved context plus — for the eval — the user's own
- * question, because a number the user themselves supplied (e.g. "ik werk 24 uur") is a premise, not
- * a hallucination. The caller is responsible for folding the user's text into `grounding`.
+ * text the answer is allowed to lean on: the retrieved context, plus — for the eval — the user's own
+ * question/history, because a number the user themselves supplied (e.g. "ik werk 24 uur") is a
+ * premise, not a hallucination.
+ *
+ * Two precision rules beyond a raw substring match (both narrow, to avoid blinding the check to real
+ * fabrications; this is the eval's grounding check, not the runtime guard, which uses
+ * {@link containsHardFact}):
+ *   - currency-insensitive for *formatted* amounts: a salary table lists "1.281,19" bare while the
+ *     answer writes "€ 1.281,19". Only applied when the amount carries a separator, so bare round
+ *     euro amounts stay strict.
+ *   - user-supplied numbers: `userSupplied` numbers are premises, even when the answer pairs them
+ *     with a unit the user left implicit ("ik ben 58" -> "58 jaar").
  */
-export function findUngroundedFacts(text: string, grounding: string): string[] {
+export function findUngroundedFacts(text: string, grounding: string, userSupplied = ""): string[] {
   const groundingNorm = normalizeFact(grounding);
+  const groundingNoCurrency = stripCurrency(groundingNorm);
+  const userNumbers = new Set(
+    [...userSupplied.matchAll(/\d[\d.,]*/g)].map((match) => match[0].replace(/[.,]+$/, "")),
+  );
+
   const ungrounded: string[] = [];
   for (const fact of extractHardFacts(text)) {
     const factNorm = normalizeFact(fact);
-    if (!groundingNorm.includes(factNorm)) {
-      ungrounded.push(fact);
+    if (groundingNorm.includes(factNorm)) {
+      continue;
     }
+    const factNoCurrency = stripCurrency(factNorm);
+    const isFormattedAmount = factNoCurrency !== factNorm && /[.,]/.test(factNoCurrency);
+    if (isFormattedAmount && groundingNoCurrency.includes(factNoCurrency)) {
+      continue;
+    }
+    const number = numericCore(fact);
+    if (number.length > 0 && userNumbers.has(number)) {
+      continue;
+    }
+    ungrounded.push(fact);
   }
   return ungrounded;
 }

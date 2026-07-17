@@ -67,14 +67,52 @@ export function parseGenerationOutput(raw: string): ParsedGenerationOutput {
   }
 }
 
-/** Pull the first JSON array from trailing model output (tolerates stray whitespace/newlines). */
+/**
+ * Pull the first *balanced* JSON array from trailing model output.
+ *
+ * A first-`[`/last-`]` span breaks whenever the model appends anything after the array — a stray
+ * empty `[]`, a lone `]`, or several arrays in a row — which small models do often; the span then
+ * spans invalid JSON and the whole citation block is discarded. Instead we bracket-depth scan from
+ * the first `[` and return as soon as depth returns to zero, ignoring any trailing tokens. Brackets
+ * inside string literals are skipped so a quote containing `[`/`]` cannot end the array early.
+ *
+ * A genuinely truncated array (no closing `]`, e.g. cut off by maxTokens) never balances and throws,
+ * which the caller correctly reports as `citationParseFailed`.
+ */
 function extractJsonArray(text: string): string {
   const start = text.indexOf("[");
-  const end = text.lastIndexOf("]");
-  if (start === -1 || end === -1 || end < start) {
+  if (start === -1) {
     throw new Error("No JSON array in citation block");
   }
-  return text.slice(start, end + 1);
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < text.length; i++) {
+    const char = text[i];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+    } else if (char === "[") {
+      depth += 1;
+    } else if (char === "]") {
+      depth -= 1;
+      if (depth === 0) {
+        return text.slice(start, i + 1);
+      }
+    }
+  }
+
+  throw new Error("No balanced JSON array in citation block");
 }
 
 /**
