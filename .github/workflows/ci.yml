@@ -60,7 +60,8 @@ jobs:
       # SCALEWAY_API_KEY enables Gate B (retrieval + rerank); MISTRAL_API_KEY enables Gate C
       # (answer-level LLM-judge). On fork PRs without secrets, Gate A still runs and B/C skip.
       # EVAL_REQUIRE_ALL turns a skip into a FAIL when landing on main (merge queue), on the
-      # protected branch, or nightly — so "skipped != passed". EVAL_JUDGE_SAMPLES=3 nightly.
+      # protected branch, or nightly — so "skipped != passed". EVAL_JUDGE_SAMPLES=3 on
+      # merge/push/nightly (Tier B); PRs keep 1 to stay cheap.
       # See packages/agents/src/evals/cao.eval.ts.
       - name: Eval (accuracy gate)
         run: pnpm turbo run test
@@ -76,7 +77,9 @@ jobs:
           # with only Gate A + D-contract. Fork PRs (head repo != this repo) have no secrets and keep
           # skipping B/C. See audit point #13.
           EVAL_REQUIRE_ALL: ${{ (github.event_name == 'merge_group' || github.event_name == 'push' || github.event_name == 'schedule' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)) && '1' || '0' }}
-          EVAL_JUDGE_SAMPLES: ${{ github.event_name == 'schedule' && '3' || '1' }}
+          # Median over 3 samples damps single-draw judge noise on the merge/nightly path (Tier B).
+          # PRs keep 1 to keep the hot path cheap; write-baseline also uses 3 (see below).
+          EVAL_JUDGE_SAMPLES: ${{ (github.event_name == 'schedule' || github.event_name == 'merge_group' || github.event_name == 'push') && '3' || '1' }}
 
       # Per-run artefact (E9): commit SHA, model ids, per-case scores, aggregates, gate results,
       # rerank counts, judge parse-retries. Uploaded even on failure — a red run is when it matters.

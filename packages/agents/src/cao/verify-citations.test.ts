@@ -45,6 +45,22 @@ describe("verifyCitations", () => {
     assert.equal(result.verified.length, 0);
   });
 
+  // Tier B: the prompt allows two citation objects sharing a marker when two contiguous spans are
+  // needed (instead of stitching with "..."). Each object verifies independently.
+  it("verifies two citation objects that share a marker when both quotes are verbatim", () => {
+    const result = verifyCitations(
+      [
+        citation("vakantie-ouderen", "55 t/m 59 jaar", 1),
+        citation("vakantie-ouderen", "twee dagen", 1),
+      ],
+      content,
+    );
+    assert.equal(result.strippedMarkers.length, 0);
+    assert.equal(result.verified.length, 2);
+    assert.equal(result.verified[0]?.marker, 1);
+    assert.equal(result.verified[1]?.marker, 1);
+  });
+
   it("strips a citation whose id does not exist even after stripping the anchor", () => {
     const result = verifyCitations([citation("onbekend (Artikel 9)", "iets")], content);
     assert.deepEqual(result.strippedMarkers, [1]);

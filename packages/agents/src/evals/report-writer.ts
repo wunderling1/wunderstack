@@ -18,7 +18,8 @@ const reportPath = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "ev
 
 /** Current on-disk schema version — bump when the report shape changes in a breaking way. */
 // v1: initial (E9). v2: retrievalIntegration (E11). v3: funds[] (E12).
-export const EVAL_REPORT_SCHEMA_VERSION = 3;
+// v4: AnswerReport.cases carry id/question/answerRaw so under-refusal / citation failures are inspectable (Tier B).
+export const EVAL_REPORT_SCHEMA_VERSION = 4;
 
 export interface ReportCheck {
   name: string;
@@ -54,9 +55,20 @@ export interface RetrievalReport {
   };
 }
 
+/**
+ * Per-case Gate C record. Extends the scores with the raw inputs/outputs so a failed run can be
+ * diagnosed without regenerating (Tier B — under-refusal and citation failures were previously
+ * invisible once the aggregate was written).
+ */
+export interface AnswerCaseReport extends CaseScores {
+  id: string;
+  question: string;
+  answerRaw: string;
+}
+
 export interface AnswerReport {
   aggregate: AggregateScores;
-  cases: CaseScores[];
+  cases: AnswerCaseReport[];
 }
 
 export interface RecallThresholds {

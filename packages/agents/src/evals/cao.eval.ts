@@ -78,7 +78,6 @@ import {
   JUDGE_MODEL,
   scoreAnswerCase,
   type AggregateScores,
-  type CaseScores,
 } from "./judge.js";
 import {
   EVAL_REPORT_SCHEMA_VERSION,
@@ -88,6 +87,7 @@ import {
   type GateReport,
   type RetrievalReport,
   type RetrievalIntegrationReport,
+  type AnswerCaseReport,
   type AnswerReport,
 } from "./report-writer.js";
 import { retryWithBackoff, sleep } from "./retry.js";
@@ -256,6 +256,12 @@ function promptContractChecks(): Check[] {
     {
       name: "prompt: forbids individual/legal advice (scope guard)",
       ok: /geen (?:persoonlijk|individueel)/i.test(instructions) && /advies/i.test(instructions),
+    },
+    {
+      // Tier B: quotes must be one contiguous span; stitching with "…" / "..." is forbidden
+      // (baseline v4 etd-010/018). Multiple citation objects may share a marker instead.
+      name: "prompt: citation quotes must be contiguous (no ellipsis stitching)",
+      ok: /aaneengesloten/i.test(instructions) && /(…|\.\.\.)/.test(instructions),
     },
   ];
 }
@@ -994,7 +1000,7 @@ function answerRegressionChecks(aggregate: AggregateScores): Check[] {
 }
 
 async function answerQualityChecks(): Promise<Check[]> {
-  const caseScores: CaseScores[] = [];
+  const caseScores: AnswerCaseReport[] = [];
 
   for (const testCase of goldenCases) {
     // Every case — including refusals — runs the real generation path. Refusal cases are given
@@ -1020,7 +1026,10 @@ async function answerQualityChecks(): Promise<Check[]> {
     const answer = generated.text;
     await sleep(2000);
 
-    caseScores.push(await scoreAnswerCase(testCase, passages, answer, NOT_FOUND_MESSAGE));
+    const scores = await scoreAnswerCase(testCase, passages, answer, NOT_FOUND_MESSAGE);
+    // Persist id/question/answerRaw so a failed under-refusal or citation case is inspectable from
+    // the run artefact without regenerating (Tier B).
+    caseScores.push({ ...scores, id: testCase.id, question, answerRaw: answer });
   }
 
   const aggregate = aggregateScores(caseScores);
