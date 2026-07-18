@@ -263,6 +263,16 @@ function promptContractChecks(): Check[] {
       name: "prompt: citation quotes must be contiguous (no ellipsis stitching)",
       ok: /aaneengesloten/i.test(instructions) && /(…|\.\.\.)/.test(instructions),
     },
+    {
+      // Tier B.1: a synthetic few-shot exemplar demonstrates the two-objects-share-a-marker form
+      // (the fix for the etd-010 stitching class by demonstration, not only rule). The sentinel
+      // "voorbeeld-diensten" is the exemplar's invented chunk_id; assert both it and that the
+      // exemplar shows two objects reusing marker 1.
+      name: "prompt: carries the contiguous-citation few-shot exemplar",
+      ok:
+        instructions.includes("voorbeeld-diensten") &&
+        (instructions.match(/"marker":1,"chunk_id":"voorbeeld-diensten"/g)?.length ?? 0) >= 2,
+    },
   ];
 }
 
