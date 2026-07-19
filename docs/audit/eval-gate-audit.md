@@ -90,7 +90,7 @@ The eval step env (`ci.yml:46-52`):
 - There is **no `continue-on-error`** anywhere in the workflow, and no `if:` conditions on steps.
   A non-zero exit from the eval step fails the `verify` job.
 - Whether a failed `verify` job actually **blocks merge** depends on GitHub branch-protection /
-  merge-queue settings that are **not in the repo**. `PLAN-eval-gates.md:7-10,192-193` states
+  merge-queue settings that are **not in the repo**. `docs/plans/PLAN-eval-gates.md:7-10,192-193` states
   explicitly this is still "Nog te doen in repo-settings: `verify` als required check + merge queue
   aanzetten." `[UNVERIFIED]` — cannot confirm from the codebase that `verify` is a required check
   or that the merge queue is enabled. If it is not, nothing blocks a merge regardless of gate result.
@@ -524,7 +524,7 @@ nothing enforces it).
 **Not implemented as separate files.** The split exists only as **labels in console output and
 comments**: Gate A + Gate C behavioral checks are called "corpus-agnostic base layer" and Gate B +
 correctness checks "fund-specific" (`cao.eval.ts:729,736,755`; header `:13,:19`). All cases live in
-one `golden-set.jsonl`; `PLAN-eval-gates.md:161-163` lists physically splitting the fixtures as an
+one `golden-set.jsonl`; `docs/plans/PLAN-eval-gates.md:161-163` lists physically splitting the fixtures as an
 open backlog item.
 
 ### Versioning / pinning
@@ -686,9 +686,9 @@ CI code. The relevant items are worded as "backlog"/"skip" semantics:
 - `answerRegressionChecks()` (`cao.eval.ts:550-600`) — effectively **suppressed**: returns `[]`
   because `baseline.json` has no `answer` section. Answer-quality regressions are only caught by the
   absolute thresholds, not relative to a baseline.
-- `PLAN-eval-gates.md:7-10, 192-193` — branch protection (required `verify` check + merge queue)
+- `docs/plans/PLAN-eval-gates.md:7-10, 192-193` — branch protection (required `verify` check + merge queue)
   is documented as **not yet configured in repo settings**; without it the gate does not block merges.
-- `PLAN-eval-gates.md:161-163` — physical behavioral/fonds-specific fixture split: **not done**.
+- `docs/plans/PLAN-eval-gates.md:161-163` — physical behavioral/fonds-specific fixture split: **not done**.
 - `packages/agents/scripts/build-golden-fixtures.ts` is **stale** relative to the committed fixtures:
   it generates 50 cases (23 labeled + 10 extra in-scope + 7 table + 10 refusal) and no `history`
   cases, but the committed `golden-set.jsonl` has 58 cases including 3 multi-turn ones. Regenerating
@@ -700,7 +700,7 @@ CI code. The relevant items are worded as "backlog"/"skip" semantics:
 
 1. **Is `verify` a required check / is the merge queue on?** Not answerable from the repo. If not,
    `EVAL_REQUIRE_ALL` on `merge_group`/`push` is moot because nothing forces the merge through the
-   gate (`PLAN-eval-gates.md:7-10`).
+   gate (`docs/plans/PLAN-eval-gates.md:7-10`).
 2. **What temperature does production actually use?** `agent.ts` never sets it and
    `createSovereignModel` forwards `callOptions.temperature`. `[UNVERIFIED]` whether Mastra 1.x
    injects a default temperature into `doGenerate`/`doStream`. If it defaults to non-zero, the eval
@@ -708,13 +708,13 @@ CI code. The relevant items are worded as "backlog"/"skip" semantics:
 3. **Dead answer-regression path.** `answerRegressionChecks` and the entire `answer` branch of the
    baseline schema are unused because `baseline.json` lacks an `answer` section. Was an answer
    baseline ever meant to be committed? Currently the "regression-relative" protection the plan
-   describes (`PLAN-eval-gates.md:158-160`) only exists for retrieval.
+   describes (`docs/plans/PLAN-eval-gates.md:158-160`) only exists for retrieval.
 4. **Refusal category never tests the model.** Gate C substitutes `NOT_FOUND_MESSAGE` for refusal
    cases (`cao.eval.ts:608-609`), so `underRefusalRate` is structurally 0 and the 10 refusal cases
    validate only the deterministic scorers on a constant. Intended, or a stub?
 5. **Gate B does not test production retrieval.** It re-embeds fixtures and does in-memory cosine
    (no pgvector, no rewrite, no `minScore`, no production skip-rerank logic). The plan
-   (`PLAN-eval-gates.md:100-103`) targeted "Gate B op de echte retrieval-pijplijn"; the code did not
+   (`docs/plans/PLAN-eval-gates.md:100-103`) targeted "Gate B op de echte retrieval-pijplijn"; the code did not
    move to it. So retrieval-pipeline regressions (SQL, rewrite, threshold) are invisible to the gate.
 6. **Rerank model is the embedding model.** `RERANK_CONFIG.model = "qwen3-embedding-8b"`
    (`config/rerank.ts:34`) — an embedding model used as a reranker, not a cross-encoder. The

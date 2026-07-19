@@ -1,10 +1,10 @@
 # PLAN-ui-fluency.md — UI die snel *voelt* (Wunderstack, Fase 13)
 
-> **Vervolg op `PLAN-v2.md` (Fase 12 leverde de vertrouwens-UI: citations, feedback, starters,
+> **Vervolg op `docs/plans/PLAN-v2.md` (Fase 12 leverde de vertrouwens-UI: citations, feedback, starters,
 > theming).** Deze fase raakt geen retrieval- of modelkwaliteit; ze pakt **waargenomen
 > snelheid** aan. Het antwoord is inhoudelijk hetzelfde, maar de gebruiker ervaart de wachttijd
 > heel anders. Doel: van "staren naar drie bolletjes" naar "je ziet het systeem werken".
-> Leidend blijft: `.cursor/rules/*.mdc` (hoe) en `PLAN-v2.md` (context).
+> Leidend blijft: `.cursor/rules/*.mdc` (hoe) en `docs/plans/PLAN-v2.md` (context).
 
 ## Waarom dit los staat van kwaliteit
 De wachttijd bestaat vandaag uit twee stille stukken: retrieval (~2,3s, straks <1s) en de

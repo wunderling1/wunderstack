@@ -25,7 +25,7 @@
  * are missing FAILS instead of skipping. Locally it skips so dev runs stay cheap.
  *
  * Backlog (not gated yet): latency and per-run token cost. Worth adding a soft budget gate before
- * production, but out of scope here — see PLAN-eval-gates.md.
+ * production, but out of scope here — see docs/plans/PLAN-eval-gates.md.
  *
  * Run: pnpm --filter @wunderstack/agents test   (loads repo-root .env automatically)
  */

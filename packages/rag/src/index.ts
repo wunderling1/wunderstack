@@ -1,5 +1,5 @@
 // @wunderstack/rag — retrieval pipeline: rewrite -> retrieve -> rerank -> assemble.
-// See PLAN.md Fase 5 and PLAN-v2.md Fase 9/10.
+// See docs/plans/PLAN.md Fase 5 and docs/plans/PLAN-v2.md Fase 9/10.
 
 import { requireRerankConfig } from "@wunderstack/shared";
 

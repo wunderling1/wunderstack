@@ -25,7 +25,7 @@
 > real feature code (agent, API, UI, ingestion, evals) is still uncommitted/untracked on top of
 > it. In practice this is a **whole-codebase review** of a brand-new walking skeleton, which
 > matches the review standard: existing code is thin, so the rules (`.cursor/rules/*.mdc`),
-> `AGENTS.md`, `docs/PRODUCT_SPEC.md` and `PLAN.md` are the primary standard.
+> `AGENTS.md`, `docs/PRODUCT_SPEC.md` and `docs/plans/PLAN.md` are the primary standard.
 
 ## Changed files
 
@@ -34,7 +34,7 @@
 
 Full monorepo scaffold: root config (`package.json`, `turbo.json`, `tsconfig.base.json`,
 `eslint.config.mjs`, `.dependency-cruiser.cjs`, `.github/workflows/ci.yml`, `.env.example`),
-`.cursor/rules/000–500`, `docs/PRODUCT_SPEC.md`, `PLAN.md`, empty package skeletons, and the
+`.cursor/rules/000–500`, `docs/PRODUCT_SPEC.md`, `docs/plans/PLAN.md`, empty package skeletons, and the
 `packages/db` schema + migrations, `packages/ai`, `packages/shared`, `scripts/bake-off`.
 
 ### Uncommitted — modified (tracked), ce1zer, last hours

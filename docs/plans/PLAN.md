@@ -5,7 +5,7 @@
 > Leidend: `docs/PRODUCT_SPEC.md` (wat) en `.cursor/rules/*.mdc` (hoe).
 
 ## Zo voer je dit uit (Fase 4)
-- **Eén fase tegelijk.** In Cursor: *"Refer to `@PLAN.md`. Ik ben klaar voor Fase X. Bouw
+- **Eén fase tegelijk.** In Cursor: *"Refer to `@docs/plans/PLAN.md`. Ik ben klaar voor Fase X. Bouw
   alleen deze fase, volg de `.cursor/rules`, en ga niet door naar de volgende fase."*
 - **Verifieer versies** vóór elke install (web search aan) — zie `100-stack.mdc`.
 - **Alle code, namen en commits in het Engels**; packages onder `@wunderstack/*` (zie `000-core.mdc`).

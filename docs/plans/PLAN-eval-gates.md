@@ -10,7 +10,7 @@
 > is de GitHub-kant van P1 die niet in de workflow-yaml kan. Details per punt onderaan onder
 > "Uitvoering".
 >
-> **Los addendum bij `PLAN-v2.md` (Fase 9).** De eval-architectuur (A → B → C, offline
+> **Los addendum bij `docs/plans/PLAN-v2.md` (Fase 9).** De eval-architectuur (A → B → C, offline
 > Gate A, vóór/na-rerank, mix deterministisch + LLM-as-judge) staat en is verdedigbaar.
 > Maar de gates zijn nu **strenger op papier dan in werkelijkheid**. Dit plan dicht die
 > gaten. Doel: als de eval groen is, dan is dat een *echte* kwaliteitsgarantie — niet een
@@ -127,7 +127,7 @@ niet reproduceerbaar, wat P5 en P7 stilletjes ondermijnt.
   bewuste promptwijzigingen afdwingt, geen bewijs dat het model de regel *volgt*.
 - Clarify hoort wél in Gate A: `detectClarification` is expliciet deterministisch (geen LLM),
   dus offline testbaar in beide richtingen.
-- **Ingreep:** hernoem/documenteer in `cao.eval.ts` en `PLAN-v2.md`: Gate A = "prompt- &
+- **Ingreep:** hernoem/documenteer in `cao.eval.ts` en `docs/plans/PLAN-v2.md`: Gate A = "prompt- &
   clarify-**contract**"; gedragsnaleving van de prompt-regels wordt in Gate C getest.
 
 ### P4 — judge ≠ generator (self-preference bias verkleinen)
@@ -162,7 +162,7 @@ niet reproduceerbaar, wat P5 en P7 stilletjes ondermijnt.
   basisset; Gate B + correctness-checks = fonds-specifiek. Scheid dit in de fixtures — maakt
   multi-tenant eval in v3 schoon.
 - **Latency/kosten** worden nergens gegate. Niet urgent; backlog richting productie.
-- **Mermaid.** `PLAN-v2.md` bevat geen mermaid, dus niets te fixen in de repo. Als er een
+- **Mermaid.** `docs/plans/PLAN-v2.md` bevat geen mermaid, dus niets te fixen in de repo. Als er een
   diagram naar een klant/procurement-pack gaat: geldige `flowchart LR`, geen los pijl-blok.
 
 ---

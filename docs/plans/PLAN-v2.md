@@ -8,7 +8,7 @@
 > Leidend blijft: `docs/PRODUCT_SPEC.md` (wat) en `.cursor/rules/*.mdc` (hoe).
 
 ## Zo voer je dit uit
-- **Eén fase tegelijk.** In Cursor: *"Refer to `@PLAN.md` en `@PLAN-v2.md`. Ik ben klaar
+- **Eén fase tegelijk.** In Cursor: *"Refer to `@docs/plans/PLAN.md` en `@docs/plans/PLAN-v2.md`. Ik ben klaar
   voor Fase X. Bouw alleen deze fase, volg de `.cursor/rules`, en ga niet door naar de volgende."*
 - **Meet vóór je schaaft.** Fase 9 bouwt het meetinstrument; elke latere DoD is een
   *gemeten* winst t.o.v. de Fase 9-baseline, niet een gevoel.

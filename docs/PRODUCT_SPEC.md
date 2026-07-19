@@ -216,8 +216,8 @@ organisatorisch/contractueel; soevereiniteit is de troef erbovenop.
 
 ---
 
-## 12. Vervolg — Fase 3 (PLAN.md)
+## 12. Vervolg — Fase 3 (`docs/plans/PLAN.md`)
 
 Na goedkeuring van deze PRD: de implementatie opknippen in chronologische, kleine stappen
 met exacte bestandspaden per stap (o.a. monorepo-scaffold → db + schema → ingestion + bake-off
-→ retrieval → agent → API + widget → observability + evals), uitgeschreven in `PLAN.md`.
+→ retrieval → agent → API + widget → observability + evals), uitgeschreven in `docs/plans/PLAN.md`.
