@@ -8,6 +8,7 @@
  * Usage:
  *   pnpm --filter @wunderstack/ingest ingest [path] --fund <fund> --version <v>
  *   pnpm --filter @wunderstack/ingest ingest [path] --dry-run    # parse + chunk only, no DB/API
+ *   pnpm --filter @wunderstack/ingest ingest [path] --force      # re-chunk + re-embed unchanged source
  *
  * `path` is a file or directory (default: scripts/ingest/input). DATABASE_URL + SCALEWAY_API_KEY
  * are read from the repo-root .env automatically (except in --dry-run).
@@ -19,8 +20,8 @@ import { basename, extname, join } from "node:path";
 import { parseArgs } from "node:util";
 
 import { embed } from "@wunderstack/ai";
-import { chunks as chunksTable, documents, eq, getDb } from "@wunderstack/db";
-import { EMBEDDING_CONFIG } from "@wunderstack/shared";
+import { chunks as chunksTable, closeDb, documents, eq, getDb } from "@wunderstack/db";
+import { EMBEDDING_CONFIG, env } from "@wunderstack/shared";
 
 import { chunk, type Chunk } from "./chunk.js";
 import { parseFile, SUPPORTED_EXTENSIONS } from "./parse.js";
@@ -34,6 +35,7 @@ interface CliOptions {
   fund: string;
   version: string;
   dryRun: boolean;
+  force: boolean;
 }
 
 function parseCli(): CliOptions {
@@ -43,6 +45,7 @@ function parseCli(): CliOptions {
       fund: { type: "string" },
       version: { type: "string" },
       "dry-run": { type: "boolean", default: false },
+      force: { type: "boolean", default: false },
     },
   });
   return {
@@ -50,15 +53,14 @@ function parseCli(): CliOptions {
     fund: values.fund ?? "demo",
     version: values.version ?? "1",
     dryRun: values["dry-run"] ?? false,
+    force: values.force ?? false,
   };
 }
 
 function chunkOptionsFromEnv(): { targetChars?: number; overlapChars?: number } {
-  const target = process.env.INGEST_CHUNK_CHARS;
-  const overlap = process.env.INGEST_OVERLAP_CHARS;
   return {
-    targetChars: target ? Number(target) : undefined,
-    overlapChars: overlap ? Number(overlap) : undefined,
+    targetChars: env.INGEST_CHUNK_CHARS,
+    overlapChars: env.INGEST_OVERLAP_CHARS,
   };
 }
 
@@ -121,7 +123,9 @@ function summarize(pieces: Chunk[]): Pick<FileOutcome, "tableChunks" | "structur
 }
 
 async function ingestFile(options: CliOptions, filePath: string): Promise<FileOutcome> {
-  const sourceUri = basename(filePath);
+  // Namespace the source URI by fund so the same filename ingested under two funds produces two
+  // distinct documents (source_uri is globally unique) instead of silently overwriting each other.
+  const sourceUri = `${options.fund}/${basename(filePath)}`;
   const title = basename(filePath, extname(filePath));
   const text = await parseFile(filePath);
   const contentHash = sha256(text);
@@ -142,7 +146,9 @@ async function ingestFile(options: CliOptions, filePath: string): Promise<FileOu
     .where(eq(documents.sourceUri, sourceUri))
     .limit(1);
 
-  if (existing[0]?.contentHash === contentHash) {
+  // Idempotency is keyed on the parsed SOURCE TEXT, not the chunk output. A chunker/config change
+  // (same PDF) therefore looks "unchanged" and would be skipped; --force re-chunks and re-embeds.
+  if (existing[0]?.contentHash === contentHash && !options.force) {
     return { sourceUri, status: "unchanged", chunkCount: pieces.length, ...summary };
   }
   const isUpdate = existing.length > 0;
@@ -234,10 +240,9 @@ async function main(): Promise<void> {
 }
 
 main()
-  .then(() => {
-    process.exitCode = 0;
-  })
   .catch((error: unknown) => {
     console.error(error instanceof Error ? error.message : error);
     process.exitCode = 1;
-  });
+  })
+  // Close the pool so the process exits (postgres.js keeps sockets open otherwise) — matters in CI.
+  .finally(closeDb);

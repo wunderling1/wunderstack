@@ -145,6 +145,17 @@ function extractArticle(heading: string): string | null {
   return match?.[1] ? stripTrailingPunctuation(match[1]) : null;
 }
 
+/**
+ * Section-number article headings ("4.1.", "6.2 Salaristabellen", "5.14 Mantelzorg") used by CAOs
+ * that number articles as chapter.article instead of the "Artikel N" style. Requires at least one
+ * dot so a bare clause marker ("1.", "2)") is NOT misread as an article — those stay leden and are
+ * handled by splitLeden / extractHeadingLid.
+ */
+function extractSectionArticle(heading: string): string | null {
+  const match = /^(\d+\.\d+(?:\.\d+)*)[.)]?(?=\s|$)/.exec(heading.trim());
+  return match?.[1] ?? null;
+}
+
 function extractBijlage(heading: string): string | null {
   const match = /^bijlage\s+(\S+)/i.exec(heading);
   return match?.[1] ? `Bijlage ${stripTrailingPunctuation(match[1])}` : null;
@@ -212,6 +223,9 @@ export function chunk(text: string, options: ChunkOptions = {}): Chunk[] {
       const chapter = extractChapter(heading);
       const article = extractArticle(heading);
       const bijlage = extractBijlage(heading);
+      // Only look for an N.M section-article when none of the explicit heading types matched.
+      const sectionArticle =
+        chapter === null && article === null && bijlage === null ? extractSectionArticle(heading) : null;
       if (chapter !== null) {
         currentChapter = chapter;
         currentArticle = null;
@@ -221,7 +235,12 @@ export function chunk(text: string, options: ChunkOptions = {}): Chunk[] {
         currentArticle = bijlage;
         currentChapter = null;
       }
-      if (chapter === null && article === null && bijlage === null && currentArticle !== null) {
+      if (sectionArticle !== null) {
+        currentArticle = sectionArticle;
+        // The part before the first dot is the chapter (e.g. "6.2" lives in Hoofdstuk 6).
+        currentChapter = sectionArticle.split(".")[0] ?? currentChapter;
+      }
+      if (chapter === null && article === null && bijlage === null && sectionArticle === null && currentArticle !== null) {
         sectionLid = extractHeadingLid(heading);
       }
     }

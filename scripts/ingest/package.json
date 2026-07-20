@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "ingest": "tsx --env-file-if-exists=../../.env run.ts",
+    "ingest:fixtures": "tsx --env-file-if-exists=../../.env fixtures.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
   },

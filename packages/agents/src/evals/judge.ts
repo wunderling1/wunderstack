@@ -4,6 +4,7 @@ import { env } from "@wunderstack/shared";
 import { z } from "zod";
 
 import { extractCitationMarkers } from "../cao/build-citations.js";
+import { findUngroundedFacts } from "../cao/hard-facts.js";
 import { parseGenerationOutput } from "../cao/parse-generation.js";
 import { verifyCitations } from "../cao/verify-citations.js";
 import { passageToHit, type GoldenCase, type GoldenPassage } from "./golden-set.js";
@@ -26,7 +27,7 @@ import { retryWithBackoff } from "./retry.js";
  */
 
 /** Pinned judge model — deliberately different from the generator (mistral-small-2603). */
-const JUDGE_MODEL = "mistral-large-2512";
+export const JUDGE_MODEL = "mistral-large-2512";
 
 const judgeResponseSchema = z.object({
   faithfulness: z.number().min(0).max(1),
@@ -64,6 +65,22 @@ export function parseJudgeOutput(text: string): JudgeResponse {
 export type JudgeModelCall = (extraMessages: ChatMessage[]) => Promise<string>;
 
 /**
+ * How often {@link runJudgeWithParseRetry} had to fire its targeted retry (a first judge output
+ * failed to parse). Surfaced in the E9 run artefact so judge-flakiness stays a visible trend rather
+ * than a silently-swallowed warning. Module-level: the eval is a single-run process.
+ */
+let judgeParseRetryCount = 0;
+
+export function getJudgeParseRetryCount(): number {
+  return judgeParseRetryCount;
+}
+
+/** Reset the counter (used by unit tests; the eval process never reuses the module). */
+export function resetJudgeParseRetryCount(): void {
+  judgeParseRetryCount = 0;
+}
+
+/**
  * Call the judge with exactly one targeted retry on a parse/validation failure. One malformed
  * output no longer fails the whole run at the first attempt: the failure is fed back into the
  * conversation ("your previous answer was not valid JSON") so the model can correct itself.
@@ -75,6 +92,7 @@ export async function runJudgeWithParseRetry(call: JudgeModelCall): Promise<Judg
   try {
     return parseJudgeOutput(firstRaw);
   } catch (error) {
+    judgeParseRetryCount += 1;
     const reason = error instanceof Error ? error.message : String(error);
     console.warn(`[judge] parse-retry: previous output was not valid JSON (${reason})`);
     const retryRaw = await call([
@@ -128,6 +146,21 @@ export interface AggregateScores {
   /** Refusal cases that wrongly answered, as a rate of refusal cases. */
   underRefusalRate: number;
   caseCount: number;
+  /**
+   * Count of cases whose citationVerification scored 0. The absolute Gate C check is count-based
+   * ("0 of N unverified") — at N=31 one failure is already 96.8% < 0.98, so the percentage form was
+   * schijngranulariteit over an [X]-gate. Rate kept above for trend.
+   */
+  unverifiedCitationCount: number;
+  /** Count of cases with danglingMarkerRate > 0. Same count-based absolute gate as above. */
+  danglingCaseCount: number;
+  /**
+   * Count of refusal cases that wrongly answered. With only a handful of refusal fixtures the
+   * underRefusalRate is a noisy tiny-denominator fraction (1 of 3 = 33%), so the gate is expressed as a
+   * count (like citation-verification/dangling). Hallucinated under-refusals are still caught absolutely
+   * by hard-hallucination; this count tolerates a grounded should-have-deferred slip. See REVIEW.md §21.
+   */
+  underRefusalCount: number;
 }
 
 /**
@@ -140,7 +173,19 @@ export function scoreCitationVerification(
   passages: GoldenPassage[],
 ): { verification: number; orphanRate: number; danglingMarkerRate: number; prose: string } {
   if (testCase.category === "refusal") {
-    return { verification: 1, orphanRate: 0, danglingMarkerRate: 0, prose: rawAnswer };
+    // Score on the PARSED prose (what the pipeline actually delivers), not rawAnswer. The generator can
+    // run away past a clean refusal and dump content after the `<<<CITATIONS>>>` sentinel (etd-026:
+    // finishReason=length, a few-shot-example tail with numbers like "16 weken"); that tail is stripped
+    // before the user ever sees it, so the load-bearing hard-hallucination gate must measure the delivered
+    // prose, identical to the answerable path below (golden-set.REVIEW.md §22, REVIEW.md §21: safety =
+    // post-pipeline output). A refusal that WRONGLY answers still keeps its ungrounded fact in the
+    // pre-sentinel prose, so under-refusal-with-fabrication is still caught.
+    return {
+      verification: 1,
+      orphanRate: 0,
+      danglingMarkerRate: 0,
+      prose: parseGenerationOutput(rawAnswer).answerMarkdown,
+    };
   }
 
   const parsed = parseGenerationOutput(rawAnswer);
@@ -157,10 +202,17 @@ export function scoreCitationVerification(
 
   const contentById = new Map(passages.map((passage) => [passage.id, passage.content]));
   const result = verifyCitations(parsed.modelCitations, contentById);
-  const verification = result.strippedMarkers.length === 0 ? 1 : 0;
 
   const proseMarkers = new Set(extractCitationMarkers(parsed.answerMarkdown));
   const verifiedMarkers = result.verified.map((citation) => citation.marker);
+
+  // Verification passes only when nothing was stripped AND no prose `[n]` is left without a verified
+  // citation behind it. Without the second clause, an answer that keeps `[1]` in the prose but emits
+  // an empty citations array scores a vacuous 1 (baseline v4 etd-021): there is nothing to strip, yet
+  // the marker is unsupported — exactly the answer the citation contract is supposed to fail.
+  const hasUnbackedMarker = proseMarkers.size > 0 && verifiedMarkers.length === 0;
+  const verification = result.strippedMarkers.length === 0 && !hasUnbackedMarker ? 1 : 0;
+
   const orphans = verifiedMarkers.filter((marker) => !proseMarkers.has(marker)).length;
   const orphanRate = verifiedMarkers.length === 0 ? 0 : orphans / verifiedMarkers.length;
   const dangling = [...proseMarkers].filter((marker) => !verifiedMarkers.includes(marker)).length;
@@ -268,38 +320,23 @@ export function scoreRefusalCalibration(answer: string, testCase: GoldenCase, no
 
 /**
  * Hard-hallucination check (deterministic, near-zero tolerance) — the gate that actually backs the
- * "hij verzint niets"-promise. Extracts the load-bearing facts an answer can fabricate — money
- * amounts (€), percentages, and quantities with a unit (uur/weken/maanden/dagen/jaar/km/trede) —
- * and asserts each one literally appears in the supplied context. Bare article/citation numbers
- * are excluded (they are covered by citation-correctness) to avoid false positives.
+ * "hij verzint niets"-promise. The hard-fact regexes live in `../cao/hard-facts.js` (shared with the
+ * production runtime guard, so the gate and the guard cannot drift). Each load-bearing fact — money
+ * amounts (€), percentages, and quantities with a unit — must literally appear in the grounding.
  *
  * Returns 1 when every hard fact is grounded (or there are none), 0 when any is invented. Binary on
  * purpose: one fabricated salary or term is a hard fail, regardless of how fluent the answer reads.
  */
-const HARD_FACT_PATTERNS: RegExp[] = [
-  /€\s?\d[\d.]*(?:,\d+)?/g,
-  /\d+(?:,\d+)?\s?%/g,
-  /\b\d+(?:,\d+)?\s?(?:uur|uren|week|weken|maand|maanden|dag|dagen|jaar|jaren|kilometer|km|trede|treden|periodiek|periodieke|periodieken)\b/gi,
-];
-
-function normalizeFact(text: string): string {
-  return text.toLowerCase().replace(/\s+/g, "");
-}
-
-export function scoreHardHallucination(answer: string, passages: GoldenPassage[]): { score: number; invented: string[] } {
-  const answerWithoutCitations = answer.replace(/\[\d+\]/g, " ");
-  const contextNorm = normalizeFact(passages.map((passage) => passage.content).join(" "));
-
-  const invented: string[] = [];
-  for (const pattern of HARD_FACT_PATTERNS) {
-    for (const match of answerWithoutCitations.matchAll(pattern)) {
-      const fact = match[0];
-      if (!contextNorm.includes(normalizeFact(fact))) {
-        invented.push(fact.trim());
-      }
-    }
-  }
-
+export function scoreHardHallucination(
+  answer: string,
+  passages: GoldenPassage[],
+  userSupplied = "",
+): { score: number; invented: string[] } {
+  // Grounding = retrieved context + what the user themselves put on the table. A `derived` case asks
+  // "en bij 24 uur?"; the agent echoing "24 uur" is not a hallucination, so the user's question/history
+  // count as grounding. What stays forbidden is an invented *result* (a pro-rata total not in the CAO).
+  const grounding = `${passages.map((passage) => passage.content).join(" ")} ${userSupplied}`;
+  const invented = findUngroundedFacts(answer, grounding, userSupplied);
   return { score: invented.length === 0 ? 1 : 0, invented };
 }
 
@@ -410,7 +447,10 @@ export async function scoreAnswerCase(
   const citationCorrectness = scoreCitationCorrectness(prose, testCase, passages);
   const refusalCalibration = scoreRefusalCalibration(prose, testCase, notFoundMessage);
   const refused = answerRefuses(prose, notFoundMessage);
-  const hardHallucination = scoreHardHallucination(prose, passages).score;
+  // User-supplied numbers (this turn's question + prior history) count as grounding: a `derived` case
+  // like "en bij 24 uur?" must not flag the agent for echoing the 24 the user provided.
+  const userSupplied = [testCase.question, ...(testCase.history ?? []).map((message) => message.content)].join(" ");
+  const hardHallucination = scoreHardHallucination(prose, passages, userSupplied).score;
 
   if (testCase.category === "refusal") {
     // Refusal cases now receive a real generated answer (against near-miss distractor context), so
@@ -471,6 +511,9 @@ export function aggregateScores(scores: CaseScores[]): AggregateScores {
       overRefusalRate: 0,
       underRefusalRate: 0,
       caseCount: 0,
+      unverifiedCitationCount: 0,
+      danglingCaseCount: 0,
+      underRefusalCount: 0,
     };
   }
 
@@ -503,6 +546,8 @@ export function aggregateScores(scores: CaseScores[]): AggregateScores {
   const refusals = scores.filter((score) => score.category === "refusal");
   const overRefusals = answerable.filter((score) => score.refused).length;
   const underRefusals = refusals.filter((score) => !score.refused).length;
+  const unverifiedCitationCount = scores.filter((score) => score.citationVerification === 0).length;
+  const danglingCaseCount = scores.filter((score) => score.danglingMarkerRate > 0).length;
 
   const count = scores.length;
   return {
@@ -518,5 +563,8 @@ export function aggregateScores(scores: CaseScores[]): AggregateScores {
     overRefusalRate: answerable.length === 0 ? 0 : overRefusals / answerable.length,
     underRefusalRate: refusals.length === 0 ? 0 : underRefusals / refusals.length,
     caseCount: count,
+    unverifiedCitationCount,
+    danglingCaseCount,
+    underRefusalCount: underRefusals,
   };
 }

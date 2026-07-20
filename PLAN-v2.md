@@ -123,6 +123,37 @@ betere agent) is dicht.
 
 ---
 
+## Backlog uit audit 2026-07-10 (getrackt, niet nu bouwen)
+Drie punten uit de code-review/audit van 2026-07-10 die bewust *niet* in de audit-remediatie
+zaten. Elk is een gedocumenteerde afweging met een expliciete trigger — pas oppakken als de
+trigger afgaat, niet speculatief (regel van drie, `200-architecture.mdc`).
+
+- **Streaming hard-fact flash** — `packages/agents/src/cao/agent.ts` (streaming-pad, E13-guard).
+  De hard-fact-guard vuurt *na* generatie: in de stream heeft de client de ongefundeerde prose
+  (bv. een verzonnen bedrag) al ontvangen, waarna het `citations`-event die vervangt door de
+  niet-gevonden-boodschap. Op trage verbindingen ziet de gebruiker het foute getal even flitsen.
+  *Waarom nu niet:* laagfrequente edge-case; het vervang-contract bestaat al en is correct.
+  *Echte fix:* structured-generation upstream, of de prose bufferen tot de guard groen is vóór
+  de eerste stream-chunk. *Trigger:* zodra de guard in de praktijk meer dan zelden vuurt, of bij
+  de eerste UX-klacht hierover.
+
+- **Gate B2-integration gap** — `packages/agents/src/evals/cao.eval.ts` (`retrievalIntegrationChecks`).
+  De integratie-gate sluit multi-turn-cases expliciet uit (`history`), dus het echte pad
+  (condensatie → retrieve) wordt voor multi-turn nergens end-to-end geverifieerd; Gate B2 dekt
+  dit alleen in-memory op de fixture-laag. Een nightly die Gate B2 haalt maar op een echte
+  Gate B2-integration zou vallen, blijft nu onopgemerkt. *Waarom nu niet:* voegt een tweede
+  integratie-gate toe vóór de eerste stabiel is. *Trigger:* Gate B-integration ~2 weken stabiel
+  (drempels gemeten) — daarna een Gate B2-integration op multi-turn-cases toevoegen.
+
+- **Nightly concurrency** — `packages/agents/src/evals/cao.eval.ts` (`retrievalIntegrationChecks`
+  + `fundLayerChecks`). Beide draaien de retrieval-queries in een sequentiële `for`-loop (één
+  `retrieveContext` per query). Prima bij het huidige corpus (~24 queries); de nightly-looptijd
+  schaalt lineair mee. *Waarom nu niet:* premature optimalisatie bij 24 queries. *Trigger:*
+  totaal aantal queries > ~50 → over naar `Promise.all` met semafoor-gelimiteerde concurrency
+  (bv. `p-limit`). Geen ongelimiteerde fan-out (rate limits van de EU-provider).
+
+---
+
 ## Nog steeds buiten scope (naden staan klaar, niet bouwen)
 Multi-tenancy / data-plane per fonds · tweede agent + Supervisor-pattern · per-klant
 auth-middleware & deploys · fine-tuning van embeddings of LLM. Rerank + CAO-chunking +

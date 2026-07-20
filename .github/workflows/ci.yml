@@ -16,6 +16,8 @@ on:
 
 jobs:
   verify:
+    # workflow_dispatch is baseline-only (see write-baseline below); skip the paid verify eval there.
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -44,19 +46,50 @@ jobs:
       - name: Unit tests
         run: pnpm turbo run test:unit
 
+      # Nightly only (E11): ingest the golden passages into the reserved "eval-fixtures" fund on the
+      # staging DB so Gate B-integration can run the REAL pipeline against them. Idempotent, so it is
+      # a fast no-op once ingested. PRs never touch the DB (see the eval step's DATABASE_URL below).
+      - name: Ingest golden fixtures (nightly integration gate)
+        if: github.event_name == 'schedule'
+        run: pnpm --filter @wunderstack/ingest ingest:fixtures
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SCALEWAY_API_KEY: ${{ secrets.SCALEWAY_API_KEY }}
+
       # Quality gate: blocks prompt/retrieval/answer regressions (Fase 9).
       # SCALEWAY_API_KEY enables Gate B (retrieval + rerank); MISTRAL_API_KEY enables Gate C
       # (answer-level LLM-judge). On fork PRs without secrets, Gate A still runs and B/C skip.
       # EVAL_REQUIRE_ALL turns a skip into a FAIL when landing on main (merge queue), on the
-      # protected branch, or nightly — so "skipped != passed". EVAL_JUDGE_SAMPLES=3 nightly.
+      # protected branch, or nightly — so "skipped != passed". EVAL_JUDGE_SAMPLES=3 on
+      # merge/push/nightly (Tier B); PRs keep 1 to stay cheap.
       # See packages/agents/src/evals/cao.eval.ts.
       - name: Eval (accuracy gate)
         run: pnpm turbo run test
         env:
           SCALEWAY_API_KEY: ${{ secrets.SCALEWAY_API_KEY }}
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
-          EVAL_REQUIRE_ALL: ${{ (github.event_name == 'merge_group' || github.event_name == 'push' || github.event_name == 'schedule') && '1' || '0' }}
-          EVAL_JUDGE_SAMPLES: ${{ github.event_name == 'schedule' && '3' || '1' }}
+          # DB-backed integration gates (Gate B-integration + Gate D integration) run ONLY nightly:
+          # the staging DB is wired here just for the schedule, so PRs run with no DATABASE_URL and
+          # those gates skip. EVAL_REQUIRE_DB makes them required (fail-if-missing) on the nightly.
+          DATABASE_URL: ${{ github.event_name == 'schedule' && secrets.DATABASE_URL || '' }}
+          EVAL_REQUIRE_DB: ${{ github.event_name == 'schedule' && '1' || '0' }}
+          # Same-repo PRs have secrets, so a missing/expired key must FAIL rather than silently pass
+          # with only Gate A + D-contract. Fork PRs (head repo != this repo) have no secrets and keep
+          # skipping B/C. See audit point #13.
+          EVAL_REQUIRE_ALL: ${{ (github.event_name == 'merge_group' || github.event_name == 'push' || github.event_name == 'schedule' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)) && '1' || '0' }}
+          # Median over 3 samples damps single-draw judge noise on the merge/nightly path (Tier B).
+          # PRs keep 1 to keep the hot path cheap; write-baseline also uses 3 (see below).
+          EVAL_JUDGE_SAMPLES: ${{ (github.event_name == 'schedule' || github.event_name == 'merge_group' || github.event_name == 'push') && '3' || '1' }}
+
+      # Per-run artefact (E9): commit SHA, model ids, per-case scores, aggregates, gate results,
+      # rerank counts, judge parse-retries. Uploaded even on failure — a red run is when it matters.
+      - name: Upload eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: packages/agents/eval-report.json
+          if-no-files-found: warn
 
   # Manual-only: refresh the recorded baseline (retrieval + answer) under nightly config and publish
   # it as an artifact for review. Never commits — a human downloads it, inspects the deltas, and
@@ -92,3 +125,11 @@ jobs:
         with:
           name: eval-baseline
           path: packages/agents/src/evals/fixtures/baseline.json
+
+      - name: Upload eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report-baseline
+          path: packages/agents/eval-report.json
+          if-no-files-found: warn

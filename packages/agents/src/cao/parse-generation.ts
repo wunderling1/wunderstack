@@ -25,6 +25,26 @@ const rawModelCitationSchema = z
 
 const modelCitationsArraySchema = z.array(rawModelCitationSchema);
 
+/**
+ * Locate the citation-block sentinel, tolerating the word the model occasionally corrupts. The prompt
+ * asks for the exact `<<<CITATIONS>>>`, but on a Dutch task the model sometimes "translates" the English
+ * word to a Dutch variant — `<<<CITATIES>>>`, `<<<CITATIE>>>`, `<<<CITATION>>>` (golden-set.REVIEW.md §19,
+ * etd-008). The `<<<` / `>>>` fence is distinctive enough that matching any `CITATI…` word between them
+ * cannot collide with answer prose, so we normalize the protocol wrapper while the quotes inside still go
+ * through absolute verbatim verification — the same "normalize the wrapper, keep the content check hard"
+ * principle as chunk-id and ellipsis tolerance.
+ */
+const SENTINEL_PATTERN = /<<<\s*CITATI[A-Z]*\s*>>>/i;
+
+function locateSentinel(raw: string): { index: number; length: number } {
+  const exact = raw.indexOf(CITATIONS_SENTINEL);
+  if (exact !== -1) {
+    return { index: exact, length: CITATIONS_SENTINEL.length };
+  }
+  const match = SENTINEL_PATTERN.exec(raw);
+  return match ? { index: match.index, length: match[0].length } : { index: -1, length: 0 };
+}
+
 export interface ParsedGenerationOutput {
   /** Answer prose with `[n]` markers; sentinel and citation block stripped. */
   answerMarkdown: string;
@@ -39,8 +59,8 @@ export interface ParsedGenerationOutput {
  * Everything before the sentinel is answer text; everything after is parsed as JSON citations.
  */
 export function parseGenerationOutput(raw: string): ParsedGenerationOutput {
-  const sentinelIndex = raw.indexOf(CITATIONS_SENTINEL);
-  if (sentinelIndex === -1) {
+  const sentinel = locateSentinel(raw);
+  if (sentinel.index === -1) {
     return {
       answerMarkdown: raw.trimEnd(),
       modelCitations: [],
@@ -48,8 +68,8 @@ export function parseGenerationOutput(raw: string): ParsedGenerationOutput {
     };
   }
 
-  const answerMarkdown = raw.slice(0, sentinelIndex).trimEnd();
-  const afterSentinel = raw.slice(sentinelIndex + CITATIONS_SENTINEL.length).trim();
+  const answerMarkdown = raw.slice(0, sentinel.index).trimEnd();
+  const afterSentinel = raw.slice(sentinel.index + sentinel.length).trim();
 
   if (afterSentinel.length === 0) {
     return { answerMarkdown, modelCitations: [], citationParseFailed: true };
@@ -67,14 +87,66 @@ export function parseGenerationOutput(raw: string): ParsedGenerationOutput {
   }
 }
 
-/** Pull the first JSON array from trailing model output (tolerates stray whitespace/newlines). */
+/**
+ * Pull the first *balanced* JSON array from trailing model output.
+ *
+ * A first-`[`/last-`]` span breaks whenever the model appends anything after the array — a stray
+ * empty `[]`, a lone `]`, or several arrays in a row — which small models do often; the span then
+ * spans invalid JSON and the whole citation block is discarded. Instead we bracket-depth scan from
+ * the first `[` and return as soon as depth returns to zero, ignoring any trailing tokens. Brackets
+ * inside string literals are skipped so a quote containing `[`/`]` cannot end the array early.
+ *
+ * Conservative recovery (Gate C close-out, etd-012): when the scan ends with depth > 0 *outside* a
+ * string — the model dropped the closing `]` after a complete object — append the missing brackets
+ * and only accept the result if `JSON.parse` then succeeds. Mid-string / mid-object truncation still
+ * throws (`citationParseFailed`). Recovered citations still go through absolute verbatim verification;
+ * recovery is a parse-layer fix, never a verification exemption.
+ */
 function extractJsonArray(text: string): string {
   const start = text.indexOf("[");
-  const end = text.lastIndexOf("]");
-  if (start === -1 || end === -1 || end < start) {
+  if (start === -1) {
     throw new Error("No JSON array in citation block");
   }
-  return text.slice(start, end + 1);
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < text.length; i++) {
+    const char = text[i];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+    } else if (char === "[") {
+      depth += 1;
+    } else if (char === "]") {
+      depth -= 1;
+      if (depth === 0) {
+        return text.slice(start, i + 1);
+      }
+    }
+  }
+
+  // Unbalanced: attempt a conservative close only when we are outside a string (objects fully closed).
+  if (!inString && depth > 0) {
+    const recovered = text.slice(start) + "]".repeat(depth);
+    try {
+      JSON.parse(recovered);
+      return recovered;
+    } catch {
+      // Fall through to the throw below — mid-object / mid-string truncation is not recoverable.
+    }
+  }
+
+  throw new Error("No balanced JSON array in citation block");
 }
 
 /**

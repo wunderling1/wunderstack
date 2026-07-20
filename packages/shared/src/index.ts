@@ -1,4 +1,4 @@
-export { env } from "./env.js";
+export { env, envSchema } from "./env.js";
 export type { Env } from "./env.js";
 
 export {
@@ -35,3 +35,5 @@ export {
 } from "./contracts/citation.js";
 
 export { parseCaoFunds, isFundScopeConfigured } from "./config/funds.js";
+
+export { EVAL_FIXTURE_FUND } from "./config/eval.js";

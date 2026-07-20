@@ -50,14 +50,38 @@ const envSchema = z.object({
   // run because its API keys are missing FAILS instead of skipping — "skipped != passed". Set on
   // the merge-to-main job so Gate B/C are genuinely required; unset locally so dev runs may skip.
   EVAL_REQUIRE_ALL: optional(z.enum(["1", "true", "0", "false"])),
+  // Like EVAL_REQUIRE_ALL but for the DB-backed integration gates (Gate B-integration and Gate D
+  // integration, which need DATABASE_URL). Set only on the nightly job, which wires a staging DB; on
+  // PRs the DB is intentionally absent, so those gates skip rather than fail. See cao.eval.ts (E11).
+  EVAL_REQUIRE_DB: optional(z.enum(["1", "true", "0", "false"])),
   // Number of LLM-judge samples per case for Gate C; the median is taken (majority vote against
   // judge non-determinism). Defaults to 1; raise to 3 on the merge queue / nightly run.
   EVAL_JUDGE_SAMPLES: optional(z.coerce.number().int().positive().max(9)),
+  // Override the Gate C answer-generation model (default mistral-small-2603). Lets us A/B a stronger
+  // sovereign generator (e.g. mistral-large-2512) behind the AI seam without a code change; the model
+  // must still be EU-sovereign (enforced by @wunderstack/ai's resolveModel). Recorded in the artefact.
+  EVAL_GENERATION_MODEL: optional(z.string().min(1)),
+  // Generation analogue of EVAL_JUDGE_SAMPLES: total answer-generation attempts per Gate C case in the
+  // best-of-N contract loop (generate-answer.ts). The first clean attempt wins; otherwise the
+  // lowest-penalty one. Tames single-sample generation variance on the zero-tolerance count gates
+  // (citation-verification, dangling-marker) without weakening a threshold. Defaults to 2 (one
+  // generation + one repair, = production); raise to 3 on the merge queue / nightly run.
+  EVAL_GENERATION_SAMPLES: optional(z.coerce.number().int().positive().max(9)),
   // When truthy, a known-good eval run records the current metrics as the regression baseline
   // (packages/agents/src/evals/fixtures/baseline.json) instead of comparing against it.
   EVAL_WRITE_BASELINE: optional(z.enum(["1", "true", "0", "false"])),
+  // Commit SHA of the checked-out revision (GitHub Actions sets this). Recorded in the per-run eval
+  // artefact (E9) so a report is traceable to an exact commit; null on local runs without it.
+  GITHUB_SHA: optional(z.string().min(1)),
+  // Ingestion chunker overrides (scripts/ingest). Optional; the chunker falls back to its defaults
+  // when unset. Coerced + validated so a non-numeric value fails loud here instead of flowing into
+  // the chunker as NaN.
+  INGEST_CHUNK_CHARS: optional(z.coerce.number().int().positive()),
+  INGEST_OVERLAP_CHARS: optional(z.coerce.number().int().positive()),
 });
 
 export type Env = z.infer<typeof envSchema>;
+
+export { envSchema };
 
 export const env: Env = envSchema.parse(process.env);

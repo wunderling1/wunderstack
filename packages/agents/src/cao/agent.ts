@@ -19,7 +19,9 @@ import {
 import { buildVerifiedCitations } from "./build-citations.js";
 import { detectClarification } from "./clarify.js";
 import { condenseQuery, isElliptical } from "./condense.js";
-import { parseGenerationOutput, splitStreamBuffer } from "./parse-generation.js";
+import { generateAnswerWithRepair } from "./generate-answer.js";
+import { hasUngroundedHardFact } from "./hard-facts.js";
+import { parseGenerationOutput } from "./parse-generation.js";
 import { CAO_SYSTEM_INSTRUCTIONS, NOT_FOUND_MESSAGE, buildAnswerPrompt } from "./prompt.js";
 import { runRetrieval, type RetrievalOutput } from "./tools.js";
 import { stripFailedMarkers, stripUnverifiedMarkers, verifyCitations } from "./verify-citations.js";
@@ -109,11 +111,23 @@ function tracingOptionsFor(
  * Turn raw model output + retrieval into verified citations and a cleaned answer.
  * Model citations whose quote is not verbatim in their chunk are stripped (O2 default), verified
  * against the FULL chunk content (not the truncated snippet).
+ *
+ * E13 runtime guard: an answer that asserts a hard fact — a money amount, percentage, or quantity
+ * with a unit — which is NOT grounded in the retrieved context is an ungrounded numeric claim. That
+ * is the "verzint een bedrag" failure (a pro-rata "€ 6,25" or an invented "312 uur" not in the CAO),
+ * AND the "decorative citation" (etd-026): a figure — "16 weken" — dressed with a quote that verifies
+ * verbatim but does not carry it. The guard grounds the FIGURE itself via `hasUngroundedHardFact`
+ * (the same `findUngroundedFacts` decision the retry trigger and the eval's hard-hallucination scorer
+ * use, so the three cannot drift): a citation is proof, not decoration. `userSupplied` (question +
+ * history) is grounding, so echoing a number the user provided is not treated as a fabrication.
+ * On a trip we refuse: the answer is replaced with the not-found message and the turn is marked
+ * unfound. A grounded answer is unaffected — the number appears in the context.
  */
 function verifyAndBuild(
   raw: string,
   retrieval: RetrievalOutput,
-): { answer: string; citations: CaoCitation[]; verificationFailed: boolean } {
+  userSupplied: string,
+): { answer: string; citations: CaoCitation[]; verificationFailed: boolean; hardFactGuardTriggered: boolean } {
   const parsed = parseGenerationOutput(raw);
   const fullContentById = new Map(retrieval.fullChunkContent);
   const verification = verifyCitations(parsed.modelCitations, fullContentById);
@@ -124,7 +138,19 @@ function verifyAndBuild(
     verifiedMarkers,
   );
   const verificationFailed = parsed.citationParseFailed || verification.strippedMarkers.length > 0;
-  return { answer, citations, verificationFailed };
+
+  const grounding = [...fullContentById.values()].join(" ");
+  if (hasUngroundedHardFact(answer, grounding, userSupplied)) {
+    return { answer: NOT_FOUND_MESSAGE, citations: [], verificationFailed: true, hardFactGuardTriggered: true };
+  }
+
+  return { answer, citations, verificationFailed, hardFactGuardTriggered: false };
+}
+
+/** The user's own numbers are premises, not fabrications: question + prior turns count as grounding. */
+function userSuppliedText(input: CaoQuestion): string {
+  const history = input.history ?? [];
+  return [input.question, ...history.map((message) => message.content)].join(" ");
 }
 
 async function resolveRetrievalQuestion(input: CaoQuestion, signal?: AbortSignal): Promise<{
@@ -173,10 +199,68 @@ export function createCaoAgent(): CaoAgent {
   // Retrieve the registered agent so it carries the Mastra context (observability, logging, ...).
   const registered = mastra.getAgent(AGENT_KEY);
 
+  /**
+   * One place where a grounded, verified answer is produced — shared by both `answer()` and
+   * `answerStream()` so the streamed path is not a weaker sibling. It runs the citation-contract
+   * repair retry (generate-answer.ts) and then the serve-time verify/guard (verifyAndBuild).
+   *
+   * The repair turn is what recovers the common small-model slip where the prose carries the inline
+   * [n] markers but the trailing citation JSON block is dropped: without it every marker is stripped
+   * and the answer is served source-less (the "bronnen worden niet getoond" regression). Streaming
+   * already buffers the whole answer before showing a character (BUFFER-TO-VERIFY, G5), so running the
+   * repair here costs nothing user-visible and keeps stream/non-stream — and the eval — on one path.
+   */
+  async function generateVerifiedAnswer(args: {
+    retrieval: RetrievalOutput;
+    answerQuestion: string;
+    userSupplied: string;
+    tracingOptions: ReturnType<typeof tracingOptionsFor> & ReturnType<CaoTrace["link"]>;
+    signal?: AbortSignal;
+  }): Promise<{
+    answer: string;
+    citations: CaoCitation[];
+    verificationFailed: boolean;
+    hardFactGuardTriggered: boolean;
+    usage: CaoUsage;
+  }> {
+    const generated = await generateAnswerWithRepair({
+      chunkContentById: new Map(args.retrieval.fullChunkContent),
+      userSupplied: args.userSupplied,
+      generate: async (extraMessages) => {
+        // Mastra's message union is the AI SDK discriminated CoreMessage type; our ChatMessage
+        // (role is a union, content a string) is structurally a subset, so cast at this boundary.
+        const messages = [
+          { role: "user", content: buildAnswerPrompt(args.retrieval.context, args.answerQuestion) },
+          ...extraMessages,
+        ] as Parameters<typeof registered.generate>[0];
+        const result = await registered.generate(messages, {
+          modelSettings: {
+            temperature: GENERATION_CONFIG.temperature,
+            maxOutputTokens: GENERATION_CONFIG.maxTokens,
+          },
+          tracingOptions: args.tracingOptions,
+          ...(args.signal === undefined ? {} : { abortSignal: args.signal }),
+        });
+        return {
+          text: result.text,
+          usage: {
+            promptTokens: result.usage.inputTokens ?? 0,
+            completionTokens: result.usage.outputTokens ?? 0,
+            totalTokens: result.usage.totalTokens ?? 0,
+          },
+          finishReason: result.finishReason ?? null,
+        };
+      },
+    });
+    const built = verifyAndBuild(generated.text, args.retrieval, args.userSupplied);
+    return { ...built, usage: generated.usage };
+  }
+
   return {
     async answer(input: CaoQuestion, options: CaoAnswerOptions = {}): Promise<CaoAnswer> {
       const parsedInput = caoQuestionSchema.parse(input);
       const { question, fund, topK, minScore } = parsedInput;
+      const userSupplied = userSuppliedText(parsedInput);
 
       const trace = startCaoTrace(mastra, { question, fund, topK, minScore });
       const traceId = trace.link().traceId ?? null;
@@ -210,33 +294,32 @@ export function createCaoAgent(): CaoAgent {
           });
         }
 
-        const result = await registered.generate(buildAnswerPrompt(retrieval.context, query.answerQuestion), {
-          modelSettings: {
-            temperature: GENERATION_CONFIG.temperature,
-            maxOutputTokens: GENERATION_CONFIG.maxTokens,
-          },
-          tracingOptions: {
-            ...tracingOptionsFor(question, query.retrievalQuery, query.condensed, fund, topK, minScore, retrieval),
-            ...trace.link(),
-          },
-          ...(options.signal === undefined ? {} : { abortSignal: options.signal }),
-        });
-
-        const { answer, citations, verificationFailed } = verifyAndBuild(result.text, retrieval);
+        const tracingOptions = {
+          ...tracingOptionsFor(question, query.retrievalQuery, query.condensed, fund, topK, minScore, retrieval),
+          ...trace.link(),
+        };
+        // One citation-contract repair retry (generate-answer.ts): the same seam the eval uses to
+        // collapse Gate C's generator variance. A first attempt that leaves an unverifiable quote, an
+        // ungrounded number, or a dropped citation block is re-asked once; the cleaner attempt is kept.
+        const { answer, citations, verificationFailed, hardFactGuardTriggered, usage } =
+          await generateVerifiedAnswer({
+            retrieval,
+            answerQuestion: query.answerQuestion,
+            userSupplied,
+            tracingOptions,
+            ...(options.signal === undefined ? {} : { signal: options.signal }),
+          });
         recordCitationScore(traceId, verificationFailed);
 
-        trace.end({ found: true, citationCount: citations.length });
+        const found = !hardFactGuardTriggered;
+        trace.end({ found, citationCount: citations.length, ...(hardFactGuardTriggered ? { refused: true } : {}) });
         return caoAnswerSchema.parse({
           answer,
-          found: true,
+          found,
           needsClarification: false,
           citations,
           traceId,
-          usage: {
-            promptTokens: result.usage.inputTokens ?? 0,
-            completionTokens: result.usage.outputTokens ?? 0,
-            totalTokens: result.usage.totalTokens ?? 0,
-          },
+          usage,
           citationVerificationFailed: verificationFailed,
         });
       } catch (error) {
@@ -251,6 +334,7 @@ export function createCaoAgent(): CaoAgent {
     ): AsyncIterable<CaoStreamEvent> {
       const parsedInput = caoQuestionSchema.parse(input);
       const { question, fund, topK, minScore } = parsedInput;
+      const userSupplied = userSuppliedText(parsedInput);
       const requestStart = performance.now();
 
       const trace = startCaoTrace(mastra, { question, fund, topK, minScore });
@@ -296,71 +380,54 @@ export function createCaoAgent(): CaoAgent {
         yield { type: "status", phase: "retrieved", count: retrieval.hits.length };
         yield { type: "status", phase: "generating" };
 
-        const output = await registered.stream(buildAnswerPrompt(retrieval.context, query.answerQuestion), {
-          modelSettings: {
-            temperature: GENERATION_CONFIG.temperature,
-            maxOutputTokens: GENERATION_CONFIG.maxTokens,
-          },
-          tracingOptions: {
-            ...tracingOptionsFor(question, query.retrievalQuery, query.condensed, fund, topK, minScore, retrieval),
-            ...trace.link(),
-          },
-          ...(options.signal === undefined ? {} : { abortSignal: options.signal }),
-        });
+        const tracingOptions = {
+          ...tracingOptionsFor(question, query.retrievalQuery, query.condensed, fund, topK, minScore, retrieval),
+          ...trace.link(),
+        };
 
-        // Stream the prose up to the citation sentinel; buffer the rest for server-side parsing.
-        const reader = output.textStream.getReader();
-        let ttftMs: number | undefined;
-        let raw = "";
-        let held = "";
-        try {
-          for (;;) {
-            const { done, value } = await reader.read();
-            if (done) {
-              break;
-            }
-            if (value) {
-              if (ttftMs === undefined) {
-                ttftMs = performance.now() - requestStart;
-                trace.recordTtft(ttftMs);
-              }
-              raw += value;
-              const { emit, hold } = splitStreamBuffer(held + value);
-              held = hold;
-              if (emit.length > 0) {
-                yield { type: "text", delta: emit };
-              }
-            }
-          }
-        } finally {
-          reader.releaseLock();
-        }
-
-        const { answer, citations, verificationFailed } = verifyAndBuild(raw, retrieval);
+        // BUFFER-TO-VERIFY (G5) + citation-contract repair: the hard-fact guard is all-or-nothing over
+        // the WHOLE answer (a late ungrounded "16 weken" retroactively refuses everything before it),
+        // and a dropped citation block strips every [n] marker — so we never stream prose token-by-token.
+        // We generate the full answer (repairing a violated citation contract once, the SAME seam
+        // `answer()` uses so the stream is not a weaker sibling), verify, guard-check, and only then emit
+        // the settled prose. The client sees no partial stream, so there is nothing to retract.
+        const { answer, citations, verificationFailed, hardFactGuardTriggered, usage } =
+          await generateVerifiedAnswer({
+            retrieval,
+            answerQuestion: query.answerQuestion,
+            userSupplied,
+            tracingOptions,
+            ...(options.signal === undefined ? {} : { signal: options.signal }),
+          });
         recordCitationScore(traceId, verificationFailed);
 
-        // Emit verified citations as the closing structured event (after prose, before done). The
-        // final `answer` lets the client reconcile any stripped markers with what it streamed.
+        // With full buffering the client sees its first character only once the answer is settled, so
+        // that instant IS the user-perceived time-to-first-token.
+        const ttftMs = performance.now() - requestStart;
+        trace.recordTtft(ttftMs);
+
+        // Emit the verified prose, then the citations event whose `answer` is the canonical text the
+        // client reconciles against (it also carries the not-found message when the E13 guard tripped).
+        const found = !hardFactGuardTriggered;
+        if (answer.length > 0) {
+          yield { type: "text", delta: answer };
+        }
         yield {
           type: "citations",
-          found: true,
+          found,
           needsClarification: false,
           citations,
           citationVerificationFailed: verificationFailed,
           answer,
         };
 
-        const full = await output.getFullOutput();
-        yield {
-          type: "done",
-          usage: {
-            promptTokens: full.usage.inputTokens ?? 0,
-            completionTokens: full.usage.outputTokens ?? 0,
-            totalTokens: full.usage.totalTokens ?? 0,
-          },
-          traceId,
-        };
-        trace.end({ found: true, citationCount: citations.length, ...(ttftMs === undefined ? {} : { ttftMs }) });
+        yield { type: "done", usage, traceId };
+        trace.end({
+          found,
+          citationCount: citations.length,
+          ...(hardFactGuardTriggered ? { refused: true } : {}),
+          ttftMs,
+        });
       } catch (error) {
         trace.fail(error);
         throw error;

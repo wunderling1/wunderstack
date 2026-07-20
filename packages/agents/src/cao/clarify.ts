@@ -16,8 +16,14 @@
 const SALARY_INTENT = /\b(verdien\w*|salaris|maandsalaris|uurloon|maandloon)\b/i;
 /** Phrased as a question about an amount ("hoeveel", "wat", "welk bedrag"). */
 const AMOUNT_QUESTION = /\b(hoeveel|wat|welk)\b/i;
-/** Already specifies the pay grade, so no clarification is needed. */
-const PAY_GRADE_SPECIFIED = /\b(functiegroep|functie-?indeling|salarisschaal|schaal|trede|fg\s?\d)\b/i;
+/**
+ * Already specifies the pay grade, so no clarification is needed. Besides the generic
+ * functiegroep/trede signals, CAOs that pay by age (jeugdloon) or by salarisgroep + functiejaren
+ * (e.g. ETD) make a salary question answerable once the age/diploma or group/functiejaren is given —
+ * asking for functiegroep/trede there would be wrong (and would hijack answerable golden cases).
+ */
+const PAY_GRADE_SPECIFIED =
+  /\b(functiegroep|functie-?indeling|salarisgroep|salarisschaal|schaal|trede|fg\s?\d|functiejaar|functiejaren|jeugdgroep|jeugdloon|\d+\s?-?\s?jarige?|\d+\s+jaar)\b/i;
 /**
  * Qualifiers that make a salary question answerable WITHOUT a pay grade (it is about a rule or a
  * percentage, not an absolute amount): sick pay, raises, deductions, holiday allowance, pro-rata,

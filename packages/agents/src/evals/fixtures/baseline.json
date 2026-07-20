@@ -1,22 +1,23 @@
 {
-  "corpusVersion": "1",
+  "corpusVersion": "4",
+  "fixtureHash": "1ec1680932bbde6cbbee88af0055a8321e5b3aa9f9b68c46339b3597e5466e0a",
   "retrieval": {
-    "hitAt1": 0.9777777777777777,
+    "hitAt1": 0.9583333333333334,
     "recallAt3": 1,
     "recallAt5": 1,
-    "mrr": 0.9888888888888889
+    "mrr": 0.9791666666666666
   },
   "answer": {
-    "hardHallucination": 0.9827586206896551,
-    "faithfulness": 0.9396551724137931,
-    "relevance": 0.9448275862068966,
-    "citationCorrectness": 0.9655172413793104,
-    "completeness": 0.9275862068965517,
-    "refusalCalibration": 0.9482758620689655,
-    "citationVerification": 0.5344827586206896,
+    "hardHallucination": 1,
+    "faithfulness": 0.9935483870967742,
+    "relevance": 0.970967741935484,
+    "citationCorrectness": 1,
+    "completeness": 0.9129032258064517,
+    "refusalCalibration": 1,
+    "citationVerification": 1,
     "orphanRate": 0,
-    "danglingMarkerRate": 0.43103448275862066,
+    "danglingMarkerRate": 0,
     "overRefusalRate": 0,
-    "underRefusalRate": 0.3
+    "underRefusalRate": 0
   }
 }

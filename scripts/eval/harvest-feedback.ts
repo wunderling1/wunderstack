@@ -10,8 +10,10 @@ import { z } from "zod";
  *
  * Manual utility (not CI): it reads "user-feedback" scores via the Langfuse public API, keeps the
  * thumbs-down ones (value 0), fetches each trace for the question + answer, and writes a JSONL of
- * candidate cases. A human reviews and curates these into `packages/agents/src/evals/fixtures/
- * golden-set.jsonl` — feedback never enters the eval automatically.
+ * candidate cases. A human reviews and curates these into a golden set layer under
+ * `packages/agents/src/evals/fixtures/` — the behavioral `golden-set.base.jsonl` or a fund-specific
+ * `golden-set.<fund>.jsonl` (see docs/golden-set-cocreation.md). Feedback never enters the eval
+ * automatically.
  *
  *   pnpm --filter @wunderstack/eval-scripts harvest-feedback
  *
@@ -34,6 +36,14 @@ const scoresResponseSchema = z.object({
   data: z.array(scoreSchema),
   meta: z.object({ page: z.number(), totalPages: z.number() }),
 });
+
+type Score = z.infer<typeof scoreSchema>;
+/** A score we have confirmed carries a traceId, so downstream code needs no cast. */
+type ScoreWithTrace = Score & { traceId: string };
+
+function hasTraceId(score: Score): score is ScoreWithTrace {
+  return typeof score.traceId === "string";
+}
 
 interface Candidate {
   status: "needs_review";
@@ -87,8 +97,8 @@ function findString(value: unknown, keys: string[], depth = 0): string | null {
   return null;
 }
 
-async function fetchDownvotedScores(auth: string): Promise<z.infer<typeof scoreSchema>[]> {
-  const downvoted: z.infer<typeof scoreSchema>[] = [];
+async function fetchDownvotedScores(auth: string): Promise<ScoreWithTrace[]> {
+  const downvoted: ScoreWithTrace[] = [];
   let page = 1;
   for (;;) {
     const raw = await getJson(
@@ -97,7 +107,7 @@ async function fetchDownvotedScores(auth: string): Promise<z.infer<typeof scoreS
     );
     const parsed = scoresResponseSchema.parse(raw);
     for (const score of parsed.data) {
-      if (score.traceId && (score.value ?? 1) <= 0) {
+      if (hasTraceId(score) && (score.value ?? 1) <= 0) {
         downvoted.push(score);
       }
     }
@@ -110,10 +120,10 @@ async function fetchDownvotedScores(auth: string): Promise<z.infer<typeof scoreS
 }
 
 async function toCandidate(
-  score: z.infer<typeof scoreSchema>,
+  score: ScoreWithTrace,
   auth: string,
 ): Promise<Candidate> {
-  const traceId = score.traceId as string;
+  const traceId = score.traceId;
   let question: string | null = null;
   let answer: string | null = null;
   try {
@@ -153,7 +163,7 @@ async function main(): Promise<void> {
   await writeFile(outPath, body.length > 0 ? `${body}\n` : "", "utf8");
 
   console.log(`Wrote ${String(candidates.length)} candidate case(s) to ${outPath}`);
-  console.log("Review these by hand before adding any to golden-set.jsonl.");
+  console.log("Review these by hand before adding any to a golden set layer (see docs/golden-set-cocreation.md).");
 }
 
 main().catch((error: unknown) => {

@@ -114,8 +114,15 @@ const MODEL_REGISTRY: Record<string, RegisteredModel> = {
   },
 };
 
-/** Default LLM = Mistral Small 4 (pinned). Gate C validates answer quality on this model. */
-export const DEFAULT_LLM_MODEL = "mistral-small-2603";
+/**
+ * Default LLM = Mistral Large 3 (pinned, EU-sovereign). Gate C validates answer quality on this model.
+ * Raised from mistral-small-2603 after the A/B in golden-set.REVIEW.md §17: Small hit its ceiling on
+ * hard reasoning + long verbatim citations (etd-021 answered with inverted logic; relevance 0.835 under
+ * an independent judge), while Large answers correctly and copies long spans verbatim (relevance 0.97,
+ * completeness 0.93). Both are Mistral/EU so the sovereign default path is unchanged (100-stack). Cost is
+ * ~3.3×/2.5× input/output vs Small — negligible at demo volume; revisit if request volume grows.
+ */
+export const DEFAULT_LLM_MODEL = "mistral-large-2512";
 
 /**
  * Hard upper bound on tokens the model may emit per call when the caller does not set its own
