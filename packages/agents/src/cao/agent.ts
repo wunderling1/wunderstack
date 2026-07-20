@@ -199,6 +199,63 @@ export function createCaoAgent(): CaoAgent {
   // Retrieve the registered agent so it carries the Mastra context (observability, logging, ...).
   const registered = mastra.getAgent(AGENT_KEY);
 
+  /**
+   * One place where a grounded, verified answer is produced — shared by both `answer()` and
+   * `answerStream()` so the streamed path is not a weaker sibling. It runs the citation-contract
+   * repair retry (generate-answer.ts) and then the serve-time verify/guard (verifyAndBuild).
+   *
+   * The repair turn is what recovers the common small-model slip where the prose carries the inline
+   * [n] markers but the trailing citation JSON block is dropped: without it every marker is stripped
+   * and the answer is served source-less (the "bronnen worden niet getoond" regression). Streaming
+   * already buffers the whole answer before showing a character (BUFFER-TO-VERIFY, G5), so running the
+   * repair here costs nothing user-visible and keeps stream/non-stream — and the eval — on one path.
+   */
+  async function generateVerifiedAnswer(args: {
+    retrieval: RetrievalOutput;
+    answerQuestion: string;
+    userSupplied: string;
+    tracingOptions: ReturnType<typeof tracingOptionsFor> & ReturnType<CaoTrace["link"]>;
+    signal?: AbortSignal;
+  }): Promise<{
+    answer: string;
+    citations: CaoCitation[];
+    verificationFailed: boolean;
+    hardFactGuardTriggered: boolean;
+    usage: CaoUsage;
+  }> {
+    const generated = await generateAnswerWithRepair({
+      chunkContentById: new Map(args.retrieval.fullChunkContent),
+      userSupplied: args.userSupplied,
+      generate: async (extraMessages) => {
+        // Mastra's message union is the AI SDK discriminated CoreMessage type; our ChatMessage
+        // (role is a union, content a string) is structurally a subset, so cast at this boundary.
+        const messages = [
+          { role: "user", content: buildAnswerPrompt(args.retrieval.context, args.answerQuestion) },
+          ...extraMessages,
+        ] as Parameters<typeof registered.generate>[0];
+        const result = await registered.generate(messages, {
+          modelSettings: {
+            temperature: GENERATION_CONFIG.temperature,
+            maxOutputTokens: GENERATION_CONFIG.maxTokens,
+          },
+          tracingOptions: args.tracingOptions,
+          ...(args.signal === undefined ? {} : { abortSignal: args.signal }),
+        });
+        return {
+          text: result.text,
+          usage: {
+            promptTokens: result.usage.inputTokens ?? 0,
+            completionTokens: result.usage.outputTokens ?? 0,
+            totalTokens: result.usage.totalTokens ?? 0,
+          },
+          finishReason: result.finishReason ?? null,
+        };
+      },
+    });
+    const built = verifyAndBuild(generated.text, args.retrieval, args.userSupplied);
+    return { ...built, usage: generated.usage };
+  }
+
   return {
     async answer(input: CaoQuestion, options: CaoAnswerOptions = {}): Promise<CaoAnswer> {
       const parsedInput = caoQuestionSchema.parse(input);
@@ -237,48 +294,21 @@ export function createCaoAgent(): CaoAgent {
           });
         }
 
-        const generateOptions = {
-          modelSettings: {
-            temperature: GENERATION_CONFIG.temperature,
-            maxOutputTokens: GENERATION_CONFIG.maxTokens,
-          },
-          tracingOptions: {
-            ...tracingOptionsFor(question, query.retrievalQuery, query.condensed, fund, topK, minScore, retrieval),
-            ...trace.link(),
-          },
-          ...(options.signal === undefined ? {} : { abortSignal: options.signal }),
+        const tracingOptions = {
+          ...tracingOptionsFor(question, query.retrievalQuery, query.condensed, fund, topK, minScore, retrieval),
+          ...trace.link(),
         };
         // One citation-contract repair retry (generate-answer.ts): the same seam the eval uses to
-        // collapse Gate C's generator variance. A first attempt that leaves an unverifiable quote or
-        // an ungrounded number is re-asked once; the cleaner attempt is kept. Streaming keeps its
-        // serve-time guard (verifyAndBuild) instead, so a partial stream is never shown then corrected.
-        const generated = await generateAnswerWithRepair({
-          chunkContentById: new Map(retrieval.fullChunkContent),
-          userSupplied,
-          generate: async (extraMessages) => {
-            // Mastra's message union is the AI SDK discriminated CoreMessage type; our ChatMessage
-            // (role is a union, content a string) is structurally a subset, so cast at this boundary.
-            const messages = [
-              { role: "user", content: buildAnswerPrompt(retrieval.context, query.answerQuestion) },
-              ...extraMessages,
-            ] as Parameters<typeof registered.generate>[0];
-            const result = await registered.generate(messages, generateOptions);
-            return {
-              text: result.text,
-              usage: {
-                promptTokens: result.usage.inputTokens ?? 0,
-                completionTokens: result.usage.outputTokens ?? 0,
-                totalTokens: result.usage.totalTokens ?? 0,
-              },
-            };
-          },
-        });
-
-        const { answer, citations, verificationFailed, hardFactGuardTriggered } = verifyAndBuild(
-          generated.text,
-          retrieval,
-          userSupplied,
-        );
+        // collapse Gate C's generator variance. A first attempt that leaves an unverifiable quote, an
+        // ungrounded number, or a dropped citation block is re-asked once; the cleaner attempt is kept.
+        const { answer, citations, verificationFailed, hardFactGuardTriggered, usage } =
+          await generateVerifiedAnswer({
+            retrieval,
+            answerQuestion: query.answerQuestion,
+            userSupplied,
+            tracingOptions,
+            ...(options.signal === undefined ? {} : { signal: options.signal }),
+          });
         recordCitationScore(traceId, verificationFailed);
 
         const found = !hardFactGuardTriggered;
@@ -289,7 +319,7 @@ export function createCaoAgent(): CaoAgent {
           needsClarification: false,
           citations,
           traceId,
-          usage: generated.usage,
+          usage,
           citationVerificationFailed: verificationFailed,
         });
       } catch (error) {
@@ -350,55 +380,34 @@ export function createCaoAgent(): CaoAgent {
         yield { type: "status", phase: "retrieved", count: retrieval.hits.length };
         yield { type: "status", phase: "generating" };
 
-        const output = await registered.stream(buildAnswerPrompt(retrieval.context, query.answerQuestion), {
-          modelSettings: {
-            temperature: GENERATION_CONFIG.temperature,
-            maxOutputTokens: GENERATION_CONFIG.maxTokens,
-          },
-          tracingOptions: {
-            ...tracingOptionsFor(question, query.retrievalQuery, query.condensed, fund, topK, minScore, retrieval),
-            ...trace.link(),
-          },
-          ...(options.signal === undefined ? {} : { abortSignal: options.signal }),
-        });
+        const tracingOptions = {
+          ...tracingOptionsFor(question, query.retrievalQuery, query.condensed, fund, topK, minScore, retrieval),
+          ...trace.link(),
+        };
 
-        // BUFFER-TO-VERIFY (G5): do NOT stream prose token-by-token. The hard-fact guard is
-        // all-or-nothing over the WHOLE answer — a late ungrounded "16 weken" retroactively refuses
-        // everything before it — so any prefix shown live could be a figure we then have to retract.
-        // With the widened E13 guard firing more often, that flash-then-retract is exactly the leak
-        // this closes. We drain the model stream fully server-side (still recording the model's
-        // first-token latency for the trace), verify, and only then emit the settled answer.
-        const reader = output.textStream.getReader();
-        let ttftMs: number | undefined;
-        let raw = "";
-        try {
-          for (;;) {
-            const { done, value } = await reader.read();
-            if (done) {
-              break;
-            }
-            if (value) {
-              if (ttftMs === undefined) {
-                ttftMs = performance.now() - requestStart;
-                trace.recordTtft(ttftMs);
-              }
-              raw += value;
-            }
-          }
-        } finally {
-          reader.releaseLock();
-        }
-
-        const { answer, citations, verificationFailed, hardFactGuardTriggered } = verifyAndBuild(
-          raw,
-          retrieval,
-          userSupplied,
-        );
+        // BUFFER-TO-VERIFY (G5) + citation-contract repair: the hard-fact guard is all-or-nothing over
+        // the WHOLE answer (a late ungrounded "16 weken" retroactively refuses everything before it),
+        // and a dropped citation block strips every [n] marker — so we never stream prose token-by-token.
+        // We generate the full answer (repairing a violated citation contract once, the SAME seam
+        // `answer()` uses so the stream is not a weaker sibling), verify, guard-check, and only then emit
+        // the settled prose. The client sees no partial stream, so there is nothing to retract.
+        const { answer, citations, verificationFailed, hardFactGuardTriggered, usage } =
+          await generateVerifiedAnswer({
+            retrieval,
+            answerQuestion: query.answerQuestion,
+            userSupplied,
+            tracingOptions,
+            ...(options.signal === undefined ? {} : { signal: options.signal }),
+          });
         recordCitationScore(traceId, verificationFailed);
 
-        // The answer is settled and guard-checked before the client sees a single character: emit the
-        // verified prose, then the citations event whose `answer` is the canonical text the client
-        // reconciles against (it also carries the not-found message when the E13 guard tripped).
+        // With full buffering the client sees its first character only once the answer is settled, so
+        // that instant IS the user-perceived time-to-first-token.
+        const ttftMs = performance.now() - requestStart;
+        trace.recordTtft(ttftMs);
+
+        // Emit the verified prose, then the citations event whose `answer` is the canonical text the
+        // client reconciles against (it also carries the not-found message when the E13 guard tripped).
         const found = !hardFactGuardTriggered;
         if (answer.length > 0) {
           yield { type: "text", delta: answer };
@@ -412,21 +421,12 @@ export function createCaoAgent(): CaoAgent {
           answer,
         };
 
-        const full = await output.getFullOutput();
-        yield {
-          type: "done",
-          usage: {
-            promptTokens: full.usage.inputTokens ?? 0,
-            completionTokens: full.usage.outputTokens ?? 0,
-            totalTokens: full.usage.totalTokens ?? 0,
-          },
-          traceId,
-        };
+        yield { type: "done", usage, traceId };
         trace.end({
           found,
           citationCount: citations.length,
           ...(hardFactGuardTriggered ? { refused: true } : {}),
-          ...(ttftMs === undefined ? {} : { ttftMs }),
+          ttftMs,
         });
       } catch (error) {
         trace.fail(error);
