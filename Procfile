@@ -1,1 +1,1 @@
-web: pnpm --filter demo start
+web: cd apps/demo && node_modules/.bin/next start -p $PORT

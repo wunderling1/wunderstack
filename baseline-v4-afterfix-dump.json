@@ -1,0 +1,856 @@
+{
+  "aggregate": {
+    "hardHallucination": 1,
+    "faithfulness": 0.8387096774193549,
+    "relevance": 0.8129032258064517,
+    "citationCorrectness": 1,
+    "completeness": 0.6838709677419355,
+    "refusalCalibration": 0.967741935483871,
+    "citationVerification": 0.9032258064516129,
+    "orphanRate": 0,
+    "danglingMarkerRate": 0.0967741935483871,
+    "overRefusalRate": 0,
+    "underRefusalRate": 0.3333333333333333,
+    "caseCount": 31
+  },
+  "cases": [
+    {
+      "id": "etd-001",
+      "category": "in_scope",
+      "multiTurn": false,
+      "question": "Hoeveel uur per week werkt een fulltime werknemer gemiddeld volgens deze cao?",
+      "answerRaw": "Een fulltime werknemer werkt gemiddeld 38 uur per week volgens deze CAO [1].\n\n<<<CITATIONS>>>\n[{\"marker\":1,\"chunk_id\":\"arbeidsduur\",\"quote\":\"De gemiddelde arbeidsduur per week van een fulltime werknemer is 38 uur.\"}]",
+      "prose": "Een fulltime werknemer werkt gemiddeld 38 uur per week volgens deze CAO [1].",
+      "scores": {
+        "hardHallucination": 1,
+        "faithfulness": 1,
+        "relevance": 1,
+        "citationCorrectness": 1,
+        "completeness": 0.8,
+        "refusalCalibration": 1,
+        "citationVerification": 1,
+        "orphanRate": 0,
+        "danglingMarkerRate": 0,
+        "refused": false,
+        "category": "in_scope"
+      },
+      "inventedFacts": [],
+      "citationParseFailed": false,
+      "modelCitationCount": 1,
+      "proseMarkers": [
+        1
+      ]
+    },
+    {
+      "id": "etd-002",
+      "category": "in_scope",
+      "multiTurn": false,
+      "question": "Op hoeveel vakantie-uren heb ik recht als fulltimer?",
+      "answerRaw": "Je hebt recht op 190 vakantie-uren per jaar als fulltimer [1].\n\n<<<CITATIONS>>>\n[{\"marker\":1,\"chunk_id\":\"vakantie-uren (Artikel 5.2)\",\"quote\":\"Een fulltime werknemer die een heel jaar in dienst is, heeft recht op 190 uur vakantie per jaar.\"}]",
+      "prose": "Je hebt recht op 190 vakantie-uren per jaar als fulltimer [1].",
+      "scores": {
+        "hardHallucination": 1,
+        "faithfulness": 1,
+        "relevance": 1,
+        "citationCorrectness": 1,
+        "completeness": 0.5,
+        "refusalCalibration": 1,
+        "citationVerification": 1,
+        "orphanRate": 0,
+        "danglingMarkerRate": 0,
+        "refused": false,
+        "category": "in_scope"
+      },
+      "inventedFacts": [],
+      "citationParseFailed": false,
+      "modelCitationCount": 1,
+      "proseMarkers": [
+        1
+      ]
+    },
+    {
+      "id": "etd-003",
+      "category": "in_scope",
+      "multiTurn": false,
+      "question": "Krijgen oudere werknemers extra vakantiedagen?",
+      "answerRaw": "Oudere werknemers krijgen volgens de CAO extra vakantiedagen, afhankelijk van hun leeftijd [1].\n\n<<<CITATIONS>>>\n[{\"marker\":1,\"chunk_id\":\"vakantie-ouderen\",\"quote\":\"Oudere werknemers hebben recht op de volgende extra vakantiedagen\"}]",
+      "prose": "Oudere werknemers krijgen volgens de CAO extra vakantiedagen, afhankelijk van hun leeftijd [1].",
+      "scores": {
+        "hardHallucination": 1,
+        "faithfulness": 1,
+        "relevance": 1,
+        "citationCorrectness": 1,
+        "completeness": 0.7,
+        "refusalCalibration": 1,
+        "citationVerification": 1,
+        "orphanRate": 0,
+        "danglingMarkerRate": 0,
+        "refused": false,
+        "category": "in_scope"
+      },
+      "inventedFacts": [],
+      "citationParseFailed": false,
+      "modelCitationCount": 1,
+      "proseMarkers": [
+        1
+      ]
+    },
+    {
+      "id": "etd-004",
+      "category": "in_scope",
+      "multiTurn": false,
+      "question": "Hoe lang mag een proeftijd zijn?",
+      "answerRaw": "De proeftijd mag maximaal twee maanden zijn [1].\n\nDeze regel geldt alleen voor contracten langer dan zes maanden [1].\n<<<CITATIONS>>>\n[{\"marker\":1,\"chunk_id\":\"proeftijd\",\"quote\":\"De proeftijd is maximaal twee maanden, voor contracten langer dan zes maanden\"}]\n[{\"marker\":1,\"chunk_id\":\"proeftijd\",\"quote\":\"Voor contracten van zes maanden of korter kan geen proeftijd worden afgesproken\"}]\n[{\"marker\":1,\"chunk_id\":\"proeftijd\",\"quote\":\"Tijdens de proeftijd kunnen zowel de werkgever, als de werknemer opzeggen zonder dat er sprake is van een opzegtermijn\"}]\n[{\"marker\":1,\"chunk_id\":\"proeftijd\",\"quote\":\"Als de werkgever of de werknemer het dienstverband in de proeftijd beëindigt, dan gebeurt dit aan het einde van de werkdag.\"}]",
+      "prose": "De proeftijd mag maximaal twee maanden zijn [1].\n\nDeze regel geldt alleen voor contracten langer dan zes maanden [1].",
+      "scores": {
+        "hardHallucination": 1,
+        "faithfulness": 1,
+        "relevance": 0.7,
+        "citationCorrectness": 1,
+        "completeness": 0.5,
+        "refusalCalibration": 1,
+        "citationVerification": 1,
+        "orphanRate": 0,
+        "danglingMarkerRate": 0,
+        "refused": false,
+        "category": "in_scope"
+      },
+      "inventedFacts": [],
+      "citationParseFailed": false,
+      "modelCitationCount": 1,
+      "proseMarkers": [
+        1
+      ]
+    },
+    {
+      "id": "etd-005",
+      "category": "in_scope",
+      "multiTurn": false,
+      "question": "Op hoeveel ADV-uren heb ik recht?",
+      "answerRaw": "Je hebt recht op 104 roostervrije ADV-uren per jaar bij een fulltime dienstverband [1].\n\n<<<CITATIONS>>>\n[{\"marker\":1,\"chunk_id\":\"adv\",\"quote\":\"recht op 104 roostervrije uren\"}]\n]",
+      "prose": "Je hebt recht op 104 roostervrije ADV-uren per jaar bij een fulltime dienstverband [1].",
+      "scores": {
+        "hardHallucination": 1,
+        "faithfulness": 1,
+        "relevance": 1,
+        "citationCorrectness": 1,
+        "completeness": 1,
+        "refusalCalibration": 1,
+        "citationVerification": 1,
+        "orphanRate": 0,
+        "danglingMarkerRate": 0,
+        "refused": false,
+        "category": "in_scope"
+      },
+      "inventedFacts": [],
+      "citationParseFailed": false,
+      "modelCitationCount": 1,
+      "proseMarkers": [
+        1
+      ]
+    },
+    {
+      "id": "etd-006",
+      "category": "in_scope",
+      "multiTurn": false,
+      "question": "Krijg ik een maaltijdvergoeding als ik 's avonds moet werken?",
+      "answerRaw": "Je krijgt een maaltijdvergoeding als je na 19.00 uur werkt en die dag langer dan acht uur werkt [1].\n<<<CITATIONS>>>\n[{\"marker\":1,\"chunk_id\":\"maaltijdvergoeding (Artikel 6.12)\",\"quote\":\"Als een werknemer na 19.00 uur moet werken en deze dag langer dan acht uur werkt, dan krijgt hij van de werkgever een maaltijd of een vergoeding hiervoor van € 6,25 netto.\"}]",
+      "prose": "Je krijgt een maaltijdvergoeding als je na 19.00 uur werkt en die dag langer dan acht uur werkt [1].",
+      "scores": {
+        "hardHallucination": 1,
+        "faithfulness": 1,
+        "relevance": 1,
+        "citationCorrectness": 1,
+        "completeness": 1,
+        "refusalCalibration": 1,
+        "citationVerification": 1,
+        "orphanRate": 0,
+        "danglingMarkerRate": 0,
+        "refused": false,
+        "category": "in_scope"
+      },
+      "inventedFacts": [],
+      "citationParseFailed": false,
+      "modelCitationCount": 1,
+      "proseMarkers": [
+        1
+      ]
+    },
+    {
+      "id": "etd-007",
+      "category": "in_scope",
+      "multiTurn": false,
+      "question": "Hoeveel is het individueel leerbudget en wie heeft er recht op?",
+      "answerRaw": "Het individueel leerbudget bedraagt € 150 per werknemer per kalenderjaar [1].\n\nWerknemers met een arbeidsovereenkomst voor meer dan 15 contracturen per week hebben recht op dit budget [1].\n<<<CITATIONS>>>\n[{\"marker\":1,\"chunk_id\":\"leerbudget\",\"quote\":\"Het individueel leerbudget bedraagt voor het jaar 2023 € 150 per werknemer per kalenderjaar\"},{\"marker\":1,\"chunk_id\":\"leerbudget\",\"quote\":\"Alle werknemers met een arbeidsovereenkomst voor meer dan 15 contracturen per week hebben recht op een individueel leerbudget per jaar\"}]",
+      "prose": "Het individueel leerbudget bedraagt € 150 per werknemer per kalenderjaar [1].\n\nWerknemers met een arbeidsovereenkomst voor meer dan 15 contracturen per week hebben recht op dit budget [1].",
+      "scores": {
+        "hardHallucination": 1,
+        "faithfulness": 1,
+        "relevance": 0.7,
+        "citationCorrectness": 1,
+        "completeness": 0.6,
+        "refusalCalibration": 1,
+        "citationVerification": 1,
+        "orphanRate": 0,
+        "danglingMarkerRate": 0,
+        "refused": false,
+        "category": "in_scope"
+      },
+      "inventedFacts": [],
+      "citationParseFailed": false,
+      "modelCitationCount": 2,
+      "proseMarkers": [
+        1
+      ]
+    },
+    {
+      "id": "etd-008",
+      "category": "in_scope",
+      "multiTurn": false,
+      "question": "Heb ik recht op een eenmalige uitkering?",
+      "answerRaw": "Je hebt recht op een eenmalige uitkering als je op 1 januari 2022 in dienst was bij je werkgever [1].\n\n<<<CITATIONS>>>\n[{\"marker\":1,\"chunk_id\":\"eenmalige-uitkering\",\"quote\":\"Werknemers hebben in februari, maart en april 2023 recht op een eenmalige uitkering. De werkgever betaalt in deze maanden (februari, maart en april 2023) aan werknemers die op 1 januari 2022 in dienst zijn eenmalig € 200 bruto per maand.\"}]",
+      "prose": "Je hebt recht op een eenmalige uitkering als je op 1 januari 2022 in dienst was bij je werkgever [1].",
+      "scores": {
+        "hardHallucination": 1,
+        "faithfulness": 1,
+        "relevance": 0.5,
+        "citationCorrectness": 1,
+        "completeness": 0.3,
+        "refusalCalibration": 1,
+        "citationVerification": 1,
+        "orphanRate": 0,
+        "danglingMarkerRate": 0,
+        "refused": false,
+        "category": "in_scope"
+      },
+      "inventedFacts": [],
+      "citationParseFailed": false,
+      "modelCitationCount": 1,
+      "proseMarkers": [
+        1
+      ]
+    },
+    {
+      "id": "etd-009",
+      "category": "in_scope",
+      "multiTurn": false,
+      "question": "Krijg ik reiskostenvergoeding voor woon-werkverkeer?",
+      "answerRaw": "Je hebt geen recht op een reiskostenvergoeding voor normaal woon-werkverkeer [1].\n\n<<<CITATIONS>>>\n[{\"marker\":1,\"chunk_id\":\"reiskosten\",\"quote\":\"Woon-werkverkeer: voor het normale woon-werkverkeer heeft de werknemer geen recht op een vergoeding.\"}]",
+      "prose": "Je hebt geen recht op een reiskostenvergoeding voor normaal woon-werkverkeer [1].",
+      "scores": {
+        "hardHallucination": 1,
+        "faithfulness": 1,
+        "relevance": 1,
+        "citationCorrectness": 1,
+        "completeness": 0.8,
+        "refusalCalibration": 1,
+        "citationVerification": 1,
+        "orphanRate": 0,
+        "danglingMarkerRate": 0,
+        "refused": false,
+        "category": "in_scope"
+      },
+      "inventedFacts": [],
+      "citationParseFailed": false,
+      "modelCitationCount": 1,
+      "proseMarkers": [
+        1
+      ]
+    },
+    {
+      "id": "etd-010",
+      "category": "in_scope",
+      "multiTurn": false,
+      "question": "Geldt deze cao ook voor vakantiewerkers?",
+      "answerRaw": "Deze cao geldt niet voor vakantiewerkers [1].\n\n<<<CITATIONS>>>\n[{\"marker\":1,\"chunk_id\":\"bereik-niet\",\"quote\":\"niet van toepassing ... vakantiewerkers.\"}]",
+      "prose": "Deze cao geldt niet voor vakantiewerkers [1].",
+      "scores": {
+        "hardHallucination": 1,
+        "faithfulness": 1,
+        "relevance": 1,
+        "citationCorrectness": 1,
+        "completeness": 1,
+        "refusalCalibration": 1,
+        "citationVerification": 0,
+        "orphanRate": 0,
+        "danglingMarkerRate": 1,
+        "refused": false,
+        "category": "in_scope"
+      },
+      "inventedFacts": [],
+      "citationParseFailed": false,
+      "modelCitationCount": 1,
+      "proseMarkers": [
+        1
+      ]
+    },
+    {
+      "id": "etd-011",
+      "category": "in_scope",
+      "multiTurn": false,
+      "question": "Hoeveel tijdelijke contracten mag mijn werkgever mij geven?",
+      "answerRaw": "Je werkgever mag jou maximaal drie opeenvolgende tijdelijke contracten geven, mits de totale duur niet langer is dan 24 maanden [1].\n\n<<<CITATIONS>>>\n[{\"marker\":1,\"chunk_id\":\"ketenbepaling (Artikel 3.6)\",\"quote\":\"maximaal twee keer wordt voortgezet (in totaal derhalve maximaal drie contracten) en als de dienstverbanden bij elkaar niet langer duren dan 24 maanden\"} ]",
+      "prose": "Je werkgever mag jou maximaal drie opeenvolgende tijdelijke contracten geven, mits de totale duur niet langer is dan 24 maanden [1].",
+      "scores": {
+        "hardHallucination": 1,
+        "faithfulness": 1,
+        "relevance": 1,
+        "citationCorrectness": 1,
+        "completeness": 1,
+        "refusalCalibration": 1,
+        "citationVerification": 1,
+        "orphanRate": 0,
+        "danglingMarkerRate": 0,
+        "refused": false,
+        "category": "in_scope"
+      },
+      "inventedFacts": [],
+      "citationParseFailed": false,
+      "modelCitationCount": 1,
+      "proseMarkers": [
+        1
+      ]
+    },
+    {
+      "id": "etd-012",
+      "category": "table",
+      "multiTurn": false,
+      "question": "Wat verdient een 19-jarige met een afgeronde MBO-opleiding ETD per maand vanaf 1 juli 2023?",
+      "answerRaw": "Een 19-jarige met een afgeronde MBO-opleiding ETD verdient € 1.281,19 bruto per maand vanaf 1 juli 2023 [1].\n\n<<<CITATIONS>>>\n[{\"marker\":1,\"chunk_id\":\"salaristabel-maand-jul2023\",\"quote\":\"19 jaar: 1.164,71 / 1.222,95 / 1.281,19\"} ]",
+      "prose": "Een 19-jarige met een afgeronde MBO-opleiding ETD verdient € 1.281,19 bruto per maand vanaf 1 juli 2023 [1].",
+      "scores": {
+        "hardHallucination": 1,
+        "faithfulness": 1,
+        "relevance": 1,
+        "citationCorrectness": 1,
+        "completeness": 1,
+        "refusalCalibration": 1,
+        "citationVerification": 1,
+        "orphanRate": 0,
+        "danglingMarkerRate": 0,
+        "refused": false,
+        "category": "table"
+      },
+      "inventedFacts": [],
+      "citationParseFailed": false,
+      "modelCitationCount": 1,
+      "proseMarkers": [
+        1
+      ]
+    },
+    {
+      "id": "etd-013",
+      "category": "table",
+      "multiTurn": false,
+      "question": "Wat is het salaris van een 20-jarige zonder diploma bij betaling per vier weken, per 1 januari 2023?",
+      "answerRaw": "Het salaris van een 20-jarige zonder diploma bij betaling per vier weken per 1 januari 2023 is € 1.428,40 [1].\n\n<<<CITATIONS>>>\n[{\"marker\":1,\"chunk_id\":\"salaristabel-4weken-jan2023\",\"quote\":\"Het basisbedrag zonder diplomatoeslag voor een 20-jarige is € 1.428,40 per vier weken.\"}]",
+      "prose": "Het salaris van een 20-jarige zonder diploma bij betaling per vier weken per 1 januari 2023 is € 1.428,40 [1].",
+      "scores": {
+        "hardHallucination": 1,
+        "faithfulness": 1,
+        "relevance": 1,
+        "citationCorrectness": 1,
+        "completeness": 1,
+        "refusalCalibration": 1,
+        "citationVerification": 1,
+        "orphanRate": 0,
+        "danglingMarkerRate": 0,
+        "refused": false,
+        "category": "table"
+      },
+      "inventedFacts": [],
+      "citationParseFailed": false,
+      "modelCitationCount": 1,
+      "proseMarkers": [
+        1
+      ]
+    },
+    {
+      "id": "etd-014",
+      "category": "table",
+      "multiTurn": false,
+      "question": "Wat is het maandsalaris in salarisgroep F bij 9 functiejaren, vanaf 1 juli 2023?",
+      "answerRaw": "Het maandsalaris in salarisgroep F bij 9 functiejaren vanaf 1 juli 2023 bedraagt € 2.485,90 [1].\n\n<<<CITATIONS>>>\n[{\"marker\":1,\"chunk_id\":\"salaristabel-maand-jul2023\",\"quote\":\"functiejaar 9 (€ 2.485,90) betreft salarisgroep F\"}]\n[{\"marker\":1,\"chunk_id\":\"salaristabel-maand-jul2023\",\"quote\":\"2.485,90\"}]\n[{\"marker\":1,\"chunk_id\":\"salaristabel-maand-jul2023\",\"quote\":\"Salarisgroepen A t/m F, bruto per maand per functiejaar (kolommen A B C D E F):\"}]\n[{\"marker\":1,\"chunk_id\":\"salaristabel-maand-jul2023\",\"quote\":\"De hoogste functiejaren gelden voor de hoogste salarisgroepen\"}]\n[{\"marker\":1,\"chunk_id\":\"salaristabel-maand-jul2023\",\"quote\":\"Betaling per maand vanaf 1 juli 2023\"}]\n[{\"marker\":1,\"chunk_id\":\"salaristabel-maand-jul2023\",\"quote\":\"fulltime, gemiddeld 38 uur per week\"}]\n[{\"marker\":1,\"chunk_id\":\"salaristabel-maand-jul2023\",\"quote\":\"Artikel 6.2\"}]\n[{\"marker\":1,\"chunk_id\":\"salaristabel-maand-jul2023\",\"quote\":\"Salaristabellen\"}]\n[{\"marker\":1,\"chunk_id\":\"salaristabel-maand-jul2023\",\"quote\":\"in euro's\"}]\n[{\"marker\":1,\"chunk_id\":\"salaristabel-maand-jul2023\",\"quote\":\"9: 2.485,90\"}]\n[{\"marker\":1,\"chunk_id\":\"salaristabel-maand-jul2023\",\"quote\":\"Salarisgroep F.\"}]",
+      "prose": "Het maandsalaris in salarisgroep F bij 9 functiejaren vanaf 1 juli 2023 bedraagt € 2.485,90 [1].",
+      "scores": {
+        "hardHallucination": 1,
+        "faithfulness": 1,
+        "relevance": 1,
+        "citationCorrectness": 1,
+        "completeness": 1,
+        "refusalCalibration": 1,
+        "citationVerification": 1,
+        "orphanRate": 0,
+        "danglingMarkerRate": 0,
+        "refused": false,
+        "category": "table"
+      },
+      "inventedFacts": [],
+      "citationParseFailed": false,
+      "modelCitationCount": 1,
+      "proseMarkers": [
+        1
+      ]
+    },
+    {
+      "id": "etd-015",
+      "category": "in_scope",
+      "multiTurn": false,
+      "question": "Welke toeslag krijg ik als ik op zondag werk?",
+      "answerRaw": "Voor werknemers die op 1 april 2018 of eerder in dienst zijn, geldt een toeslag van 100% per uur bij werken op een zondag [1].\nVoor werknemers die na 1 april 2018 in dienst zijn, geldt een toeslag van 50% per uur bij werken op een zondag [1].\n\n<<<CITATIONS>>>\n[{\"marker\":1,\"chunk_id\":\"toeslagen-koopavond-zondag (Artikel 6.10)\",\"quote\":\"zon- en feestdagen: 100%.\"},{\"marker\":1,\"chunk_id\":\"toeslagen-koopavond-zondag (Artikel 6.10)\",\"quote\":\"zon- en feestdagen: 50%\"}]",
+      "prose": "Voor werknemers die op 1 april 2018 of eerder in dienst zijn, geldt een toeslag van 100% per uur bij werken op een zondag [1].\nVoor werknemers die na 1 april 2018 in dienst zijn, geldt een toeslag van 50% per uur bij werken op een zondag [1].",
+      "scores": {
+        "hardHallucination": 1,
+        "faithfulness": 1,
+        "relevance": 1,
+        "citationCorrectness": 1,
+        "completeness": 1,
+        "refusalCalibration": 1,
+        "citationVerification": 1,
+        "orphanRate": 0,
+        "danglingMarkerRate": 0,
+        "refused": false,
+        "category": "in_scope"
+      },
+      "inventedFacts": [],
+      "citationParseFailed": false,
+      "modelCitationCount": 2,
+      "proseMarkers": [
+        1
+      ]
+    },
+    {
+      "id": "etd-016",
+      "category": "in_scope",
+      "multiTurn": false,
+      "question": "Hoeveel loon krijg ik doorbetaald als ik ziek ben?",
+      "answerRaw": "In het eerste jaar van ziekte krijg je 100% van je loon doorbetaald [1].\nIn het tweede jaar krijg je 70% van je loon doorbetaald, tenzij is vastgesteld dat je geen herstelkans hebt en geen verdiencapaciteit meer hebt; dan krijg je 80% [1].\n\n<<<CITATIONS>>>\n[{\"marker\":1,\"chunk_id\":\"loondoorbetaling-ziekte\",\"quote\":\"In het eerste jaar van arbeidsongeschiktheid betaalt de werkgever het loon 100% door. In het tweede jaar van arbeidsongeschiktheid betaalt de werkgever 70% van het loon door. In afwijking hiervan wordt aan de werknemer waarvan is vastgesteld dat die geen kans op herstel heeft en niet beschikt over een resterende verdiencapaciteit, gedurende het tweede jaar 80% van het loon doorbetaald.\"}]",
+      "prose": "In het eerste jaar van ziekte krijg je 100% van je loon doorbetaald [1].\nIn het tweede jaar krijg je 70% van je loon doorbetaald, tenzij is vastgesteld dat je geen herstelkans hebt en geen verdiencapaciteit meer hebt; dan krijg je 80% [1].",
+      "scores": {
+        "hardHallucination": 1,
+        "faithfulness": 1,
+        "relevance": 1,
+        "citationCorrectness": 1,
+        "completeness": 0.8,
+        "refusalCalibration": 1,
+        "citationVerification": 1,
+        "orphanRate": 0,
+        "danglingMarkerRate": 0,
+        "refused": false,
+        "category": "in_scope"
+      },
+      "inventedFacts": [],
+      "citationParseFailed": false,
+      "modelCitationCount": 1,
+      "proseMarkers": [
+        1
+      ]
+    },
+    {
+      "id": "etd-017",
+      "category": "in_scope",
+      "multiTurn": false,
+      "question": "Heb ik als mantelzorger recht op doorbetaald verlof?",
+      "answerRaw": "Je hebt mogelijk recht op (gedeeltelijke) doorbetaling van het loon als mantelzorger, mits je aan de voorwaarden voldoet [1].\n\n<<<CITATIONS>>>\n[{\"marker\":1,\"chunk_id\":\"mantelzorg\",\"quote\":\"Naast de wettelijke regeling langdurig zorgverlof kunnen medewerkers die mantelzorg verlenen recht hebben op een verzoek tot (gedeeltelijke) doorbetaling van het loon.\"}]",
+      "prose": "Je hebt mogelijk recht op (gedeeltelijke) doorbetaling van het loon als mantelzorger, mits je aan de voorwaarden voldoet [1].",
+      "scores": {
+        "hardHallucination": 1,
+        "faithfulness": 1,
+        "relevance": 0.5,
+        "citationCorrectness": 1,
+        "completeness": 0.3,
+        "refusalCalibration": 1,
+        "citationVerification": 1,
+        "orphanRate": 0,
+        "danglingMarkerRate": 0,
+        "refused": false,
+        "category": "in_scope"
+      },
+      "inventedFacts": [],
+      "citationParseFailed": false,
+      "modelCitationCount": 1,
+      "proseMarkers": [
+        1
+      ]
+    },
+    {
+      "id": "etd-018",
+      "category": "in_scope",
+      "multiTurn": false,
+      "question": "Wat is de toeslag voor overuren?",
+      "answerRaw": "De toeslag voor overuren is 25% voor de eerste twee overuren en 50% voor overige overuren [1].\nOp zon- of feestdagen geldt een toeslag van 100% per uur [1].\n<<<CITATIONS>>>\n[{\"marker\":1,\"chunk_id\":\"overuren\",\"quote\":\"Er is altijd sprake van overuren als een werknemer in een week meer werkt dan 47 uur. Als er sprake is van overuren, dan krijgt de werknemer een toeslag van 25% over de eerste twee overuren, direct voor of na de dagelijkse werktijd, en een toeslag van 50% voor overige overuren. ... Een werknemer krijgt geen toeslag voor overuren als dit direct aansluit op de dagelijkse werktijd en wordt gebruikt om het werk af te ronden, niet langer duurt dan een kwartier en niet vaak voorkomt, of als de werkgever en de werknemer zijn overeengekomen dat de overuren zijn opgenomen in het salaris. Als een werknemer overwerkt op een zon- of feestdag ontvangt hij uitsluitend een toeslag van 100% per uur in totaal.\"}]",
+      "prose": "De toeslag voor overuren is 25% voor de eerste twee overuren en 50% voor overige overuren [1].\nOp zon- of feestdagen geldt een toeslag van 100% per uur [1].",
+      "scores": {
+        "hardHallucination": 1,
+        "faithfulness": 1,
+        "relevance": 0.7,
+        "citationCorrectness": 1,
+        "completeness": 0.6,
+        "refusalCalibration": 1,
+        "citationVerification": 0,
+        "orphanRate": 0,
+        "danglingMarkerRate": 1,
+        "refused": false,
+        "category": "in_scope"
+      },
+      "inventedFacts": [],
+      "citationParseFailed": false,
+      "modelCitationCount": 1,
+      "proseMarkers": [
+        1
+      ]
+    },
+    {
+      "id": "etd-019",
+      "category": "in_scope",
+      "multiTurn": false,
+      "question": "Hoeveel koopavonden moet ik maximaal werken?",
+      "answerRaw": "Je mag hooguit drie koopavonden per week werken [1].\n\nOp jaarbasis, vakantieweken uitgezonderd, geldt een gemiddelde van maximaal twee koopavonden per week [1].\n<<<CITATIONS>>>\n[{\"marker\":1,\"chunk_id\":\"koopavond\",\"quote\":\"Een werknemer hoeft hooguit drie koopavonden per week te werken.\"},{\"marker\":1,\"chunk_id\":\"koopavond\",\"quote\":\"Op jaarbasis, vakantieweken uitgezonderd, werkt een werknemer gemiddeld maximaal twee koopavonden per week.\"}]",
+      "prose": "Je mag hooguit drie koopavonden per week werken [1].\n\nOp jaarbasis, vakantieweken uitgezonderd, geldt een gemiddelde van maximaal twee koopavonden per week [1].",
+      "scores": {
+        "hardHallucination": 1,
+        "faithfulness": 1,
+        "relevance": 0.8,
+        "citationCorrectness": 1,
+        "completeness": 0.7,
+        "refusalCalibration": 1,
+        "citationVerification": 1,
+        "orphanRate": 0,
+        "danglingMarkerRate": 0,
+        "refused": false,
+        "category": "in_scope"
+      },
+      "inventedFacts": [],
+      "citationParseFailed": false,
+      "modelCitationCount": 2,
+      "proseMarkers": [
+        1
+      ]
+    },
+    {
+      "id": "etd-020",
+      "category": "in_scope",
+      "multiTurn": false,
+      "question": "Mag mijn werkgever mij als deeltijder zomaar meer of minder uren inplannen?",
+      "answerRaw": "Ja, je werkgever mag je als deeltijder binnen een bandbreedte van +25% en -25% meer of minder uren inplannen [1].\n\nDeze flexibiliteit geldt binnen een referteperiode van zes maanden, waarbij afwijkingen in werktijd worden gecompenseerd [1].\n<<<CITATIONS>>>\n[{\"marker\":1,\"chunk_id\":\"flexinzet\",\"quote\":\"kan de werkgever binnen een bandbreedte van +25% en -25% (gerekend vanaf het aantal contracturen) de deeltijdwerknemer wekelijks meer of minder arbeidsuren inzetten. Werkweken waarin de feitelijke werktijd afwijkt van het aantal contracturen, worden binnen een door de werkgever gekozen referteperiode van zes maanden in tijd gecompenseerd.\"}]",
+      "prose": "Ja, je werkgever mag je als deeltijder binnen een bandbreedte van +25% en -25% meer of minder uren inplannen [1].\n\nDeze flexibiliteit geldt binnen een referteperiode van zes maanden, waarbij afwijkingen in werktijd worden gecompenseerd [1].",
+      "scores": {
+        "hardHallucination": 1,
+        "faithfulness": 1,
+        "relevance": 0.8,
+        "citationCorrectness": 1,
+        "completeness": 0.6,
+        "refusalCalibration": 1,
+        "citationVerification": 1,
+        "orphanRate": 0,
+        "danglingMarkerRate": 0,
+        "refused": false,
+        "category": "in_scope"
+      },
+      "inventedFacts": [],
+      "citationParseFailed": false,
+      "modelCitationCount": 1,
+      "proseMarkers": [
+        1
+      ]
+    },
+    {
+      "id": "etd-021",
+      "category": "in_scope",
+      "multiTurn": false,
+      "question": "Ik ben uitzendkracht en werk nu 8 weken bij een winkel die onder deze cao valt. Welke cao-afspraken gelden voor mij?",
+      "answerRaw": "Voor uitzendkrachten die minder dan zes weken zijn uitgezonden, gelden alleen de salaristabellen niet automatisch [1].\n\n<<<CITATIONS>>>\n[{\"marker\":1,\"chunk_id\":\"vakkrachten\",\"quote\":\"Naar de uitzendwerkgever op wie deze cao van toepassing is, zijn de volgende artikelen van toepassing: Salaristabellen (artikel 6.2); ...\"}]",
+      "prose": "Voor uitzendkrachten die minder dan zes weken zijn uitgezonden, gelden alleen de salaristabellen niet automatisch [1].",
+      "scores": {
+        "hardHallucination": 1,
+        "faithfulness": 0,
+        "relevance": 0,
+        "citationCorrectness": 1,
+        "completeness": 0,
+        "refusalCalibration": 1,
+        "citationVerification": 0,
+        "orphanRate": 0,
+        "danglingMarkerRate": 1,
+        "refused": false,
+        "category": "in_scope"
+      },
+      "inventedFacts": [],
+      "citationParseFailed": false,
+      "modelCitationCount": 1,
+      "proseMarkers": [
+        1
+      ]
+    },
+    {
+      "id": "etd-022",
+      "category": "in_scope",
+      "multiTurn": false,
+      "question": "Mijn partner is net bevallen. Op hoeveel verlof heb ik recht?",
+      "answerRaw": "Je hebt recht op vijf dagen verlof bij de bevalling van je partner [1], en daarnaast kun je maximaal vijf vakantiedagen opnemen na de bevalling [2].\n\n<<<CITATIONS>>>\n[{\"marker\":1,\"chunk_id\":\"geboorteverlof (Artikel 5.8)\",\"quote\":\"bij bevalling van de partner: vijf dagen\"},\n{\"marker\":2,\"chunk_id\":\"vakantie-na-bevalling (Artikel 5.10)\",\"quote\":\"maximaal vijf vakantiedagen op te nemen na de bevalling van de partner\"} ]",
+      "prose": "Je hebt recht op vijf dagen verlof bij de bevalling van je partner [1], en daarnaast kun je maximaal vijf vakantiedagen opnemen na de bevalling [2].",
+      "scores": {
+        "hardHallucination": 1,
+        "faithfulness": 1,
+        "relevance": 1,
+        "citationCorrectness": 1,
+        "completeness": 1,
+        "refusalCalibration": 1,
+        "citationVerification": 1,
+        "orphanRate": 0,
+        "danglingMarkerRate": 0,
+        "refused": false,
+        "category": "in_scope"
+      },
+      "inventedFacts": [],
+      "citationParseFailed": false,
+      "modelCitationCount": 2,
+      "proseMarkers": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "etd-023",
+      "category": "in_scope",
+      "multiTurn": false,
+      "question": "Mag mijn werkgever mij een all-in uurloon betalen?",
+      "answerRaw": "Voor werknemers die maximaal 15 uur per week werken, mag de werkgever beslissen om het recht op vakantiedagen en vakantietoeslag om te zetten in een all-in salaris [1].\n\n<<<CITATIONS>>>\n[{\"marker\":1,\"chunk_id\":\"all-in-uurloon\",\"quote\":\"De werkgever kan beslissen het recht op vakantiedagen (9,61%) en vakantietoeslag (8%) om te zetten in een uitkering en maandelijks tegelijk met het loon uit te betalen.\"}]",
+      "prose": "Voor werknemers die maximaal 15 uur per week werken, mag de werkgever beslissen om het recht op vakantiedagen en vakantietoeslag om te zetten in een all-in salaris [1].",
+      "scores": {
+        "hardHallucination": 1,
+        "faithfulness": 1,
+        "relevance": 1,
+        "citationCorrectness": 1,
+        "completeness": 1,
+        "refusalCalibration": 1,
+        "citationVerification": 1,
+        "orphanRate": 0,
+        "danglingMarkerRate": 0,
+        "refused": false,
+        "category": "in_scope"
+      },
+      "inventedFacts": [],
+      "citationParseFailed": false,
+      "modelCitationCount": 1,
+      "proseMarkers": [
+        1
+      ]
+    },
+    {
+      "id": "etd-024",
+      "category": "refusal",
+      "multiTurn": false,
+      "question": "Hoe hoog is de pensioenpremie die ik betaal?",
+      "answerRaw": "Ik kan dit niet terugvinden in de CAO-documenten waar ik toegang toe heb. Neem voor zekerheid contact op met je fonds.\n<<<CITATIONS>>>\n[]",
+      "prose": "Ik kan dit niet terugvinden in de CAO-documenten waar ik toegang toe heb. Neem voor zekerheid contact op met je fonds.\n<<<CITATIONS>>>\n[]",
+      "scores": {
+        "hardHallucination": 1,
+        "faithfulness": 1,
+        "relevance": 1,
+        "citationCorrectness": 1,
+        "completeness": 1,
+        "refusalCalibration": 1,
+        "citationVerification": 1,
+        "orphanRate": 0,
+        "danglingMarkerRate": 0,
+        "refused": true,
+        "category": "refusal"
+      },
+      "inventedFacts": [],
+      "citationParseFailed": false,
+      "modelCitationCount": 0,
+      "proseMarkers": []
+    },
+    {
+      "id": "etd-025",
+      "category": "refusal",
+      "multiTurn": false,
+      "question": "Wat wordt de loonsverhoging per 1 januari 2024?",
+      "answerRaw": "De CAO bepaalt geen loonsverhoging per 1 januari 2024 [1][2].\n<<<CITATIONS>>>\n[]",
+      "prose": "De CAO bepaalt geen loonsverhoging per 1 januari 2024 [1][2].\n<<<CITATIONS>>>\n[]",
+      "scores": {
+        "hardHallucination": 1,
+        "faithfulness": 0,
+        "relevance": 0,
+        "citationCorrectness": 1,
+        "completeness": 0,
+        "refusalCalibration": 0,
+        "citationVerification": 1,
+        "orphanRate": 0,
+        "danglingMarkerRate": 0,
+        "refused": false,
+        "category": "refusal"
+      },
+      "inventedFacts": [],
+      "citationParseFailed": false,
+      "modelCitationCount": 0,
+      "proseMarkers": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "etd-026",
+      "category": "refusal",
+      "multiTurn": false,
+      "question": "Hoeveel weken zwangerschapsverlof krijg ik?",
+      "answerRaw": "Ik kan dit niet terugvinden in de CAO-documenten waar ik toegang toe heb. Neem voor zekerheid contact op met je fonds.\n<<<CITATIONS>>>\n[]",
+      "prose": "Ik kan dit niet terugvinden in de CAO-documenten waar ik toegang toe heb. Neem voor zekerheid contact op met je fonds.\n<<<CITATIONS>>>\n[]",
+      "scores": {
+        "hardHallucination": 1,
+        "faithfulness": 1,
+        "relevance": 1,
+        "citationCorrectness": 1,
+        "completeness": 1,
+        "refusalCalibration": 1,
+        "citationVerification": 1,
+        "orphanRate": 0,
+        "danglingMarkerRate": 0,
+        "refused": true,
+        "category": "refusal"
+      },
+      "inventedFacts": [],
+      "citationParseFailed": false,
+      "modelCitationCount": 0,
+      "proseMarkers": []
+    },
+    {
+      "id": "etd-029",
+      "category": "in_scope",
+      "multiTurn": true,
+      "question": "En als mijn werktijd al is verkort naar 38 uur?",
+      "answerRaw": "Als je werktijd al is verkort naar 38 uur, geldt Artikel 4.3 niet voor jou [1].\n\n<<<CITATIONS>>>\n[{\"marker\":1,\"chunk_id\":\"adv\",\"quote\":\"Dit artikel is niet van toepassing op een werknemer wiens werktijd is verkort van 40 uur naar 38 uur.\"}]",
+      "prose": "Als je werktijd al is verkort naar 38 uur, geldt Artikel 4.3 niet voor jou [1].",
+      "scores": {
+        "hardHallucination": 1,
+        "faithfulness": 1,
+        "relevance": 1,
+        "citationCorrectness": 1,
+        "completeness": 1,
+        "refusalCalibration": 1,
+        "citationVerification": 1,
+        "orphanRate": 0,
+        "danglingMarkerRate": 0,
+        "refused": false,
+        "category": "in_scope"
+      },
+      "inventedFacts": [],
+      "citationParseFailed": false,
+      "modelCitationCount": 1,
+      "proseMarkers": [
+        1
+      ]
+    },
+    {
+      "id": "etd-030",
+      "category": "in_scope",
+      "multiTurn": true,
+      "question": "En hoeveel extra dagen krijg ik als ik 58 ben?",
+      "answerRaw": "Je krijgt twee extra vakantiedagen als je 58 bent [1].\n\n<<<CITATIONS>>>\n[{\"marker\":1,\"chunk_id\":\"vakantie-ouderen (Artikel 5.3)\",\"quote\":\"55 t/m 59 jaar: twee dagen (15,2 uur)\"}]",
+      "prose": "Je krijgt twee extra vakantiedagen als je 58 bent [1].",
+      "scores": {
+        "hardHallucination": 1,
+        "faithfulness": 1,
+        "relevance": 1,
+        "citationCorrectness": 1,
+        "completeness": 1,
+        "refusalCalibration": 1,
+        "citationVerification": 1,
+        "orphanRate": 0,
+        "danglingMarkerRate": 0,
+        "refused": false,
+        "category": "in_scope"
+      },
+      "inventedFacts": [],
+      "citationParseFailed": false,
+      "modelCitationCount": 1,
+      "proseMarkers": [
+        1
+      ]
+    },
+    {
+      "id": "etd-d01",
+      "category": "derived",
+      "multiTurn": false,
+      "question": "Ik werk 24 uur per week. Op hoeveel vakantie-uren heb ik dan per jaar recht?",
+      "answerRaw": "Je hebt recht op 120 vakantie-uren per jaar bij een dienstverband van 24 uur per week [1][2].\n\n<<<CITATIONS>>>\n[{\"marker\":1,\"chunk_id\":\"vakantie-uren (Artikel 5.2)\",\"quote\":\"recht op 190 uur vakantie per jaar\"},{\"marker\":2,\"chunk_id\":\"naar-rato (Artikel 5.1)\",\"quote\":\"Voor deeltijders en werknemers die gedurende het jaar in dienst zijn getreden, gelden de vakantierechten naar evenredigheid\"}]\n</context>",
+      "prose": "Je hebt recht op 120 vakantie-uren per jaar bij een dienstverband van 24 uur per week [1][2].",
+      "scores": {
+        "hardHallucination": 1,
+        "faithfulness": 0,
+        "relevance": 0.5,
+        "citationCorrectness": 1,
+        "completeness": 0,
+        "refusalCalibration": 1,
+        "citationVerification": 1,
+        "orphanRate": 0,
+        "danglingMarkerRate": 0,
+        "refused": false,
+        "category": "derived"
+      },
+      "inventedFacts": [],
+      "citationParseFailed": false,
+      "modelCitationCount": 2,
+      "proseMarkers": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "etd-d02",
+      "category": "derived",
+      "multiTurn": true,
+      "question": "En als ik 12 uur per week werk?",
+      "answerRaw": "Je hebt recht op 60 vakantie-uren per jaar bij een fulltime dienstverband van 12 uur per week [1][2].\n\n<<<CITATIONS>>>\n[{\"marker\":1,\"chunk_id\":\"vakantie-uren\",\"quote\":\"recht op 190 uur vakantie per jaar\"},{\"marker\":2,\"chunk_id\":\"naar-rato\",\"quote\":\"Voor deeltijders en werknemers die gedurende het jaar in dienst zijn getreden, gelden de vakantierechten naar evenredigheid\"}]\n[{\"marker\":1,\"chunk_id\":\"vakantie-uren\",\"quote\":\"recht op 192 uur vakantie per jaar\"},{\"marker\":2,\"chunk_id\":\"naar-rato\",\"quote\":\"Voor deeltijders en werknemers die gedurende het jaar in dienst zijn getreden, gelden de vakantierechten naar evenredigheid\"}]",
+      "prose": "Je hebt recht op 60 vakantie-uren per jaar bij een fulltime dienstverband van 12 uur per week [1][2].",
+      "scores": {
+        "hardHallucination": 1,
+        "faithfulness": 0,
+        "relevance": 0.5,
+        "citationCorrectness": 1,
+        "completeness": 0,
+        "refusalCalibration": 1,
+        "citationVerification": 1,
+        "orphanRate": 0,
+        "danglingMarkerRate": 0,
+        "refused": false,
+        "category": "derived"
+      },
+      "inventedFacts": [],
+      "citationParseFailed": false,
+      "modelCitationCount": 2,
+      "proseMarkers": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "etd-d03",
+      "category": "derived",
+      "multiTurn": true,
+      "question": "Hoeveel vakantiedagen is dat per jaar?",
+      "answerRaw": "Bij een arbeidsduur van 12 uur per week heeft een werknemer recht op 60 vakantie-uren per jaar [1][2].\n<<<CITATIONS>>>\n[{\"marker\":1,\"chunk_id\":\"vakantie-uren (Artikel 5.2)\",\"quote\":\"recht op 190 uur vakantie per jaar\"},{\"marker\":2,\"chunk_id\":\"naar-rato (Artikel 5.1)\",\"quote\":\"Voor deeltijders en werknemers die gedurende het jaar in dienst zijn getreden, gelden de vakantierechten naar evenredigheid\"}]\nIk kan dit niet terugvinden in de CAO-documenten waar ik toegang toe heb. Neem voor zekerheid contact op met je fonds.",
+      "prose": "Bij een arbeidsduur van 12 uur per week heeft een werknemer recht op 60 vakantie-uren per jaar [1][2].",
+      "scores": {
+        "hardHallucination": 1,
+        "faithfulness": 0,
+        "relevance": 0.5,
+        "citationCorrectness": 1,
+        "completeness": 0,
+        "refusalCalibration": 1,
+        "citationVerification": 1,
+        "orphanRate": 0,
+        "danglingMarkerRate": 0,
+        "refused": false,
+        "category": "derived"
+      },
+      "inventedFacts": [],
+      "citationParseFailed": false,
+      "modelCitationCount": 2,
+      "proseMarkers": [
+        1,
+        2
+      ]
+    }
+  ]
+}
