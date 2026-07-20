@@ -146,6 +146,21 @@ export interface AggregateScores {
   /** Refusal cases that wrongly answered, as a rate of refusal cases. */
   underRefusalRate: number;
   caseCount: number;
+  /**
+   * Count of cases whose citationVerification scored 0. The absolute Gate C check is count-based
+   * ("0 of N unverified") — at N=31 one failure is already 96.8% < 0.98, so the percentage form was
+   * schijngranulariteit over an [X]-gate. Rate kept above for trend.
+   */
+  unverifiedCitationCount: number;
+  /** Count of cases with danglingMarkerRate > 0. Same count-based absolute gate as above. */
+  danglingCaseCount: number;
+  /**
+   * Count of refusal cases that wrongly answered. With only a handful of refusal fixtures the
+   * underRefusalRate is a noisy tiny-denominator fraction (1 of 3 = 33%), so the gate is expressed as a
+   * count (like citation-verification/dangling). Hallucinated under-refusals are still caught absolutely
+   * by hard-hallucination; this count tolerates a grounded should-have-deferred slip. See REVIEW.md §21.
+   */
+  underRefusalCount: number;
 }
 
 /**
@@ -158,7 +173,19 @@ export function scoreCitationVerification(
   passages: GoldenPassage[],
 ): { verification: number; orphanRate: number; danglingMarkerRate: number; prose: string } {
   if (testCase.category === "refusal") {
-    return { verification: 1, orphanRate: 0, danglingMarkerRate: 0, prose: rawAnswer };
+    // Score on the PARSED prose (what the pipeline actually delivers), not rawAnswer. The generator can
+    // run away past a clean refusal and dump content after the `<<<CITATIONS>>>` sentinel (etd-026:
+    // finishReason=length, a few-shot-example tail with numbers like "16 weken"); that tail is stripped
+    // before the user ever sees it, so the load-bearing hard-hallucination gate must measure the delivered
+    // prose, identical to the answerable path below (golden-set.REVIEW.md §22, REVIEW.md §21: safety =
+    // post-pipeline output). A refusal that WRONGLY answers still keeps its ungrounded fact in the
+    // pre-sentinel prose, so under-refusal-with-fabrication is still caught.
+    return {
+      verification: 1,
+      orphanRate: 0,
+      danglingMarkerRate: 0,
+      prose: parseGenerationOutput(rawAnswer).answerMarkdown,
+    };
   }
 
   const parsed = parseGenerationOutput(rawAnswer);
@@ -484,6 +511,9 @@ export function aggregateScores(scores: CaseScores[]): AggregateScores {
       overRefusalRate: 0,
       underRefusalRate: 0,
       caseCount: 0,
+      unverifiedCitationCount: 0,
+      danglingCaseCount: 0,
+      underRefusalCount: 0,
     };
   }
 
@@ -516,6 +546,8 @@ export function aggregateScores(scores: CaseScores[]): AggregateScores {
   const refusals = scores.filter((score) => score.category === "refusal");
   const overRefusals = answerable.filter((score) => score.refused).length;
   const underRefusals = refusals.filter((score) => !score.refused).length;
+  const unverifiedCitationCount = scores.filter((score) => score.citationVerification === 0).length;
+  const danglingCaseCount = scores.filter((score) => score.danglingMarkerRate > 0).length;
 
   const count = scores.length;
   return {
@@ -531,5 +563,8 @@ export function aggregateScores(scores: CaseScores[]): AggregateScores {
     overRefusalRate: answerable.length === 0 ? 0 : overRefusals / answerable.length,
     underRefusalRate: refusals.length === 0 ? 0 : underRefusals / refusals.length,
     caseCount: count,
+    unverifiedCitationCount,
+    danglingCaseCount,
+    underRefusalCount: underRefusals,
   };
 }

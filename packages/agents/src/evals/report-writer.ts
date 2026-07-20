@@ -19,7 +19,8 @@ const reportPath = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "ev
 /** Current on-disk schema version — bump when the report shape changes in a breaking way. */
 // v1: initial (E9). v2: retrievalIntegration (E11). v3: funds[] (E12).
 // v4: AnswerReport.cases carry id/question/answerRaw so under-refusal / citation failures are inspectable (Tier B).
-export const EVAL_REPORT_SCHEMA_VERSION = 4;
+// v5: AnswerCaseReport carries finishReason + answerChars (truncation diagnostic, Gate C close-out).
+export const EVAL_REPORT_SCHEMA_VERSION = 5;
 
 export interface ReportCheck {
   name: string;
@@ -64,6 +65,13 @@ export interface AnswerCaseReport extends CaseScores {
   id: string;
   question: string;
   answerRaw: string;
+  /**
+   * Provider finish reason of the chosen generation attempt (`stop`, `length`, …). Distinguishes a
+   * dropped closing bracket (etd-012 at ~65 tokens, finish=stop) from a maxTokens truncation.
+   */
+  finishReason: string | null;
+  /** Character length of answerRaw — companion truncation diagnostic. */
+  answerChars: number;
 }
 
 export interface AnswerReport {

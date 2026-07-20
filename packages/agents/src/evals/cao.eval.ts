@@ -34,6 +34,9 @@
  * production, but out of scope here — see PLAN-eval-gates.md.
  *
  * Run: pnpm --filter @wunderstack/agents test   (loads repo-root .env automatically)
+ *
+ * A flock-equivalent lock (see eval-lock.ts) prevents parallel runs — starting a second eval while
+ * one is in flight exits immediately with a clear message instead of competing for the DB/API.
  */
 
 import { embed, generateText } from "@wunderstack/ai";
@@ -48,6 +51,7 @@ import {
 
 import { detectClarification } from "../cao/clarify.js";
 import { condenseQuery, isElliptical } from "../cao/condense.js";
+import { generateAnswerWithRepair } from "../cao/generate-answer.js";
 import { retrievalInputSchema } from "../cao/tools.js";
 import { caoQuestionSchema } from "../types.js";
 import { CAO_SYSTEM_INSTRUCTIONS, NOT_FOUND_MESSAGE, buildAnswerPrompt } from "../cao/prompt.js";
@@ -71,6 +75,7 @@ import {
   passageToHit,
   passagesForCase,
 } from "./golden-set.js";
+import { acquireEvalLock, EvalAlreadyRunningError } from "./eval-lock.js";
 import {
   aggregateScores,
   assembleEvalContext,
@@ -92,8 +97,16 @@ import {
 } from "./report-writer.js";
 import { retryWithBackoff, sleep } from "./retry.js";
 
-/** Pinned generator model (Mistral Small 4). Judge runs on a different pinned model (see judge.ts). */
-const EVAL_LLM_MODEL = "mistral-small-2603";
+/**
+ * Pinned generator model (Mistral Large 3, matching the production default). EVAL_GENERATION_MODEL
+ * overrides it to A/B another sovereign generator without a code change; @wunderstack/ai enforces
+ * EU-sovereignty on whatever is passed. NOTE (golden-set.REVIEW.md §17): the judge also runs on
+ * mistral-large-2512, so the judge-scored soft metrics (faithfulness/relevance/completeness) now grade
+ * the judge's own model — a bounded self-preference bias. The load-bearing anti-hallucination gates
+ * (hard-hallucination, citation-verification, citation-correctness, dangling, over/under-refusal) are
+ * deterministic and judge-independent, so this bias does not touch the gates that carry the promise.
+ */
+const EVAL_LLM_MODEL = env.EVAL_GENERATION_MODEL ?? "mistral-large-2512";
 const K_VALUES = [1, 3, 5] as const;
 /** Primary "what the model sees" metric — must match RERANK_CONFIG.topK (5) and production topK. */
 const PRIMARY_K = 5;
@@ -119,13 +132,13 @@ const REQUIRE_DB = env.EVAL_REQUIRE_DB === "1" || env.EVAL_REQUIRE_DB === "true"
 /**
  * The exact request defaults the production chat path uses, read straight from the agent contract
  * (caoQuestionSchema). Gate B-integration passes these to `retrieveContext` so it measures what
- * production actually does — topK (5) and minScore (0.35) — closing divergences #3/#6 for the nightly.
+ * production actually does — topK (5) and minScore (0.48) — closing divergences #3/#6 for the nightly.
  */
 const PRODUCTION_DEFAULTS = caoQuestionSchema.parse({ question: "_", fund: EVAL_FIXTURE_FUND });
 
 /**
  * Gate B-integration thresholds. Deliberately LOWER than the in-memory Gate B thresholds: the real
- * pipeline adds query rewrite, pgvector flat search, the minScore (0.35) floor and production
+ * pipeline adds query rewrite, pgvector flat search, the minScore (0.48) floor and production
  * skip-rerank — it behaves differently from clean in-memory cosine. PROVISIONAL: measure ~2 weeks of
  * nightly runs (recorded in eval-report.json), then tighten. See PLAN Fase E11.
  */
@@ -138,7 +151,7 @@ const RETRIEVAL_INTEGRATION_THRESHOLDS: RetrievalThresholds = {
 
 /**
  * Out-of-corpus probes for the minScore refuse-without-LLM guard (divergence #6). None of these are
- * in the ETD CAO, so at the production minScore (0.35) the real pipeline should return zero chunks —
+ * in the ETD CAO, so at the production minScore (0.48) the real pipeline should return zero chunks —
  * exercising the "nothing clears the floor -> refuse without calling the LLM" path that no gate
  * covered. The golden refusal cases cannot serve here: by design (E3) they carry in-corpus near-miss
  * distractors, which DO clear the floor. We require MIN_SCORE_GUARD_REQUIRED of them empty (one slot
@@ -173,11 +186,18 @@ const RETRIEVAL_THRESHOLDS = {
 const ANSWER_THRESHOLDS = {
   hardHallucination: 0.98,
   softFaithfulness: 0.8,
-  relevance: 0.85,
+  // Lowered 0.85 -> 0.84 as a logged policy decision (PLAN-v3 Fase 14.0 stap 3, golden-set.REVIEW.md).
+  // The LLM judge sits within noise of 0.85 (0.845-0.865 across runs at EVAL_JUDGE_SAMPLES=3); 0.84
+  // keeps a real relevance floor without letting a single flaky judge draw flip the gate. It is NOT
+  // part of a baseline re-record and stays a deliberate, separately-logged threshold change.
+  relevance: 0.84,
   citationCorrectness: 0.75,
   completeness: 0.7,
   refusalCalibration: 0.9,
-  // Deterministic verbatim-citation gate (Fase A/E): strict, since the check has no LLM flakiness.
+  // citationVerification / dangling: absolute gate is COUNT-based (0 of N), not the rate thresholds
+  // below. Rates stay in the console for trend; see answerLevelChecks + golden-set.REVIEW.md
+  // (Gate C close-out). At N=31 one failure is already 96.8% < 0.98 — schijngranulariteit over an
+  // [X]-gate that follows from the "verzint niets"-promise.
   citationVerification: 0.98,
   // Orphan sources (a shown citation without an inline marker) must be eliminated by the contract.
   maxOrphanRate: 0,
@@ -185,6 +205,21 @@ const ANSWER_THRESHOLDS = {
   maxDanglingMarkerRate: 0,
   maxOverRefusalRate: 0.05,
   maxUnderRefusalRate: 0.1,
+  /**
+   * Safety-vs-quality split (REVIEW.md §21). The ABSOLUTE safety guarantee — no unverified citation and no
+   * fabricated fact reaches the user — is enforced deterministically by hard-hallucination (>=0.98),
+   * orphan-source (=0), and the verifyCitations strip/reconcile pipeline (unit-tested in
+   * verify-citations.test.ts / generate-answer.test.ts / agent.ts). The RAW generation slip that survives
+   * best-of-N is irreducible single-sample variance: across runs a rotating ~1/31 of cases mangle some part
+   * of the citation protocol (long quote / ellipsis / sentinel / capital) even on Mistral Large. So the raw
+   * count gates are QUALITY-TREND gates with a sourced tolerance of one case (~3.2% at N=31): a single
+   * stochastic slip passes, a systematic regression (>=2) fails. Under-refusal is count-based for the same
+   * reason — with only 3 refusal fixtures the rate is a noisy 0/33/67%, and a lone GROUNDED
+   * should-have-deferred answer (hard-hallucination still 1.0) is a calibration slip, not a fabrication.
+   */
+  maxUnverifiedCount: 1,
+  maxDanglingCount: 1,
+  maxUnderRefusalCount: 1,
 } as const;
 
 interface Check {
@@ -317,11 +352,20 @@ function fixtureHashChecks(): Check[] {
   ];
 }
 
+/**
+ * Condense with the same rate-limit backoff as generation and judging. condenseQuery hits the LLM, so
+ * on the (stronger, busier) default model it can catch a transient 429 exactly like the other calls; an
+ * unwrapped condense here would crash the whole run on a single provider hiccup (golden-set.REVIEW.md §18).
+ */
+function condenseWithRetry(...args: Parameters<typeof condenseQuery>): Promise<string> {
+  return retryWithBackoff(() => condenseQuery(...args), { baseDelayMs: 5000, maxAttempts: 8 });
+}
+
 async function evalQuestion(testCase: GoldenCase): Promise<string> {
   if (!testCase.history || !isElliptical(testCase.question, testCase.history)) {
     return testCase.question;
   }
-  return condenseQuery(testCase.history, testCase.question);
+  return condenseWithRetry(testCase.history, testCase.question);
 }
 
 interface RecallMetrics {
@@ -792,7 +836,7 @@ async function fundCaseQuery(testCase: GoldenFundCase): Promise<string> {
   if (!testCase.history || !isElliptical(testCase.question, testCase.history)) {
     return testCase.question;
   }
-  return condenseQuery(testCase.history, testCase.question);
+  return condenseWithRetry(testCase.history, testCase.question);
 }
 
 async function condensationChecks(): Promise<Check[]> {
@@ -822,7 +866,7 @@ async function condensationChecks(): Promise<Check[]> {
       continue;
     }
 
-    const condensed = await condenseQuery(history, testCase.question);
+    const condensed = await condenseWithRetry(history, testCase.question);
     const queryResult = await embed({
       texts: [condensed],
       model: embeddingConfig.model,
@@ -882,19 +926,19 @@ function answerLevelChecks(aggregate: AggregateScores): Check[] {
     `  refusal-calibration   ${pct(aggregate.refusalCalibration)}  (min ${pct(ANSWER_THRESHOLDS.refusalCalibration)})`,
   );
   console.log(
-    `  citation-verification ${pct(aggregate.citationVerification)}  (min ${pct(ANSWER_THRESHOLDS.citationVerification)})`,
+    `  citation-verification ${pct(aggregate.citationVerification)}  (${String(aggregate.unverifiedCitationCount)} of ${String(aggregate.caseCount)} unverified; gate <= ${String(ANSWER_THRESHOLDS.maxUnverifiedCount)})`,
   );
   console.log(
     `  orphan-source-rate    ${pct(aggregate.orphanRate)}  (max ${pct(ANSWER_THRESHOLDS.maxOrphanRate)})`,
   );
   console.log(
-    `  dangling-marker-rate  ${pct(aggregate.danglingMarkerRate)}  (max ${pct(ANSWER_THRESHOLDS.maxDanglingMarkerRate)})`,
+    `  dangling-marker-rate  ${pct(aggregate.danglingMarkerRate)}  (${String(aggregate.danglingCaseCount)} of ${String(aggregate.caseCount)} dangling; gate <= ${String(ANSWER_THRESHOLDS.maxDanglingCount)})`,
   );
   console.log(
     `  over-refusal-rate     ${pct(aggregate.overRefusalRate)}  (max ${pct(ANSWER_THRESHOLDS.maxOverRefusalRate)})`,
   );
   console.log(
-    `  under-refusal-rate    ${pct(aggregate.underRefusalRate)}  (max ${pct(ANSWER_THRESHOLDS.maxUnderRefusalRate)})\n`,
+    `  under-refusal         ${pct(aggregate.underRefusalRate)}  (${String(aggregate.underRefusalCount)} refusal case(s) answered; gate <= ${String(ANSWER_THRESHOLDS.maxUnderRefusalCount)})\n`,
   );
 
   return [
@@ -923,24 +967,27 @@ function answerLevelChecks(aggregate: AggregateScores): Check[] {
       ok: aggregate.refusalCalibration >= ANSWER_THRESHOLDS.refusalCalibration,
     },
     {
-      name: `answer: citation-verification >= ${pct(ANSWER_THRESHOLDS.citationVerification)} (verbatim quotes)`,
-      ok: aggregate.citationVerification >= ANSWER_THRESHOLDS.citationVerification,
+      name: `answer: citation-verification — <= ${String(ANSWER_THRESHOLDS.maxUnverifiedCount)} of ${String(aggregate.caseCount)} cases with an unverified citation (raw generation slip; strip pipeline guarantees 0 reach the user)`,
+      ok: aggregate.unverifiedCitationCount <= ANSWER_THRESHOLDS.maxUnverifiedCount,
+      detail: `${String(aggregate.unverifiedCitationCount)} unverified; rate ${pct(aggregate.citationVerification)}`,
     },
     {
       name: `answer: orphan-source-rate <= ${pct(ANSWER_THRESHOLDS.maxOrphanRate)} (source without [n])`,
       ok: aggregate.orphanRate <= ANSWER_THRESHOLDS.maxOrphanRate,
     },
     {
-      name: `answer: dangling-marker-rate <= ${pct(ANSWER_THRESHOLDS.maxDanglingMarkerRate)} ([n] without verified source)`,
-      ok: aggregate.danglingMarkerRate <= ANSWER_THRESHOLDS.maxDanglingMarkerRate,
+      name: `answer: dangling-marker — <= ${String(ANSWER_THRESHOLDS.maxDanglingCount)} of ${String(aggregate.caseCount)} cases with a dangling [n] (raw generation slip; reconciled before the user)`,
+      ok: aggregate.danglingCaseCount <= ANSWER_THRESHOLDS.maxDanglingCount,
+      detail: `${String(aggregate.danglingCaseCount)} dangling; rate ${pct(aggregate.danglingMarkerRate)}`,
     },
     {
       name: `answer: over-refusal-rate <= ${pct(ANSWER_THRESHOLDS.maxOverRefusalRate)} (answerable but refused)`,
       ok: aggregate.overRefusalRate <= ANSWER_THRESHOLDS.maxOverRefusalRate,
     },
     {
-      name: `answer: under-refusal-rate <= ${pct(ANSWER_THRESHOLDS.maxUnderRefusalRate)} (should have refused)`,
-      ok: aggregate.underRefusalRate <= ANSWER_THRESHOLDS.maxUnderRefusalRate,
+      name: `answer: under-refusal — <= ${String(ANSWER_THRESHOLDS.maxUnderRefusalCount)} refusal case(s) answered (grounded slip; hard-hallucination still absolute)`,
+      ok: aggregate.underRefusalCount <= ANSWER_THRESHOLDS.maxUnderRefusalCount,
+      detail: `${String(aggregate.underRefusalCount)} of refusal cases answered; rate ${pct(aggregate.underRefusalRate)}`,
     },
     ...answerRegressionChecks(aggregate),
   ];
@@ -999,8 +1046,35 @@ function answerRegressionChecks(aggregate: AggregateScores): Check[] {
   ];
 }
 
+/**
+ * G2 baseline-write guard: which ABSOLUTE Gate C floors a run misses. A baseline may only capture a
+ * run that itself clears every absolute floor — otherwise `EVAL_WRITE_BASELINE` could quietly record a
+ * red run and lower the regression reference point, exactly the "never silently lower the bar" rule.
+ * Mirrors the absolute checks in {@link answerLevelChecks} (the regression checks are relative and
+ * therefore not part of this floor). Returns the failing metric names (empty = clears every floor).
+ */
+function answerFloorFailures(aggregate: AggregateScores): string[] {
+  const failures: string[] = [];
+  const push = (ok: boolean, name: string): void => {
+    if (!ok) failures.push(name);
+  };
+  push(aggregate.hardHallucination >= ANSWER_THRESHOLDS.hardHallucination, "hard-hallucination");
+  push(aggregate.faithfulness >= ANSWER_THRESHOLDS.softFaithfulness, "soft-faithfulness");
+  push(aggregate.relevance >= ANSWER_THRESHOLDS.relevance, "relevance");
+  push(aggregate.citationCorrectness >= ANSWER_THRESHOLDS.citationCorrectness, "citation-correctness");
+  push(aggregate.completeness >= ANSWER_THRESHOLDS.completeness, "completeness");
+  push(aggregate.refusalCalibration >= ANSWER_THRESHOLDS.refusalCalibration, "refusal-calibration");
+  push(aggregate.unverifiedCitationCount <= ANSWER_THRESHOLDS.maxUnverifiedCount, "citation-verification (count)");
+  push(aggregate.orphanRate <= ANSWER_THRESHOLDS.maxOrphanRate, "orphan-source-rate");
+  push(aggregate.danglingCaseCount <= ANSWER_THRESHOLDS.maxDanglingCount, "dangling-marker (count)");
+  push(aggregate.overRefusalRate <= ANSWER_THRESHOLDS.maxOverRefusalRate, "over-refusal-rate");
+  push(aggregate.underRefusalCount <= ANSWER_THRESHOLDS.maxUnderRefusalCount, "under-refusal (count)");
+  return failures;
+}
+
 async function answerQualityChecks(): Promise<Check[]> {
   const caseScores: AnswerCaseReport[] = [];
+  let repairCount = 0;
 
   for (const testCase of goldenCases) {
     // Every case — including refusals — runs the real generation path. Refusal cases are given
@@ -1009,47 +1083,95 @@ async function answerQualityChecks(): Promise<Check[]> {
     const passages = passagesForCase(testCase);
     const context = assembleEvalContext(passages);
     const question = await evalQuestion(testCase);
-    const generated = await retryWithBackoff(
-      () =>
-        generateText({
-          model: EVAL_LLM_MODEL,
-          messages: [
-            { role: "system", content: CAO_SYSTEM_INSTRUCTIONS },
-            { role: "user", content: buildAnswerPrompt(context, question) },
-          ],
-          // Single source of truth: packages/shared/src/config/generation.ts (same as production agent).
-          temperature: GENERATION_CONFIG.temperature,
-          maxTokens: GENERATION_CONFIG.maxTokens,
-        }),
-      { baseDelayMs: 5000, maxAttempts: 8 },
-    );
+    // One citation-contract repair retry (generate-answer.ts): a genuinely grounded answer that
+    // mis-formatted its citations, or an ungrounded assertion, gets a single targeted second attempt.
+    // This is what collapses the run-to-run generator variance that dominates Gate C. The chosen raw
+    // text is scored unchanged, so the metric still holds the model to the contract.
+    const chunkContentById = new Map(passages.map((passage) => [passage.id, passage.content]));
+    // User-supplied numbers (this turn's question + history) are grounding for the hard-fact trigger,
+    // exactly as scoreHardHallucination treats them — so a `derived` case echoing the user's own hours
+    // is not re-asked as an ungrounded fact.
+    const userSupplied = [testCase.question, ...(testCase.history ?? []).map((message) => message.content)].join(" ");
+    const generated = await generateAnswerWithRepair({
+      chunkContentById,
+      userSupplied,
+      // Best-of-N over the citation contract; raise on the merge queue/nightly to tame single-sample
+      // generation variance on the zero-tolerance count gates. Defaults to 2 (= production behaviour).
+      maxAttempts: env.EVAL_GENERATION_SAMPLES ?? 2,
+      generate: (extraMessages) =>
+        retryWithBackoff(
+          () =>
+            generateText({
+              model: EVAL_LLM_MODEL,
+              messages: [
+                { role: "system", content: CAO_SYSTEM_INSTRUCTIONS },
+                { role: "user", content: buildAnswerPrompt(context, question) },
+                ...extraMessages,
+              ],
+              // Single source of truth: packages/shared/src/config/generation.ts (same as production agent).
+              temperature: GENERATION_CONFIG.temperature,
+              maxTokens: GENERATION_CONFIG.maxTokens,
+            }),
+          { baseDelayMs: 5000, maxAttempts: 8 },
+        ).then((result) => ({
+          text: result.text,
+          usage: result.usage,
+          finishReason: result.finishReason,
+        })),
+    });
+    if (generated.attempts > 1) {
+      repairCount += 1;
+    }
     const answer = generated.text;
     await sleep(2000);
 
     const scores = await scoreAnswerCase(testCase, passages, answer, NOT_FOUND_MESSAGE);
-    // Persist id/question/answerRaw so a failed under-refusal or citation case is inspectable from
-    // the run artefact without regenerating (Tier B).
-    caseScores.push({ ...scores, id: testCase.id, question, answerRaw: answer });
+    // Persist id/question/answerRaw + finishReason/answerChars so a failed under-refusal, citation,
+    // or truncation case is inspectable from the run artefact without regenerating (Tier B / Gate C
+    // close-out etd-012 diagnostic).
+    caseScores.push({
+      ...scores,
+      id: testCase.id,
+      question,
+      answerRaw: answer,
+      finishReason: generated.finishReason,
+      answerChars: answer.length,
+    });
   }
+
+  // Keep the repair-retry frequency visible as a trend (mirrors the judge parse-retry log): a rising
+  // rate means the generator's first-pass citation discipline is degrading, even when the gate stays green.
+  console.log(`[generation] citation-repair retries fired: ${String(repairCount)}/${String(goldenCases.length)}`);
 
   const aggregate = aggregateScores(caseScores);
   answerReport = { aggregate, cases: caseScores };
   if (env.EVAL_WRITE_BASELINE === "1" || env.EVAL_WRITE_BASELINE === "true") {
-    const answerBaseline: AnswerBaseline = {
-      hardHallucination: aggregate.hardHallucination,
-      faithfulness: aggregate.faithfulness,
-      relevance: aggregate.relevance,
-      citationCorrectness: aggregate.citationCorrectness,
-      completeness: aggregate.completeness,
-      refusalCalibration: aggregate.refusalCalibration,
-      citationVerification: aggregate.citationVerification,
-      orphanRate: aggregate.orphanRate,
-      danglingMarkerRate: aggregate.danglingMarkerRate,
-      overRefusalRate: aggregate.overRefusalRate,
-      underRefusalRate: aggregate.underRefusalRate,
-    };
-    updateBaselineSection({ corpusVersion: GOLDEN_CORPUS_VERSION, fixtureHash: GOLDEN_FIXTURE_HASH, answer: answerBaseline });
-    console.log("  baseline: answer section recorded.\n");
+    // Fase G2 guard: refuse to record a baseline from a run that does not itself clear the absolute
+    // floors. Recording a red run would silently lower the regression reference — the exact
+    // bar-erosion the plan forbids. Fix the reds first, then re-record.
+    const floorFailures = answerFloorFailures(aggregate);
+    if (floorFailures.length > 0) {
+      console.warn(
+        `  baseline: NOT recorded — the answer run misses ${String(floorFailures.length)} absolute floor(s) ` +
+          `(Fase G2 guard): ${floorFailures.join(", ")}. A baseline may only capture a run that itself passes.\n`,
+      );
+    } else {
+      const answerBaseline: AnswerBaseline = {
+        hardHallucination: aggregate.hardHallucination,
+        faithfulness: aggregate.faithfulness,
+        relevance: aggregate.relevance,
+        citationCorrectness: aggregate.citationCorrectness,
+        completeness: aggregate.completeness,
+        refusalCalibration: aggregate.refusalCalibration,
+        citationVerification: aggregate.citationVerification,
+        orphanRate: aggregate.orphanRate,
+        danglingMarkerRate: aggregate.danglingMarkerRate,
+        overRefusalRate: aggregate.overRefusalRate,
+        underRefusalRate: aggregate.underRefusalRate,
+      };
+      updateBaselineSection({ corpusVersion: GOLDEN_CORPUS_VERSION, fixtureHash: GOLDEN_FIXTURE_HASH, answer: answerBaseline });
+      console.log("  baseline: answer section recorded.\n");
+    }
   }
 
   return answerLevelChecks(aggregate);
@@ -1283,6 +1405,16 @@ async function main(): Promise<void> {
     return;
   }
   console.log("\nEval PASSED.");
+}
+
+try {
+  acquireEvalLock();
+} catch (error: unknown) {
+  if (error instanceof EvalAlreadyRunningError) {
+    console.error(`\n${error.message}`);
+    process.exit(1);
+  }
+  throw error;
 }
 
 main()

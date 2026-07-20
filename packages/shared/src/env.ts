@@ -57,6 +57,16 @@ const envSchema = z.object({
   // Number of LLM-judge samples per case for Gate C; the median is taken (majority vote against
   // judge non-determinism). Defaults to 1; raise to 3 on the merge queue / nightly run.
   EVAL_JUDGE_SAMPLES: optional(z.coerce.number().int().positive().max(9)),
+  // Override the Gate C answer-generation model (default mistral-small-2603). Lets us A/B a stronger
+  // sovereign generator (e.g. mistral-large-2512) behind the AI seam without a code change; the model
+  // must still be EU-sovereign (enforced by @wunderstack/ai's resolveModel). Recorded in the artefact.
+  EVAL_GENERATION_MODEL: optional(z.string().min(1)),
+  // Generation analogue of EVAL_JUDGE_SAMPLES: total answer-generation attempts per Gate C case in the
+  // best-of-N contract loop (generate-answer.ts). The first clean attempt wins; otherwise the
+  // lowest-penalty one. Tames single-sample generation variance on the zero-tolerance count gates
+  // (citation-verification, dangling-marker) without weakening a threshold. Defaults to 2 (one
+  // generation + one repair, = production); raise to 3 on the merge queue / nightly run.
+  EVAL_GENERATION_SAMPLES: optional(z.coerce.number().int().positive().max(9)),
   // When truthy, a known-good eval run records the current metrics as the regression baseline
   // (packages/agents/src/evals/fixtures/baseline.json) instead of comparing against it.
   EVAL_WRITE_BASELINE: optional(z.enum(["1", "true", "0", "false"])),

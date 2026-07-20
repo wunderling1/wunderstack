@@ -8,16 +8,16 @@
     "mrr": 0.9791666666666666
   },
   "answer": {
-    "hardHallucination": 0.967741935483871,
-    "faithfulness": 0.7838709677419355,
-    "relevance": 0.8451612903225807,
+    "hardHallucination": 1,
+    "faithfulness": 0.9935483870967742,
+    "relevance": 0.970967741935484,
     "citationCorrectness": 1,
-    "completeness": 0.7225806451612903,
-    "refusalCalibration": 0.967741935483871,
-    "citationVerification": 0.9032258064516129,
+    "completeness": 0.9129032258064517,
+    "refusalCalibration": 1,
+    "citationVerification": 1,
     "orphanRate": 0,
-    "danglingMarkerRate": 0.06451612903225806,
+    "danglingMarkerRate": 0,
     "overRefusalRate": 0,
-    "underRefusalRate": 0.3333333333333333
+    "underRefusalRate": 0
   }
 }

@@ -19,8 +19,9 @@ import {
 import { buildVerifiedCitations } from "./build-citations.js";
 import { detectClarification } from "./clarify.js";
 import { condenseQuery, isElliptical } from "./condense.js";
-import { containsHardFact } from "./hard-facts.js";
-import { parseGenerationOutput, splitStreamBuffer } from "./parse-generation.js";
+import { generateAnswerWithRepair } from "./generate-answer.js";
+import { hasUngroundedHardFact } from "./hard-facts.js";
+import { parseGenerationOutput } from "./parse-generation.js";
 import { CAO_SYSTEM_INSTRUCTIONS, NOT_FOUND_MESSAGE, buildAnswerPrompt } from "./prompt.js";
 import { runRetrieval, type RetrievalOutput } from "./tools.js";
 import { stripFailedMarkers, stripUnverifiedMarkers, verifyCitations } from "./verify-citations.js";
@@ -112,17 +113,20 @@ function tracingOptionsFor(
  * against the FULL chunk content (not the truncated snippet).
  *
  * E13 runtime guard: an answer that asserts a hard fact — a money amount, percentage, or quantity
- * with a unit (the same regex family as the eval's hard-hallucination scorer, shared via
- * `hard-facts.js`) — but survives with ZERO verified citations is an ungrounded numeric claim. That
- * is exactly the "verzint een bedrag" failure (e.g. a pro-rata "€ 6,25" or an invented "312 uur"
- * with no source). Serving it minus the stripped marker would still leak the number, so we refuse
- * instead: the answer is replaced with the not-found message and callers mark the turn as unfound.
- * A grounded answer (>=1 verified citation) is unaffected; the eval's Gate C still catches invented
- * numbers that slip in alongside a valid citation.
+ * with a unit — which is NOT grounded in the retrieved context is an ungrounded numeric claim. That
+ * is the "verzint een bedrag" failure (a pro-rata "€ 6,25" or an invented "312 uur" not in the CAO),
+ * AND the "decorative citation" (etd-026): a figure — "16 weken" — dressed with a quote that verifies
+ * verbatim but does not carry it. The guard grounds the FIGURE itself via `hasUngroundedHardFact`
+ * (the same `findUngroundedFacts` decision the retry trigger and the eval's hard-hallucination scorer
+ * use, so the three cannot drift): a citation is proof, not decoration. `userSupplied` (question +
+ * history) is grounding, so echoing a number the user provided is not treated as a fabrication.
+ * On a trip we refuse: the answer is replaced with the not-found message and the turn is marked
+ * unfound. A grounded answer is unaffected — the number appears in the context.
  */
 function verifyAndBuild(
   raw: string,
   retrieval: RetrievalOutput,
+  userSupplied: string,
 ): { answer: string; citations: CaoCitation[]; verificationFailed: boolean; hardFactGuardTriggered: boolean } {
   const parsed = parseGenerationOutput(raw);
   const fullContentById = new Map(retrieval.fullChunkContent);
@@ -135,11 +139,18 @@ function verifyAndBuild(
   );
   const verificationFailed = parsed.citationParseFailed || verification.strippedMarkers.length > 0;
 
-  if (citations.length === 0 && containsHardFact(answer)) {
+  const grounding = [...fullContentById.values()].join(" ");
+  if (hasUngroundedHardFact(answer, grounding, userSupplied)) {
     return { answer: NOT_FOUND_MESSAGE, citations: [], verificationFailed: true, hardFactGuardTriggered: true };
   }
 
   return { answer, citations, verificationFailed, hardFactGuardTriggered: false };
+}
+
+/** The user's own numbers are premises, not fabrications: question + prior turns count as grounding. */
+function userSuppliedText(input: CaoQuestion): string {
+  const history = input.history ?? [];
+  return [input.question, ...history.map((message) => message.content)].join(" ");
 }
 
 async function resolveRetrievalQuestion(input: CaoQuestion, signal?: AbortSignal): Promise<{
@@ -192,6 +203,7 @@ export function createCaoAgent(): CaoAgent {
     async answer(input: CaoQuestion, options: CaoAnswerOptions = {}): Promise<CaoAnswer> {
       const parsedInput = caoQuestionSchema.parse(input);
       const { question, fund, topK, minScore } = parsedInput;
+      const userSupplied = userSuppliedText(parsedInput);
 
       const trace = startCaoTrace(mastra, { question, fund, topK, minScore });
       const traceId = trace.link().traceId ?? null;
@@ -225,7 +237,7 @@ export function createCaoAgent(): CaoAgent {
           });
         }
 
-        const result = await registered.generate(buildAnswerPrompt(retrieval.context, query.answerQuestion), {
+        const generateOptions = {
           modelSettings: {
             temperature: GENERATION_CONFIG.temperature,
             maxOutputTokens: GENERATION_CONFIG.maxTokens,
@@ -235,11 +247,37 @@ export function createCaoAgent(): CaoAgent {
             ...trace.link(),
           },
           ...(options.signal === undefined ? {} : { abortSignal: options.signal }),
+        };
+        // One citation-contract repair retry (generate-answer.ts): the same seam the eval uses to
+        // collapse Gate C's generator variance. A first attempt that leaves an unverifiable quote or
+        // an ungrounded number is re-asked once; the cleaner attempt is kept. Streaming keeps its
+        // serve-time guard (verifyAndBuild) instead, so a partial stream is never shown then corrected.
+        const generated = await generateAnswerWithRepair({
+          chunkContentById: new Map(retrieval.fullChunkContent),
+          userSupplied,
+          generate: async (extraMessages) => {
+            // Mastra's message union is the AI SDK discriminated CoreMessage type; our ChatMessage
+            // (role is a union, content a string) is structurally a subset, so cast at this boundary.
+            const messages = [
+              { role: "user", content: buildAnswerPrompt(retrieval.context, query.answerQuestion) },
+              ...extraMessages,
+            ] as Parameters<typeof registered.generate>[0];
+            const result = await registered.generate(messages, generateOptions);
+            return {
+              text: result.text,
+              usage: {
+                promptTokens: result.usage.inputTokens ?? 0,
+                completionTokens: result.usage.outputTokens ?? 0,
+                totalTokens: result.usage.totalTokens ?? 0,
+              },
+            };
+          },
         });
 
         const { answer, citations, verificationFailed, hardFactGuardTriggered } = verifyAndBuild(
-          result.text,
+          generated.text,
           retrieval,
+          userSupplied,
         );
         recordCitationScore(traceId, verificationFailed);
 
@@ -251,11 +289,7 @@ export function createCaoAgent(): CaoAgent {
           needsClarification: false,
           citations,
           traceId,
-          usage: {
-            promptTokens: result.usage.inputTokens ?? 0,
-            completionTokens: result.usage.outputTokens ?? 0,
-            totalTokens: result.usage.totalTokens ?? 0,
-          },
+          usage: generated.usage,
           citationVerificationFailed: verificationFailed,
         });
       } catch (error) {
@@ -270,6 +304,7 @@ export function createCaoAgent(): CaoAgent {
     ): AsyncIterable<CaoStreamEvent> {
       const parsedInput = caoQuestionSchema.parse(input);
       const { question, fund, topK, minScore } = parsedInput;
+      const userSupplied = userSuppliedText(parsedInput);
       const requestStart = performance.now();
 
       const trace = startCaoTrace(mastra, { question, fund, topK, minScore });
@@ -327,11 +362,15 @@ export function createCaoAgent(): CaoAgent {
           ...(options.signal === undefined ? {} : { abortSignal: options.signal }),
         });
 
-        // Stream the prose up to the citation sentinel; buffer the rest for server-side parsing.
+        // BUFFER-TO-VERIFY (G5): do NOT stream prose token-by-token. The hard-fact guard is
+        // all-or-nothing over the WHOLE answer — a late ungrounded "16 weken" retroactively refuses
+        // everything before it — so any prefix shown live could be a figure we then have to retract.
+        // With the widened E13 guard firing more often, that flash-then-retract is exactly the leak
+        // this closes. We drain the model stream fully server-side (still recording the model's
+        // first-token latency for the trace), verify, and only then emit the settled answer.
         const reader = output.textStream.getReader();
         let ttftMs: number | undefined;
         let raw = "";
-        let held = "";
         try {
           for (;;) {
             const { done, value } = await reader.read();
@@ -344,24 +383,26 @@ export function createCaoAgent(): CaoAgent {
                 trace.recordTtft(ttftMs);
               }
               raw += value;
-              const { emit, hold } = splitStreamBuffer(held + value);
-              held = hold;
-              if (emit.length > 0) {
-                yield { type: "text", delta: emit };
-              }
             }
           }
         } finally {
           reader.releaseLock();
         }
 
-        const { answer, citations, verificationFailed, hardFactGuardTriggered } = verifyAndBuild(raw, retrieval);
+        const { answer, citations, verificationFailed, hardFactGuardTriggered } = verifyAndBuild(
+          raw,
+          retrieval,
+          userSupplied,
+        );
         recordCitationScore(traceId, verificationFailed);
 
-        // Emit verified citations as the closing structured event (after prose, before done). The
-        // final `answer` lets the client reconcile any stripped markers with what it streamed — and,
-        // when the E13 guard trips, replace the streamed ungrounded number with the not-found message.
+        // The answer is settled and guard-checked before the client sees a single character: emit the
+        // verified prose, then the citations event whose `answer` is the canonical text the client
+        // reconciles against (it also carries the not-found message when the E13 guard tripped).
         const found = !hardFactGuardTriggered;
+        if (answer.length > 0) {
+          yield { type: "text", delta: answer };
+        }
         yield {
           type: "citations",
           found,

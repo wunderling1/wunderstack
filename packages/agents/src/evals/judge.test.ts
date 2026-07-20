@@ -3,7 +3,8 @@ import { describe, it } from "node:test";
 
 import type { ChatMessage } from "@wunderstack/ai";
 
-import { parseJudgeOutput, runJudgeWithParseRetry } from "./judge.js";
+import type { GoldenCase, GoldenPassage } from "./golden-set.js";
+import { parseJudgeOutput, runJudgeWithParseRetry, scoreCitationVerification } from "./judge.js";
 
 describe("parseJudgeOutput", () => {
   it("parses a clean JSON object", () => {
@@ -83,5 +84,58 @@ describe("runJudgeWithParseRetry", () => {
       }),
     );
     assert.equal(calls, 2);
+  });
+});
+
+describe("scoreCitationVerification — refusal prose scores the delivered output (§22)", () => {
+  const refusalCase: GoldenCase = {
+    id: "test-refusal",
+    question: "Hoeveel weken zwangerschapsverlof krijg ik?",
+    expectedPassageIds: [],
+    distractorPassageIds: ["distractor-1"],
+    referenceAnswer: "Refuse: the fact is absent from the near-miss distractor.",
+    category: "refusal",
+  };
+  const passages: GoldenPassage[] = [
+    {
+      id: "distractor-1",
+      source: "test",
+      content: "Artikel over verlof zonder het exacte aantal weken.",
+      chunkType: "text",
+    },
+  ];
+
+  it("returns the pre-sentinel refusal prose, discarding a runaway post-sentinel tail", () => {
+    // The generator refuses correctly, then runs away past the sentinel and dumps few-shot-example
+    // markdown containing "16 weken" (etd-026, finishReason=length). The pipeline strips that tail, so
+    // the gate must score only the delivered refusal — not the discarded numbers.
+    const raw = [
+      "Ik kan dit niet terugvinden in de CAO-documenten waar ik toegang toe heb. Neem contact op met je fonds.",
+      "",
+      "<<<CITATIONS>>>",
+      "[]",
+      "",
+      "+++++ voorbeelden/cao-assistent/12.md",
+      "Je hebt recht op ten minste 16 weken zwangerschapsverlof [1].",
+    ].join("\n");
+
+    const result = scoreCitationVerification(raw, refusalCase, passages);
+    assert.equal(result.verification, 1);
+    assert.doesNotMatch(result.prose, /16 weken/);
+    assert.match(result.prose, /niet terugvinden/);
+  });
+
+  it("keeps an ungrounded fact in the prose when a refusal case WRONGLY answers (still catchable)", () => {
+    // The alignment fix must not hide under-refusal-with-fabrication: a wrong answer keeps its invented
+    // number in the pre-sentinel prose, so the downstream hard-hallucination scorer can still flag it.
+    const raw = [
+      "Je hebt recht op ten minste 16 weken zwangerschapsverlof [1].",
+      "",
+      "<<<CITATIONS>>>",
+      '[{"marker":1,"chunk_id":"distractor-1","quote":"Artikel over verlof"}]',
+    ].join("\n");
+
+    const result = scoreCitationVerification(raw, refusalCase, passages);
+    assert.match(result.prose, /16 weken/);
   });
 });

@@ -27,8 +27,18 @@ export const caoQuestionSchema = z.object({
   /**
    * Minimum cosine similarity in [0,1] a chunk must reach to count as relevant. If no chunk clears
    * this bar the agent answers "niet gevonden" instead of inventing — the anti-hallucination guard.
+   *
+   * 0.48 (raised from 0.35, PLAN-v3 Fase 14.0 stap 1). At 0.35 semantically-adjacent but out-of-corpus
+   * questions (kinderopvang / bedrijfsfitness / jubileumgratificatie — absent from the ETD CAO) still
+   * cleared the floor at ~0.44-0.47 and were answered instead of refused (Gate F refusal-guard). The
+   * ETD corpus has a clean gap — out-of-corpus probes top out at 0.465 while every in-scope relevant
+   * chunk scores >= 0.520 (measured across both the base and fund layers) — so 0.48 refuses the probes
+   * (3/3) without dropping a single in-scope hit. Embeddings are deterministic, so the ~0.02 margin on
+   * each side is stable. This is a global default (v1 is single-tenant, ETD is the only real fund);
+   * a per-fund minScore is deliberately deferred until a second fund's corpus forces it (regel van
+   * drie). See golden-set.REVIEW.md (Gate F stap 1).
    */
-  minScore: z.number().min(0).max(1).default(0.35),
+  minScore: z.number().min(0).max(1).default(0.48),
 });
 
 export type CaoQuestion = z.input<typeof caoQuestionSchema>;
