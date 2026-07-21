@@ -1,0 +1,40 @@
+---
+description: Change-control en invarianten voor de eval (de meetlat). Waarom je src/evals niet ongevraagd wijzigt.
+globs: packages/agents/src/evals/**,turbo.json,.github/workflows/ci.yml
+alwaysApply: false
+---
+
+# Evals — de meetlat, niet zomaar code
+
+De eval (`packages/agents/src/evals/`) is het meetinstrument dat de kwaliteitsbelofte aan fondsen
+bewaakt: "groene eval op `main` = wat gebruikers krijgen". Volledige architectuur en bewijs:
+`docs/eval/GATE-ARCHITECTURE.md`. De harde regels:
+
+## Wijzig `src/evals/` niet buiten expliciete opdracht
+Raak bestanden onder `packages/agents/src/evals/` (en de gedeelde productie-naden die de eval scoort:
+`generateVerifiedAnswer` / `generateAnswerWithRepair`, `DEFAULT_LLM_MODEL`) **niet** aan als een
+neveneffect van ander werk. Alleen wijzigen bij een expliciete opdracht die de eval zelf betreft.
+Reden: commit `c763ea0` ("share verified-answer path") reverte per ongeluk de eval-generator (−806
+regels op `cao.eval.ts` in een commit met scope `agent.ts`) en niemand ving het. Een meetlat die
+meebeweegt met ongerelateerd werk meet niets.
+
+## Invariant: de eval scoort het productiemodel
+`EVAL_LLM_MODEL` MOET `env.EVAL_GENERATION_MODEL ?? DEFAULT_LLM_MODEL` zijn — nooit een hardcoded
+model-literal. Divergeren mag alleen via de expliciete `EVAL_GENERATION_MODEL`-override. Afgedwongen
+door `eval-model-coupling.test.ts` (draait offline op `test:unit`).
+
+## Invariant: skipped ≠ passed
+Een gate die niet kan draaien (missende credential) moet op de beschermde paden ROOD worden, niet
+skippen. Dit hangt aan `EVAL_REQUIRE_ALL` — en die env-var moet de eval ook echt bereiken. Turbo
+(strict env mode) filtert elke niet-gedeclareerde var weg: elke `EVAL_*`/credential die de eval leest,
+MOET in `turbo.json` (`test.passThroughEnv`) staan én in `.env.example`. De `test`-task heeft
+`"cache": false` (een live eval mag nooit een gecachte "pass" replayen).
+
+## Merge-gewoonte: diffstat
+Vóór elke merge: `git diff --stat <base>...HEAD`. Een grote, onverklaarde delta op een eval-/meetbestand
+is een stopteken — reconcilieer vóór je landt. Als solo-founder is dit je enige menselijke vangnet.
+
+## `DEFAULT_LLM_MODEL` wijzigen = bewuste beslissing
+Elke consument van `DEFAULT_LLM_MODEL` (productie, eval, condensatie) erft de bump. Een wijziging is een
+productie-brede kosten-/gedragswijziging en hoort in een decision-log/ADR, niet als meelifter in een
+gate-close-out.
