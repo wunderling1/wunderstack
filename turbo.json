@@ -9,7 +9,29 @@
     },
     "test:unit": {},
     "test": {
-      "env": ["SCALEWAY_API_KEY", "MISTRAL_API_KEY"]
+      "cache": false,
+      "passThroughEnv": [
+        "SCALEWAY_API_KEY",
+        "MISTRAL_API_KEY",
+        "DATABASE_URL",
+        "EVAL_REQUIRE_ALL",
+        "EVAL_REQUIRE_DB",
+        "EVAL_JUDGE_SAMPLES",
+        "EVAL_GENERATION_MODEL",
+        "EVAL_GENERATION_SAMPLES",
+        "EVAL_WRITE_BASELINE",
+        "GITHUB_SHA",
+        "LANGFUSE_PUBLIC_KEY",
+        "LANGFUSE_SECRET_KEY",
+        "LANGFUSE_BASE_URL",
+        "RERANK_ENABLED",
+        "RERANK_MODEL",
+        "RERANK_CANDIDATE_K",
+        "RERANK_TOP_K",
+        "RERANK_SKIP_ABOVE_SCORE",
+        "CAO_FUNDS",
+        "NODE_ENV"
+      ]
     }
   }
 }

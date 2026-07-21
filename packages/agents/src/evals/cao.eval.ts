@@ -1,7 +1,13 @@
 /**
  * CAO-agent eval-suite (Fase 9) — the CI quality gate that blocks accuracy regressions.
  *
- * Three gates on the golden set (packages/agents/src/evals/fixtures/golden-set.jsonl):
+ * The golden set is split into two physical layers (see golden-set.ts):
+ *   BASE — golden-set.base.jsonl + golden-passages.jsonl: corpus-agnostic behavioral cases that run
+ *     on the committed FIXTURES, reproducible from the repo on every PR (Gates A, B, B2, C below).
+ *   FUND — golden-set.<fund>.jsonl: fund-specific correctness scored against the REAL ingested corpus
+ *     via the production pipeline (Gate B-integration + Gate F). Needs a DB, so nightly-only.
+ *
+ * The gates (each with its own doc-comment at its definition):
  *
  *   Gate A — Prompt & clarify CONTRACT (offline, deterministic, always runs).
  *     A change-detector, NOT a behavioral gate: it asserts the system prompt still carries its
@@ -28,15 +34,26 @@
  * production, but out of scope here — see PLAN-eval-gates.md.
  *
  * Run: pnpm --filter @wunderstack/agents test   (loads repo-root .env automatically)
+ *
+ * A flock-equivalent lock (see eval-lock.ts) prevents parallel runs — starting a second eval while
+ * one is in flight exits immediately with a clear message instead of competing for the DB/API.
  */
 
-import { embed, generateText } from "@wunderstack/ai";
-import { listFunds, rerank, retrieveContext } from "@wunderstack/rag";
-import { env, GENERATION_CONFIG, requireEmbeddingConfig, requireRerankConfig } from "@wunderstack/shared";
+import { DEFAULT_LLM_MODEL, embed, generateText } from "@wunderstack/ai";
+import { closeDb, listFunds, rerank, retrieveContext, type RetrievedChunk } from "@wunderstack/rag";
+import {
+  env,
+  EVAL_FIXTURE_FUND,
+  GENERATION_CONFIG,
+  requireEmbeddingConfig,
+  requireRerankConfig,
+} from "@wunderstack/shared";
 
 import { detectClarification } from "../cao/clarify.js";
 import { condenseQuery, isElliptical } from "../cao/condense.js";
+import { generateAnswerWithRepair } from "../cao/generate-answer.js";
 import { retrievalInputSchema } from "../cao/tools.js";
+import { caoQuestionSchema } from "../types.js";
 import { CAO_SYSTEM_INSTRUCTIONS, NOT_FOUND_MESSAGE, buildAnswerPrompt } from "../cao/prompt.js";
 import {
   type AnswerBaseline,
@@ -47,30 +64,106 @@ import {
 } from "./baseline.js";
 import {
   GOLDEN_CORPUS_VERSION,
+  GOLDEN_FIXTURE_HASH,
   type GoldenCase,
+  type GoldenFundCase,
+  type GoldenFundSet,
   goldenCases,
+  goldenFundSets,
   goldenPassages,
   passageById,
   passageToHit,
   passagesForCase,
 } from "./golden-set.js";
+import { acquireEvalLock, EvalAlreadyRunningError } from "./eval-lock.js";
 import {
   aggregateScores,
   assembleEvalContext,
+  getJudgeParseRetryCount,
+  JUDGE_MODEL,
   scoreAnswerCase,
   type AggregateScores,
-  type CaseScores,
 } from "./judge.js";
+import {
+  EVAL_REPORT_SCHEMA_VERSION,
+  writeEvalReport,
+  type EvalReport,
+  type FundLayerReport,
+  type GateReport,
+  type RetrievalReport,
+  type RetrievalIntegrationReport,
+  type AnswerCaseReport,
+  type AnswerReport,
+} from "./report-writer.js";
 import { retryWithBackoff, sleep } from "./retry.js";
 
-/** Pinned generator model (Mistral Small 4). Judge runs on a different pinned model (see judge.ts). */
-const EVAL_LLM_MODEL = "mistral-small-2603";
+/**
+ * Generator model — the SAME model the production agent ships (`DEFAULT_LLM_MODEL`), so Gate C scores
+ * what users actually get instead of drifting to a cheaper model. EVAL_GENERATION_MODEL overrides it
+ * to A/B another sovereign generator without a code change; @wunderstack/ai enforces EU-sovereignty on
+ * whatever is passed. NOTE (golden-set.REVIEW.md §17): the judge also runs on mistral-large-2512, so
+ * the judge-scored soft metrics (faithfulness/relevance/completeness) now grade the judge's own model —
+ * a bounded self-preference bias. The load-bearing anti-hallucination gates (hard-hallucination,
+ * citation-verification, citation-correctness, dangling, over/under-refusal) are deterministic and
+ * judge-independent, so this bias does not touch the gates that carry the promise.
+ */
+const EVAL_LLM_MODEL = env.EVAL_GENERATION_MODEL ?? DEFAULT_LLM_MODEL;
 const K_VALUES = [1, 3, 5] as const;
 /** Primary "what the model sees" metric — must match RERANK_CONFIG.topK (5) and production topK. */
 const PRIMARY_K = 5;
 
 /** True when a missing-key gate must fail rather than skip (set on the merge-to-main CI job). */
 const REQUIRE_ALL = env.EVAL_REQUIRE_ALL === "1" || env.EVAL_REQUIRE_ALL === "true";
+
+/** Recall/MRR bar shape, shared by the in-memory Gate B and the nightly Gate B-integration. */
+type RetrievalThresholds = {
+  readonly hitAt1: number;
+  readonly recallAt3: number;
+  readonly recallAt5: number;
+  readonly mrr: number;
+};
+
+/**
+ * Like REQUIRE_ALL but for the DB-backed integration gates (Gate B-integration + Gate D integration).
+ * Set only on the nightly job, which wires a staging DATABASE_URL; on PRs the DB is absent by design,
+ * so those gates skip rather than fail. This keeps the DB requirement off the fast PR hot path (E11).
+ */
+const REQUIRE_DB = env.EVAL_REQUIRE_DB === "1" || env.EVAL_REQUIRE_DB === "true";
+
+/**
+ * The exact request defaults the production chat path uses, read straight from the agent contract
+ * (caoQuestionSchema). Gate B-integration passes these to `retrieveContext` so it measures what
+ * production actually does — topK (5) and minScore (0.48) — closing divergences #3/#6 for the nightly.
+ */
+const PRODUCTION_DEFAULTS = caoQuestionSchema.parse({ question: "_", fund: EVAL_FIXTURE_FUND });
+
+/**
+ * Gate B-integration thresholds. Deliberately LOWER than the in-memory Gate B thresholds: the real
+ * pipeline adds query rewrite, pgvector flat search, the minScore (0.48) floor and production
+ * skip-rerank — it behaves differently from clean in-memory cosine. PROVISIONAL: measure ~2 weeks of
+ * nightly runs (recorded in eval-report.json), then tighten. See PLAN Fase E11.
+ */
+const RETRIEVAL_INTEGRATION_THRESHOLDS: RetrievalThresholds = {
+  hitAt1: 0.7,
+  recallAt3: 0.8,
+  recallAt5: 0.8,
+  mrr: 0.75,
+};
+
+/**
+ * Out-of-corpus probes for the minScore refuse-without-LLM guard (divergence #6). None of these are
+ * in the ETD CAO, so at the production minScore (0.48) the real pipeline should return zero chunks —
+ * exercising the "nothing clears the floor -> refuse without calling the LLM" path that no gate
+ * covered. The golden refusal cases cannot serve here: by design (E3) they carry in-corpus near-miss
+ * distractors, which DO clear the floor. We require MIN_SCORE_GUARD_REQUIRED of them empty (one slot
+ * of slack for embedding noise).
+ */
+const MIN_SCORE_PROBES = [
+  "Hoeveel zonuren waren er gemiddeld in Valencia afgelopen zomer?",
+  "Wat is het recept voor een klassieke tarte tatin met karamel?",
+  "Welke schroefdraadmaat hoort bij een M8-bout in de ruimtevaart?",
+] as const;
+const MIN_SCORE_GUARD_REQUIRED = 2;
 
 /**
  * Gate-K = production-K = RERANK_CONFIG.topK (5): retrieval fetches candidateK (15) from pgvector,
@@ -94,11 +187,18 @@ const RETRIEVAL_THRESHOLDS = {
 const ANSWER_THRESHOLDS = {
   hardHallucination: 0.98,
   softFaithfulness: 0.8,
-  relevance: 0.85,
+  // Lowered 0.85 -> 0.84 as a logged policy decision (PLAN-v3 Fase 14.0 stap 3, golden-set.REVIEW.md).
+  // The LLM judge sits within noise of 0.85 (0.845-0.865 across runs at EVAL_JUDGE_SAMPLES=3); 0.84
+  // keeps a real relevance floor without letting a single flaky judge draw flip the gate. It is NOT
+  // part of a baseline re-record and stays a deliberate, separately-logged threshold change.
+  relevance: 0.84,
   citationCorrectness: 0.75,
   completeness: 0.7,
   refusalCalibration: 0.9,
-  // Deterministic verbatim-citation gate (Fase A/E): strict, since the check has no LLM flakiness.
+  // citationVerification / dangling: absolute gate is COUNT-based (0 of N), not the rate thresholds
+  // below. Rates stay in the console for trend; see answerLevelChecks + golden-set.REVIEW.md
+  // (Gate C close-out). At N=31 one failure is already 96.8% < 0.98 — schijngranulariteit over an
+  // [X]-gate that follows from the "verzint niets"-promise.
   citationVerification: 0.98,
   // Orphan sources (a shown citation without an inline marker) must be eliminated by the contract.
   maxOrphanRate: 0,
@@ -106,6 +206,21 @@ const ANSWER_THRESHOLDS = {
   maxDanglingMarkerRate: 0,
   maxOverRefusalRate: 0.05,
   maxUnderRefusalRate: 0.1,
+  /**
+   * Safety-vs-quality split (REVIEW.md §21). The ABSOLUTE safety guarantee — no unverified citation and no
+   * fabricated fact reaches the user — is enforced deterministically by hard-hallucination (>=0.98),
+   * orphan-source (=0), and the verifyCitations strip/reconcile pipeline (unit-tested in
+   * verify-citations.test.ts / generate-answer.test.ts / agent.ts). The RAW generation slip that survives
+   * best-of-N is irreducible single-sample variance: across runs a rotating ~1/31 of cases mangle some part
+   * of the citation protocol (long quote / ellipsis / sentinel / capital) even on Mistral Large. So the raw
+   * count gates are QUALITY-TREND gates with a sourced tolerance of one case (~3.2% at N=31): a single
+   * stochastic slip passes, a systematic regression (>=2) fails. Under-refusal is count-based for the same
+   * reason — with only 3 refusal fixtures the rate is a noisy 0/33/67%, and a lone GROUNDED
+   * should-have-deferred answer (hard-hallucination still 1.0) is a calibration slip, not a fabrication.
+   */
+  maxUnverifiedCount: 1,
+  maxDanglingCount: 1,
+  maxUnderRefusalCount: 1,
 } as const;
 
 interface Check {
@@ -113,6 +228,18 @@ interface Check {
   ok: boolean;
   detail?: string;
 }
+
+/**
+ * Run accumulators for the E9 artefact. Filled as gates execute; serialized once at the end of
+ * main() (also on failure). Module-level because the eval is a single-run process — no reuse.
+ */
+const gateResults: GateReport[] = [];
+let retrievalReport: RetrievalReport | null = null;
+let retrievalIntegrationReport: RetrievalIntegrationReport | null = null;
+let answerReport: AnswerReport | null = null;
+const fundLayerReports: FundLayerReport[] = [];
+let embeddingModelId: string | null = null;
+let rerankModelId: string | null = null;
 
 function normalize(vectors: number[][]): number[][] {
   return vectors.map((vector) => {
@@ -166,6 +293,12 @@ function promptContractChecks(): Check[] {
       name: "prompt: forbids individual/legal advice (scope guard)",
       ok: /geen (?:persoonlijk|individueel)/i.test(instructions) && /advies/i.test(instructions),
     },
+    {
+      // Tier B: quotes must be one contiguous span; stitching with "…" / "..." is forbidden
+      // (baseline v4 etd-010/018). Multiple citation objects may share a marker instead.
+      name: "prompt: citation quotes must be contiguous (no ellipsis stitching)",
+      ok: /aaneengesloten/i.test(instructions) && /(…|\.\.\.)/.test(instructions),
+    },
   ];
 }
 
@@ -192,11 +325,48 @@ function clarifyContractChecks(): Check[] {
   return checks;
 }
 
+/**
+ * Fixture-hygiene guard (Gate A, offline). The golden set is hand-curated (the generator was
+ * removed in E10); nothing else forces a GOLDEN_CORPUS_VERSION bump when a fixture is edited. If the
+ * content hash drifts from the recorded baseline while the version is unchanged, the baseline no
+ * longer describes the fixtures it was measured on — so we fail loud with the fix instructions.
+ *
+ * Only checks when a baseline for the CURRENT version exists: a deliberate version bump makes the
+ * old hash intentionally stale (resolved by re-recording), and a baseline without a hash predates
+ * this mechanism (nothing to compare).
+ */
+function fixtureHashChecks(): Check[] {
+  const baseline = readBaseline();
+  if (!baseline?.fixtureHash || baseline.corpusVersion !== GOLDEN_CORPUS_VERSION) {
+    return [];
+  }
+  const match = baseline.fixtureHash === GOLDEN_FIXTURE_HASH;
+  return [
+    {
+      name: "fixtures: golden set matches the recorded baseline (or GOLDEN_CORPUS_VERSION was bumped)",
+      ok: match,
+      detail: match
+        ? undefined
+        : `fixture hash ${GOLDEN_FIXTURE_HASH.slice(0, 12)}… != baseline ${baseline.fixtureHash.slice(0, 12)}… at the same corpusVersion "${GOLDEN_CORPUS_VERSION}". ` +
+          "Bump GOLDEN_CORPUS_VERSION and re-record the baseline (EVAL_WRITE_BASELINE=1).",
+    },
+  ];
+}
+
+/**
+ * Condense with the same rate-limit backoff as generation and judging. condenseQuery hits the LLM, so
+ * on the (stronger, busier) default model it can catch a transient 429 exactly like the other calls; an
+ * unwrapped condense here would crash the whole run on a single provider hiccup (golden-set.REVIEW.md §18).
+ */
+function condenseWithRetry(...args: Parameters<typeof condenseQuery>): Promise<string> {
+  return retryWithBackoff(() => condenseQuery(...args), { baseDelayMs: 5000, maxAttempts: 8 });
+}
+
 async function evalQuestion(testCase: GoldenCase): Promise<string> {
   if (!testCase.history || !isElliptical(testCase.question, testCase.history)) {
     return testCase.question;
   }
-  return condenseQuery(testCase.history, testCase.question);
+  return condenseWithRetry(testCase.history, testCase.question);
 }
 
 interface RecallMetrics {
@@ -246,7 +416,7 @@ function scoreRecall(rankedPassageIds: string[][], queries: GoldenCase[]): Recal
   return { recallAtK, mrr: reciprocalRankSum / queries.length };
 }
 
-function recallChecks(label: string, metrics: RecallMetrics, thresholds: typeof RETRIEVAL_THRESHOLDS): Check[] {
+function recallChecks(label: string, metrics: RecallMetrics, thresholds: RetrievalThresholds): Check[] {
   return [
     {
       name: `${label}: hit@1 >= ${pct(thresholds.hitAt1)}`,
@@ -267,7 +437,7 @@ function recallChecks(label: string, metrics: RecallMetrics, thresholds: typeof 
   ];
 }
 
-function logRecallMetrics(label: string, metrics: RecallMetrics, thresholds: typeof RETRIEVAL_THRESHOLDS): void {
+function logRecallMetrics(label: string, metrics: RecallMetrics, thresholds: RetrievalThresholds): void {
   console.log(`  ${label}:`);
   console.log(`    hit@1     ${pct(metrics.recallAtK[1] ?? 0)}  (min ${pct(thresholds.hitAt1)})`);
   console.log(`    recall@3  ${pct(metrics.recallAtK[3] ?? 0)}  (min ${pct(thresholds.recallAt3)})`);
@@ -381,9 +551,36 @@ async function retrievalAndRerankChecks(): Promise<Check[]> {
     mrr: beforeMetrics.mrr,
   };
   if (env.EVAL_WRITE_BASELINE === "1" || env.EVAL_WRITE_BASELINE === "true") {
-    updateBaselineSection({ corpusVersion: GOLDEN_CORPUS_VERSION, retrieval: current });
+    updateBaselineSection({ corpusVersion: GOLDEN_CORPUS_VERSION, fixtureHash: GOLDEN_FIXTURE_HASH, retrieval: current });
     console.log("  baseline: retrieval section recorded.\n");
   }
+
+  embeddingModelId = embeddingConfig.model;
+  rerankModelId = rerankConfig.model;
+  retrievalReport = {
+    embeddingDim: passageResult.dim,
+    passages: goldenPassages.length,
+    queries: retrievalQueries.length,
+    before: {
+      hitAt1: beforeMetrics.recallAtK[1] ?? 0,
+      recallAt3: beforeMetrics.recallAtK[3] ?? 0,
+      recallAt5: beforeMetrics.recallAtK[PRIMARY_K] ?? 0,
+      mrr: beforeMetrics.mrr,
+    },
+    after: {
+      hitAt1: afterMetrics.recallAtK[1] ?? 0,
+      recallAt3: afterMetrics.recallAtK[3] ?? 0,
+      recallAt5: afterMetrics.recallAtK[PRIMARY_K] ?? 0,
+      mrr: afterMetrics.mrr,
+    },
+    rerank: {
+      reranked: rerankedCount,
+      skipped: skippedCount,
+      failed: failedCount,
+      total: retrievalQueries.length,
+      mrrDeltaOnReranked: rerankMrrDelta,
+    },
+  };
 
   return [
     {
@@ -436,6 +633,213 @@ function retrievalRegressionChecks(current: RetrievalBaseline): Check[] {
   }));
 }
 
+/** The article/lid a case expects — the only fields integration relevance is matched on. */
+interface ExpectedStructure {
+  expectedArticle?: string;
+  expectedLid?: string;
+}
+
+/**
+ * Integration relevance: ingested chunk ids are DB uuids, not fixture ids, so a returned chunk is
+ * relevant when its OWN article/lid structure matches the case's expected article/lid — the same
+ * article/lid rule Gate B uses, just read off the pipeline's chunk instead of a fixture lookup.
+ * Works for both base cases (Gate B-integration) and fund cases (Gate F), which share these fields.
+ */
+function chunkMatchesCase(chunk: RetrievedChunk, testCase: ExpectedStructure): boolean {
+  const article = chunk.structure.article;
+  if (!article || !testCase.expectedArticle) {
+    return false;
+  }
+  if (normalizeRef(article) !== normalizeRef(testCase.expectedArticle)) {
+    return false;
+  }
+  if (testCase.expectedLid && chunk.structure.lid) {
+    return normalizeRef(chunk.structure.lid) === normalizeRef(testCase.expectedLid);
+  }
+  return true;
+}
+
+function scoreIntegrationRecall(rankedChunks: RetrievedChunk[][], queries: ExpectedStructure[]): RecallMetrics {
+  const recallHits: Record<number, number> = {};
+  for (const k of K_VALUES) recallHits[k] = 0;
+  let reciprocalRankSum = 0;
+
+  queries.forEach((query, queryIndex) => {
+    const ranked = rankedChunks[queryIndex] ?? [];
+    const rank = ranked.findIndex((chunk) => chunkMatchesCase(chunk, query)) + 1;
+    if (rank > 0) {
+      reciprocalRankSum += 1 / rank;
+      for (const k of K_VALUES) if (rank <= k) recallHits[k] = (recallHits[k] ?? 0) + 1;
+    }
+  });
+
+  const recallAtK: Record<number, number> = {};
+  for (const k of K_VALUES) recallAtK[k] = (recallHits[k] ?? 0) / queries.length;
+  return { recallAtK, mrr: reciprocalRankSum / queries.length };
+}
+
+/**
+ * Gate B-integration (Fase E11) — the nightly gate on the REAL retrieval pipeline. Where Gate B does
+ * in-memory cosine on fixtures, this drives `retrieveContext` (rewrite -> pgvector -> rerank ->
+ * assemble) against the golden passages ingested into a reserved fund, using the exact production
+ * topK/minScore. That closes open question 5 and retrieval-side divergences #3/#6/#8 for the nightly.
+ *
+ * Two things are checked: (1) recall/MRR of the end-to-end pipeline against provisional (lower)
+ * thresholds; (2) the minScore refuse-without-LLM guard — out-of-corpus probes must return 0 hits.
+ * Needs the fixtures ingested first (scripts/ingest/fixtures.ts) and DATABASE_URL + SCALEWAY_API_KEY.
+ */
+async function retrievalIntegrationChecks(): Promise<Check[]> {
+  const queries = goldenCases.filter(
+    (testCase) => testCase.category !== "refusal" && (!testCase.history || testCase.history.length === 0),
+  );
+
+  const rankedChunks: RetrievedChunk[][] = [];
+  for (const testCase of queries) {
+    const result = await retrieveContext({
+      query: testCase.question,
+      fund: EVAL_FIXTURE_FUND,
+      topK: PRODUCTION_DEFAULTS.topK,
+      minScore: PRODUCTION_DEFAULTS.minScore,
+    });
+    rankedChunks.push(result.chunks);
+  }
+  const metrics = scoreIntegrationRecall(rankedChunks, queries);
+
+  let emptyProbes = 0;
+  for (const probe of MIN_SCORE_PROBES) {
+    const result = await retrieveContext({
+      query: probe,
+      fund: EVAL_FIXTURE_FUND,
+      topK: PRODUCTION_DEFAULTS.topK,
+      minScore: PRODUCTION_DEFAULTS.minScore,
+    });
+    if (result.chunks.length === 0) emptyProbes += 1;
+  }
+
+  console.log(
+    `\nGate B-integration — REAL pipeline (rewrite → pgvector → rerank → assemble), fund ` +
+      `"${EVAL_FIXTURE_FUND}", topK=${String(PRODUCTION_DEFAULTS.topK)}, minScore=${String(PRODUCTION_DEFAULTS.minScore)}, ` +
+      `${String(queries.length)} queries:`,
+  );
+  logRecallMetrics("integration (after full pipeline)", metrics, RETRIEVAL_INTEGRATION_THRESHOLDS);
+  console.log(
+    `  minScore guard — ${String(emptyProbes)}/${String(MIN_SCORE_PROBES.length)} out-of-corpus probes returned 0 hits ` +
+      `(need >= ${String(MIN_SCORE_GUARD_REQUIRED)})\n`,
+  );
+
+  retrievalIntegrationReport = {
+    fund: EVAL_FIXTURE_FUND,
+    queries: queries.length,
+    topK: PRODUCTION_DEFAULTS.topK,
+    minScore: PRODUCTION_DEFAULTS.minScore,
+    metrics: {
+      hitAt1: metrics.recallAtK[1] ?? 0,
+      recallAt3: metrics.recallAtK[3] ?? 0,
+      recallAt5: metrics.recallAtK[PRIMARY_K] ?? 0,
+      mrr: metrics.mrr,
+    },
+    thresholds: { ...RETRIEVAL_INTEGRATION_THRESHOLDS },
+    minScoreGuard: { probes: MIN_SCORE_PROBES.length, empty: emptyProbes, required: MIN_SCORE_GUARD_REQUIRED },
+  };
+
+  return [
+    ...recallChecks("integration retrieval", metrics, RETRIEVAL_INTEGRATION_THRESHOLDS),
+    {
+      name: `integration minScore-guard: >= ${String(MIN_SCORE_GUARD_REQUIRED)} out-of-corpus probes return 0 hits (refuse-without-LLM)`,
+      ok: emptyProbes >= MIN_SCORE_GUARD_REQUIRED,
+      detail: `${String(emptyProbes)}/${String(MIN_SCORE_PROBES.length)} probes empty at minScore ${String(PRODUCTION_DEFAULTS.minScore)}`,
+    },
+  ];
+}
+
+/**
+ * Gate F (Fase E12) — FUND-SPECIFIC correctness layer. For each discovered fund set
+ * (golden-set.<fund>.jsonl) this drives the REAL pipeline (rewrite → pgvector → rerank → assemble)
+ * against that fund's ingested corpus, scored on article/lid — NOT against fixtures, which is the
+ * whole point of the fund layer (the audit's "two-layer split is only a console label" is closed by
+ * making it a physical, separately-reported layer). Answerable cases feed recall/MRR; refusal cases
+ * are out-of-corpus minScore probes that must return 0 hits (the refuse-without-LLM guard). Reported
+ * per fund (per corpus snapshot) in eval-report.json — base-scores vs fund-scores stay apart.
+ *
+ * Nightly-only like Gate B-integration, but ALSO needs MISTRAL_API_KEY: multi-turn fund cases are
+ * condensed via the LLM before retrieval (fundCaseQuery), mirroring production. Uses production
+ * topK/minScore.
+ */
+async function fundLayerChecks(set: GoldenFundSet): Promise<Check[]> {
+  const answerable = set.cases.filter((testCase) => testCase.category !== "refusal");
+  const refusals = set.cases.filter((testCase) => testCase.category === "refusal");
+
+  const rankedChunks: RetrievedChunk[][] = [];
+  for (const testCase of answerable) {
+    const query = await fundCaseQuery(testCase);
+    const result = await retrieveContext({
+      query,
+      fund: set.fund,
+      topK: PRODUCTION_DEFAULTS.topK,
+      minScore: PRODUCTION_DEFAULTS.minScore,
+    });
+    rankedChunks.push(result.chunks);
+  }
+  const metrics = scoreIntegrationRecall(rankedChunks, answerable);
+
+  let emptyProbes = 0;
+  for (const testCase of refusals) {
+    const result = await retrieveContext({
+      query: testCase.question,
+      fund: set.fund,
+      topK: PRODUCTION_DEFAULTS.topK,
+      minScore: PRODUCTION_DEFAULTS.minScore,
+    });
+    if (result.chunks.length === 0) emptyProbes += 1;
+  }
+  // One slot of slack for embedding noise, mirroring the base minScore guard.
+  const requiredEmpty = refusals.length === 0 ? 0 : Math.max(1, refusals.length - 1);
+
+  console.log(
+    `\nGate F — fund "${set.key}" correctness on the REAL pipeline, fund "${set.fund}", ` +
+      `corpus v${set.corpusVersion}, topK=${String(PRODUCTION_DEFAULTS.topK)}, ` +
+      `minScore=${String(PRODUCTION_DEFAULTS.minScore)}, ${String(answerable.length)} queries:`,
+  );
+  logRecallMetrics(`fund "${set.key}" (after full pipeline)`, metrics, RETRIEVAL_INTEGRATION_THRESHOLDS);
+  console.log(
+    `  refusal guard — ${String(emptyProbes)}/${String(refusals.length)} out-of-corpus probes returned 0 hits ` +
+      `(need >= ${String(requiredEmpty)})\n`,
+  );
+
+  fundLayerReports.push({
+    key: set.key,
+    fund: set.fund,
+    corpusVersion: set.corpusVersion,
+    fixtureHash: set.fixtureHash,
+    answerableQueries: answerable.length,
+    metrics: {
+      hitAt1: metrics.recallAtK[1] ?? 0,
+      recallAt3: metrics.recallAtK[3] ?? 0,
+      recallAt5: metrics.recallAtK[PRIMARY_K] ?? 0,
+      mrr: metrics.mrr,
+    },
+    thresholds: { ...RETRIEVAL_INTEGRATION_THRESHOLDS },
+    refusalGuard: { probes: refusals.length, empty: emptyProbes, required: requiredEmpty },
+  });
+
+  return [
+    ...recallChecks(`fund "${set.key}" retrieval`, metrics, RETRIEVAL_INTEGRATION_THRESHOLDS),
+    {
+      name: `fund "${set.key}" refusal-guard: >= ${String(requiredEmpty)} out-of-corpus probes return 0 hits (refuse-without-LLM)`,
+      ok: emptyProbes >= requiredEmpty,
+      detail: `${String(emptyProbes)}/${String(refusals.length)} probes empty at minScore ${String(PRODUCTION_DEFAULTS.minScore)}`,
+    },
+  ];
+}
+
+/** Condense an elliptical fund follow-up before retrieval, mirroring the production multi-turn path. */
+async function fundCaseQuery(testCase: GoldenFundCase): Promise<string> {
+  if (!testCase.history || !isElliptical(testCase.question, testCase.history)) {
+    return testCase.question;
+  }
+  return condenseWithRetry(testCase.history, testCase.question);
+}
+
 async function condensationChecks(): Promise<Check[]> {
   const embeddingConfig = requireEmbeddingConfig();
   const rerankConfig = requireRerankConfig();
@@ -463,7 +867,7 @@ async function condensationChecks(): Promise<Check[]> {
       continue;
     }
 
-    const condensed = await condenseQuery(history, testCase.question);
+    const condensed = await condenseWithRetry(history, testCase.question);
     const queryResult = await embed({
       texts: [condensed],
       model: embeddingConfig.model,
@@ -523,19 +927,19 @@ function answerLevelChecks(aggregate: AggregateScores): Check[] {
     `  refusal-calibration   ${pct(aggregate.refusalCalibration)}  (min ${pct(ANSWER_THRESHOLDS.refusalCalibration)})`,
   );
   console.log(
-    `  citation-verification ${pct(aggregate.citationVerification)}  (min ${pct(ANSWER_THRESHOLDS.citationVerification)})`,
+    `  citation-verification ${pct(aggregate.citationVerification)}  (${String(aggregate.unverifiedCitationCount)} of ${String(aggregate.caseCount)} unverified; gate <= ${String(ANSWER_THRESHOLDS.maxUnverifiedCount)})`,
   );
   console.log(
     `  orphan-source-rate    ${pct(aggregate.orphanRate)}  (max ${pct(ANSWER_THRESHOLDS.maxOrphanRate)})`,
   );
   console.log(
-    `  dangling-marker-rate  ${pct(aggregate.danglingMarkerRate)}  (max ${pct(ANSWER_THRESHOLDS.maxDanglingMarkerRate)})`,
+    `  dangling-marker-rate  ${pct(aggregate.danglingMarkerRate)}  (${String(aggregate.danglingCaseCount)} of ${String(aggregate.caseCount)} dangling; gate <= ${String(ANSWER_THRESHOLDS.maxDanglingCount)})`,
   );
   console.log(
     `  over-refusal-rate     ${pct(aggregate.overRefusalRate)}  (max ${pct(ANSWER_THRESHOLDS.maxOverRefusalRate)})`,
   );
   console.log(
-    `  under-refusal-rate    ${pct(aggregate.underRefusalRate)}  (max ${pct(ANSWER_THRESHOLDS.maxUnderRefusalRate)})\n`,
+    `  under-refusal         ${pct(aggregate.underRefusalRate)}  (${String(aggregate.underRefusalCount)} refusal case(s) answered; gate <= ${String(ANSWER_THRESHOLDS.maxUnderRefusalCount)})\n`,
   );
 
   return [
@@ -564,24 +968,27 @@ function answerLevelChecks(aggregate: AggregateScores): Check[] {
       ok: aggregate.refusalCalibration >= ANSWER_THRESHOLDS.refusalCalibration,
     },
     {
-      name: `answer: citation-verification >= ${pct(ANSWER_THRESHOLDS.citationVerification)} (verbatim quotes)`,
-      ok: aggregate.citationVerification >= ANSWER_THRESHOLDS.citationVerification,
+      name: `answer: citation-verification — <= ${String(ANSWER_THRESHOLDS.maxUnverifiedCount)} of ${String(aggregate.caseCount)} cases with an unverified citation (raw generation slip; strip pipeline guarantees 0 reach the user)`,
+      ok: aggregate.unverifiedCitationCount <= ANSWER_THRESHOLDS.maxUnverifiedCount,
+      detail: `${String(aggregate.unverifiedCitationCount)} unverified; rate ${pct(aggregate.citationVerification)}`,
     },
     {
       name: `answer: orphan-source-rate <= ${pct(ANSWER_THRESHOLDS.maxOrphanRate)} (source without [n])`,
       ok: aggregate.orphanRate <= ANSWER_THRESHOLDS.maxOrphanRate,
     },
     {
-      name: `answer: dangling-marker-rate <= ${pct(ANSWER_THRESHOLDS.maxDanglingMarkerRate)} ([n] without verified source)`,
-      ok: aggregate.danglingMarkerRate <= ANSWER_THRESHOLDS.maxDanglingMarkerRate,
+      name: `answer: dangling-marker — <= ${String(ANSWER_THRESHOLDS.maxDanglingCount)} of ${String(aggregate.caseCount)} cases with a dangling [n] (raw generation slip; reconciled before the user)`,
+      ok: aggregate.danglingCaseCount <= ANSWER_THRESHOLDS.maxDanglingCount,
+      detail: `${String(aggregate.danglingCaseCount)} dangling; rate ${pct(aggregate.danglingMarkerRate)}`,
     },
     {
       name: `answer: over-refusal-rate <= ${pct(ANSWER_THRESHOLDS.maxOverRefusalRate)} (answerable but refused)`,
       ok: aggregate.overRefusalRate <= ANSWER_THRESHOLDS.maxOverRefusalRate,
     },
     {
-      name: `answer: under-refusal-rate <= ${pct(ANSWER_THRESHOLDS.maxUnderRefusalRate)} (should have refused)`,
-      ok: aggregate.underRefusalRate <= ANSWER_THRESHOLDS.maxUnderRefusalRate,
+      name: `answer: under-refusal — <= ${String(ANSWER_THRESHOLDS.maxUnderRefusalCount)} refusal case(s) answered (grounded slip; hard-hallucination still absolute)`,
+      ok: aggregate.underRefusalCount <= ANSWER_THRESHOLDS.maxUnderRefusalCount,
+      detail: `${String(aggregate.underRefusalCount)} of refusal cases answered; rate ${pct(aggregate.underRefusalRate)}`,
     },
     ...answerRegressionChecks(aggregate),
   ];
@@ -640,8 +1047,35 @@ function answerRegressionChecks(aggregate: AggregateScores): Check[] {
   ];
 }
 
+/**
+ * G2 baseline-write guard: which ABSOLUTE Gate C floors a run misses. A baseline may only capture a
+ * run that itself clears every absolute floor — otherwise `EVAL_WRITE_BASELINE` could quietly record a
+ * red run and lower the regression reference point, exactly the "never silently lower the bar" rule.
+ * Mirrors the absolute checks in {@link answerLevelChecks} (the regression checks are relative and
+ * therefore not part of this floor). Returns the failing metric names (empty = clears every floor).
+ */
+function answerFloorFailures(aggregate: AggregateScores): string[] {
+  const failures: string[] = [];
+  const push = (ok: boolean, name: string): void => {
+    if (!ok) failures.push(name);
+  };
+  push(aggregate.hardHallucination >= ANSWER_THRESHOLDS.hardHallucination, "hard-hallucination");
+  push(aggregate.faithfulness >= ANSWER_THRESHOLDS.softFaithfulness, "soft-faithfulness");
+  push(aggregate.relevance >= ANSWER_THRESHOLDS.relevance, "relevance");
+  push(aggregate.citationCorrectness >= ANSWER_THRESHOLDS.citationCorrectness, "citation-correctness");
+  push(aggregate.completeness >= ANSWER_THRESHOLDS.completeness, "completeness");
+  push(aggregate.refusalCalibration >= ANSWER_THRESHOLDS.refusalCalibration, "refusal-calibration");
+  push(aggregate.unverifiedCitationCount <= ANSWER_THRESHOLDS.maxUnverifiedCount, "citation-verification (count)");
+  push(aggregate.orphanRate <= ANSWER_THRESHOLDS.maxOrphanRate, "orphan-source-rate");
+  push(aggregate.danglingCaseCount <= ANSWER_THRESHOLDS.maxDanglingCount, "dangling-marker (count)");
+  push(aggregate.overRefusalRate <= ANSWER_THRESHOLDS.maxOverRefusalRate, "over-refusal-rate");
+  push(aggregate.underRefusalCount <= ANSWER_THRESHOLDS.maxUnderRefusalCount, "under-refusal (count)");
+  return failures;
+}
+
 async function answerQualityChecks(): Promise<Check[]> {
-  const caseScores: CaseScores[] = [];
+  const caseScores: AnswerCaseReport[] = [];
+  let repairCount = 0;
 
   for (const testCase of goldenCases) {
     // Every case — including refusals — runs the real generation path. Refusal cases are given
@@ -650,43 +1084,95 @@ async function answerQualityChecks(): Promise<Check[]> {
     const passages = passagesForCase(testCase);
     const context = assembleEvalContext(passages);
     const question = await evalQuestion(testCase);
-    const generated = await retryWithBackoff(
-      () =>
-        generateText({
-          model: EVAL_LLM_MODEL,
-          messages: [
-            { role: "system", content: CAO_SYSTEM_INSTRUCTIONS },
-            { role: "user", content: buildAnswerPrompt(context, question) },
-          ],
-          // Single source of truth: packages/shared/src/config/generation.ts (same as production agent).
-          temperature: GENERATION_CONFIG.temperature,
-          maxTokens: GENERATION_CONFIG.maxTokens,
-        }),
-      { baseDelayMs: 5000, maxAttempts: 8 },
-    );
+    // One citation-contract repair retry (generate-answer.ts): a genuinely grounded answer that
+    // mis-formatted its citations, or an ungrounded assertion, gets a single targeted second attempt.
+    // This is what collapses the run-to-run generator variance that dominates Gate C. The chosen raw
+    // text is scored unchanged, so the metric still holds the model to the contract.
+    const chunkContentById = new Map(passages.map((passage) => [passage.id, passage.content]));
+    // User-supplied numbers (this turn's question + history) are grounding for the hard-fact trigger,
+    // exactly as scoreHardHallucination treats them — so a `derived` case echoing the user's own hours
+    // is not re-asked as an ungrounded fact.
+    const userSupplied = [testCase.question, ...(testCase.history ?? []).map((message) => message.content)].join(" ");
+    const generated = await generateAnswerWithRepair({
+      chunkContentById,
+      userSupplied,
+      // Best-of-N over the citation contract; raise on the merge queue/nightly to tame single-sample
+      // generation variance on the zero-tolerance count gates. Defaults to 2 (= production behaviour).
+      maxAttempts: env.EVAL_GENERATION_SAMPLES ?? 2,
+      generate: (extraMessages) =>
+        retryWithBackoff(
+          () =>
+            generateText({
+              model: EVAL_LLM_MODEL,
+              messages: [
+                { role: "system", content: CAO_SYSTEM_INSTRUCTIONS },
+                { role: "user", content: buildAnswerPrompt(context, question) },
+                ...extraMessages,
+              ],
+              // Single source of truth: packages/shared/src/config/generation.ts (same as production agent).
+              temperature: GENERATION_CONFIG.temperature,
+              maxTokens: GENERATION_CONFIG.maxTokens,
+            }),
+          { baseDelayMs: 5000, maxAttempts: 8 },
+        ).then((result) => ({
+          text: result.text,
+          usage: result.usage,
+          finishReason: result.finishReason,
+        })),
+    });
+    if (generated.attempts > 1) {
+      repairCount += 1;
+    }
     const answer = generated.text;
     await sleep(2000);
 
-    caseScores.push(await scoreAnswerCase(testCase, passages, answer, NOT_FOUND_MESSAGE));
+    const scores = await scoreAnswerCase(testCase, passages, answer, NOT_FOUND_MESSAGE);
+    // Persist id/question/answerRaw + finishReason/answerChars so a failed under-refusal, citation,
+    // or truncation case is inspectable from the run artefact without regenerating (Tier B / Gate C
+    // close-out etd-012 diagnostic).
+    caseScores.push({
+      ...scores,
+      id: testCase.id,
+      question,
+      answerRaw: answer,
+      finishReason: generated.finishReason,
+      answerChars: answer.length,
+    });
   }
 
+  // Keep the repair-retry frequency visible as a trend (mirrors the judge parse-retry log): a rising
+  // rate means the generator's first-pass citation discipline is degrading, even when the gate stays green.
+  console.log(`[generation] citation-repair retries fired: ${String(repairCount)}/${String(goldenCases.length)}`);
+
   const aggregate = aggregateScores(caseScores);
+  answerReport = { aggregate, cases: caseScores };
   if (env.EVAL_WRITE_BASELINE === "1" || env.EVAL_WRITE_BASELINE === "true") {
-    const answerBaseline: AnswerBaseline = {
-      hardHallucination: aggregate.hardHallucination,
-      faithfulness: aggregate.faithfulness,
-      relevance: aggregate.relevance,
-      citationCorrectness: aggregate.citationCorrectness,
-      completeness: aggregate.completeness,
-      refusalCalibration: aggregate.refusalCalibration,
-      citationVerification: aggregate.citationVerification,
-      orphanRate: aggregate.orphanRate,
-      danglingMarkerRate: aggregate.danglingMarkerRate,
-      overRefusalRate: aggregate.overRefusalRate,
-      underRefusalRate: aggregate.underRefusalRate,
-    };
-    updateBaselineSection({ corpusVersion: GOLDEN_CORPUS_VERSION, answer: answerBaseline });
-    console.log("  baseline: answer section recorded.\n");
+    // Fase G2 guard: refuse to record a baseline from a run that does not itself clear the absolute
+    // floors. Recording a red run would silently lower the regression reference — the exact
+    // bar-erosion the plan forbids. Fix the reds first, then re-record.
+    const floorFailures = answerFloorFailures(aggregate);
+    if (floorFailures.length > 0) {
+      console.warn(
+        `  baseline: NOT recorded — the answer run misses ${String(floorFailures.length)} absolute floor(s) ` +
+          `(Fase G2 guard): ${floorFailures.join(", ")}. A baseline may only capture a run that itself passes.\n`,
+      );
+    } else {
+      const answerBaseline: AnswerBaseline = {
+        hardHallucination: aggregate.hardHallucination,
+        faithfulness: aggregate.faithfulness,
+        relevance: aggregate.relevance,
+        citationCorrectness: aggregate.citationCorrectness,
+        completeness: aggregate.completeness,
+        refusalCalibration: aggregate.refusalCalibration,
+        citationVerification: aggregate.citationVerification,
+        orphanRate: aggregate.orphanRate,
+        danglingMarkerRate: aggregate.danglingMarkerRate,
+        overRefusalRate: aggregate.overRefusalRate,
+        underRefusalRate: aggregate.underRefusalRate,
+      };
+      updateBaselineSection({ corpusVersion: GOLDEN_CORPUS_VERSION, fixtureHash: GOLDEN_FIXTURE_HASH, answer: answerBaseline });
+      console.log("  baseline: answer section recorded.\n");
+    }
   }
 
   return answerLevelChecks(aggregate);
@@ -747,68 +1233,171 @@ function report(title: string, checks: Check[]): boolean {
     const status = check.ok ? "PASS" : "FAIL";
     console.log(`  [${status}] ${check.name}${check.detail ? ` — ${check.detail}` : ""}`);
   }
-  return checks.every((check) => check.ok);
+  const passed = checks.every((check) => check.ok);
+  gateResults.push({
+    name: title,
+    passed,
+    checks: checks.map((check) => ({ name: check.name, ok: check.ok, ...(check.detail === undefined ? {} : { detail: check.detail }) })),
+  });
+  return passed;
 }
 
 /**
- * Handle a gate that cannot run because its API keys are missing. Under EVAL_REQUIRE_ALL (the
- * merge-to-main job) this is a FAIL — skipped != passed; otherwise it is an explicit dev skip.
+ * Handle a gate that cannot run because its API keys (or DB) are missing. When `required` this is a
+ * FAIL — skipped != passed; otherwise it is an explicit dev skip. API-key gates pass the default
+ * (REQUIRE_ALL); the DB-integration gates pass REQUIRE_DB, so they are required only on the nightly
+ * job that wires DATABASE_URL and skip (never fail) on the PR hot path.
  */
-function reportUnavailable(gate: string, requirement: string): boolean {
-  if (REQUIRE_ALL) {
-    console.log(`\n${gate}: REQUIRED-BUT-UNAVAILABLE — ${requirement} (EVAL_REQUIRE_ALL is set).`);
+function reportUnavailable(gate: string, requirement: string, required: boolean = REQUIRE_ALL): boolean {
+  if (required) {
+    console.log(`\n${gate}: REQUIRED-BUT-UNAVAILABLE — ${requirement} (required on this job).`);
+    gateResults.push({
+      name: gate,
+      passed: false,
+      checks: [{ name: `REQUIRED-BUT-UNAVAILABLE: ${requirement}`, ok: false }],
+    });
     return false;
   }
   console.log(`\n${gate}: SKIPPED (${requirement}). Set the key(s) to run this gate; required on merge to main.`);
+  gateResults.push({
+    name: gate,
+    passed: true,
+    checks: [{ name: `SKIPPED: ${requirement}`, ok: true }],
+  });
   return true;
+}
+
+/** Assemble the E9 run artefact from the accumulators and write it (also on failure). */
+function writeRunArtefact(passed: boolean): void {
+  const report: EvalReport = {
+    schemaVersion: EVAL_REPORT_SCHEMA_VERSION,
+    generatedAt: new Date().toISOString(),
+    commitSha: env.GITHUB_SHA ?? null,
+    corpusVersion: GOLDEN_CORPUS_VERSION,
+    passed,
+    config: {
+      requireAll: REQUIRE_ALL,
+      judgeSamples: env.EVAL_JUDGE_SAMPLES ?? 1,
+      writeBaseline: env.EVAL_WRITE_BASELINE === "1" || env.EVAL_WRITE_BASELINE === "true",
+    },
+    models: {
+      generator: EVAL_LLM_MODEL,
+      judge: JUDGE_MODEL,
+      embedding: embeddingModelId,
+      rerank: rerankModelId,
+    },
+    gates: gateResults,
+    retrieval: retrievalReport,
+    retrievalIntegration: retrievalIntegrationReport,
+    answer: answerReport,
+    funds: fundLayerReports,
+    judge: { parseRetryCount: getJudgeParseRetryCount() },
+  };
+  const path = writeEvalReport(report);
+  console.log(`\nRun artefact written: ${path}`);
 }
 
 async function main(): Promise<void> {
   let allPassed = true;
+  let completed = false;
 
-  // Gate A — corpus-agnostic base layer (contract-test, always runs).
-  allPassed =
-    report("Gate A — prompt & clarify CONTRACT (change-detector, not a behavioral gate):", [
-      ...promptContractChecks(),
-      ...clarifyContractChecks(),
-    ]) && allPassed;
+  try {
+    // Gate A — corpus-agnostic base layer (contract-test, always runs).
+    allPassed =
+      report("Gate A — prompt & clarify CONTRACT (change-detector, not a behavioral gate):", [
+        ...promptContractChecks(),
+        ...clarifyContractChecks(),
+        ...fixtureHashChecks(),
+      ]) && allPassed;
 
-  // Gate B — fund-specific layer (retrieval is corpus/fund-bound).
-  if (env.SCALEWAY_API_KEY) {
-    allPassed =
-      report("Gate B — retrieval recall + rerank [fund-specific layer]:", await retrievalAndRerankChecks()) &&
-      allPassed;
-  } else {
-    allPassed = reportUnavailable("Gate B — retrieval recall", "SCALEWAY_API_KEY not set") && allPassed;
-  }
+    // Gate B — fund-specific layer (retrieval is corpus/fund-bound).
+    if (env.SCALEWAY_API_KEY) {
+      allPassed =
+        report("Gate B — retrieval recall + rerank [fund-specific layer]:", await retrievalAndRerankChecks()) &&
+        allPassed;
+    } else {
+      allPassed = reportUnavailable("Gate B — retrieval recall", "SCALEWAY_API_KEY not set") && allPassed;
+    }
 
-  if (env.SCALEWAY_API_KEY && env.MISTRAL_API_KEY) {
-    allPassed =
-      report("Gate B2 — multi-turn condensation retrieval:", await condensationChecks()) &&
-      allPassed;
-  } else {
-    allPassed =
-      reportUnavailable("Gate B2 — multi-turn condensation retrieval", "SCALEWAY_API_KEY and MISTRAL_API_KEY required") &&
-      allPassed;
-  }
+    if (env.SCALEWAY_API_KEY && env.MISTRAL_API_KEY) {
+      allPassed =
+        report("Gate B2 — multi-turn condensation retrieval:", await condensationChecks()) &&
+        allPassed;
+    } else {
+      allPassed =
+        reportUnavailable("Gate B2 — multi-turn condensation retrieval", "SCALEWAY_API_KEY and MISTRAL_API_KEY required") &&
+        allPassed;
+    }
 
-  // Gate C — behavioral layer (answer quality; correctness checks are fund-specific).
-  if (env.SCALEWAY_API_KEY && env.MISTRAL_API_KEY) {
-    allPassed = report("Gate C — answer-level quality:", await answerQualityChecks()) && allPassed;
-  } else {
-    allPassed =
-      reportUnavailable("Gate C — answer-level quality", "SCALEWAY_API_KEY and MISTRAL_API_KEY required") &&
-      allPassed;
-  }
+    // Gate C — behavioral layer (answer quality; correctness checks are fund-specific).
+    if (env.SCALEWAY_API_KEY && env.MISTRAL_API_KEY) {
+      allPassed = report("Gate C — answer-level quality:", await answerQualityChecks()) && allPassed;
+    } else {
+      allPassed =
+        reportUnavailable("Gate C — answer-level quality", "SCALEWAY_API_KEY and MISTRAL_API_KEY required") &&
+        allPassed;
+    }
 
-  // Gate D — corpus isolation. The contract layer always runs; the live cross-fund test needs a DB.
-  allPassed = report("Gate D — corpus isolation (contract):", corpusIsolationContractChecks()) && allPassed;
-  if (env.DATABASE_URL && env.SCALEWAY_API_KEY) {
-    allPassed = report("Gate D — corpus isolation (integration):", await corpusIsolationLiveChecks()) && allPassed;
-  } else {
-    allPassed =
-      reportUnavailable("Gate D — corpus isolation (integration)", "DATABASE_URL and SCALEWAY_API_KEY required") &&
-      allPassed;
+    // Gate B-integration — nightly: the REAL retrieval pipeline end-to-end on ingested fixtures
+    // (rewrite → pgvector → rerank → assemble). Needs a DB; PRs skip, the nightly requires it
+    // (REQUIRE_DB). Fixtures must be ingested first — scripts/ingest/fixtures.ts.
+    if (env.DATABASE_URL && env.SCALEWAY_API_KEY) {
+      allPassed =
+        report("Gate B-integration — production retrieval pipeline (nightly):", await retrievalIntegrationChecks()) &&
+        allPassed;
+    } else {
+      allPassed =
+        reportUnavailable(
+          "Gate B-integration — production retrieval pipeline",
+          "DATABASE_URL and SCALEWAY_API_KEY required",
+          REQUIRE_DB,
+        ) && allPassed;
+    }
+
+    // Gate F — fund-specific correctness layer (E12). One gate per discovered fund set, each scored
+    // against its own ingested corpus via the real pipeline. Nightly-only (needs a DB), like Gate
+    // B-integration; on the PR hot path it skips (required only under REQUIRE_DB). base-scores vs
+    // fund-scores are reported apart in the run artefact.
+    if (goldenFundSets.length > 0) {
+      // Needs MISTRAL_API_KEY too (not just DB + Scaleway): fund sets may contain multi-turn cases
+      // that fundCaseQuery condenses via the LLM, exactly like Gate B2/C. Without it the gate would
+      // crash on an elliptical case instead of skipping. On the nightly all three are present.
+      if (env.DATABASE_URL && env.SCALEWAY_API_KEY && env.MISTRAL_API_KEY) {
+        for (const set of goldenFundSets) {
+          allPassed =
+            report(
+              `Gate F — fund-specific correctness [${set.key}] (corpus v${set.corpusVersion}):`,
+              await fundLayerChecks(set),
+            ) && allPassed;
+        }
+      } else {
+        allPassed =
+          reportUnavailable(
+            `Gate F — fund-specific correctness (${goldenFundSets.map((set) => set.key).join(", ")})`,
+            "DATABASE_URL, SCALEWAY_API_KEY and MISTRAL_API_KEY required",
+            REQUIRE_DB,
+          ) && allPassed;
+      }
+    }
+
+    // Gate D — corpus isolation. The contract layer always runs; the live cross-fund test needs a DB.
+    allPassed = report("Gate D — corpus isolation (contract):", corpusIsolationContractChecks()) && allPassed;
+    if (env.DATABASE_URL && env.SCALEWAY_API_KEY) {
+      allPassed = report("Gate D — corpus isolation (integration):", await corpusIsolationLiveChecks()) && allPassed;
+    } else {
+      allPassed =
+        reportUnavailable(
+          "Gate D — corpus isolation (integration)",
+          "DATABASE_URL and SCALEWAY_API_KEY required",
+          REQUIRE_DB,
+        ) && allPassed;
+    }
+
+    completed = true;
+  } finally {
+    // Always leave a downloadable artefact — a crashed or failed run is exactly when it matters.
+    // If a gate threw, the run did not complete, so it is recorded as not passed.
+    writeRunArtefact(completed && allPassed);
   }
 
   if (!allPassed) {
@@ -819,7 +1408,21 @@ async function main(): Promise<void> {
   console.log("\nEval PASSED.");
 }
 
-main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : error);
-  process.exitCode = 1;
-});
+try {
+  acquireEvalLock();
+} catch (error: unknown) {
+  if (error instanceof EvalAlreadyRunningError) {
+    console.error(`\n${error.message}`);
+    process.exit(1);
+  }
+  throw error;
+}
+
+main()
+  .catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  })
+  // Close the DB pool (used by the nightly integration gates) so the process exits instead of
+  // hanging on postgres.js's open sockets. No-op when no gate touched the DB.
+  .finally(closeDb);

@@ -1,8 +1,15 @@
 # Branch protection check — `main` (Fase G0 / PLAN-v3 Fase 14 stap 1)
 
-> Status: **not yet applied** — `gh` is not authenticated in this environment
-> (`gh auth login` / `GH_TOKEN` required). This file is the checklist + intended
-> API call so the setting can be applied deliberately.
+> Status: **APPLIED (partial)** — verified 2026-07-20 via
+> `gh api repos/wunderling1/wunderstack/branches/main/protection`.
+> Active: required status check `verify` (`strict: true`), `enforce_admins: true`
+> (no admin bypass), `allow_force_pushes: false`, `allow_deletions: false`.
+> **Gaps:** `required_pull_request_reviews` is NOT set (no required PR review) and
+> there is no merge-queue. **Caveat (see code-review-2026-07-20-2217.md, Post-review
+> corrections #4):** a required check is only as strong as what runs inside it — the
+> `verify` check was green while Gate B/C were inert (Turbo stripped `EVAL_REQUIRE_ALL`
+> + secrets absent), so protection was guarding a hollow check on the quality axis.
+> Branch protection + the "skipped ≠ passed" invariant are a pair.
 >
 > Context (exhibit A): a branch named `docs/organize-meta` rewrote the eval
 > subsystem (36 files, deleted `report-writer.ts` / `baseline.ts`) and was
