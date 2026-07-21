@@ -1,5 +1,10 @@
 # PLAN-eval-gates.md — de eval-gates hard maken vóór Fase 9
 
+> **⚠️ SUPERSEDED (2026-07-21) — gearchiveerd, niet levend.** De P1–P8-nummering uit dit document is
+> vervangen door het vier-lagen-model (G1–G4) in `docs/eval/GATE-ARCHITECTURE.md` (het enige levende
+> gate-document). De P↔G-mapping staat in Bijlage A.2 daarvan. Dit bestand blijft bewaard als
+> historisch uitvoeringslog van de P-reeks; gebruik de G-identifiers voor nieuw werk.
+
 > **Status: UITGEVOERD (7 jul 2026).** Alle acht punten zijn geïmplementeerd. `typecheck`,
 > `lint` en Gate A + Gate B (met echte Scaleway-embeddings) draaien groen; Gate B bevestigt de
 > artikel/lid-matching (hit@1 97,5%) en de nieuwe rerank-gate. De deterministische Gate C-scorers

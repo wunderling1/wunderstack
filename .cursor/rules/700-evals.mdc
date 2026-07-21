@@ -10,6 +10,14 @@ De eval (`packages/agents/src/evals/`) is het meetinstrument dat de kwaliteitsbe
 bewaakt: "groene eval op `main` = wat gebruikers krijgen". Volledige architectuur en bewijs:
 `docs/eval/GATE-ARCHITECTURE.md`. De harde regels:
 
+## Naamgeving: gebruik de G-identifiers
+Het canonieke model kent vier lagen: **G1 CONTRACT · G2 GEDRAG · G3 PRODUCTIE · G4 RUNTIME**
+(`docs/eval/GATE-ARCHITECTURE.md`). Nieuwe code, docs en commit-messages verwijzen uitsluitend naar
+deze G-identifiers (en subgates zoals `G2-retrieval`, `G2-answer`, `G3-fund`). De oude labels
+(Gate A–D/B2/F, E0–E13, P1–P8) zijn historisch en leven alleen nog in Bijlage A van het canonieke
+document. Nieuwe capabilities worden een **case-categorie binnen een bestaande gate** (bv.
+`multi-turn` onder G2-retrieval), geen nieuwe gate.
+
 ## Wijzig `src/evals/` niet buiten expliciete opdracht
 Raak bestanden onder `packages/agents/src/evals/` (en de gedeelde productie-naden die de eval scoort:
 `generateVerifiedAnswer` / `generateAnswerWithRepair`, `DEFAULT_LLM_MODEL`) **niet** aan als een

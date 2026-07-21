@@ -522,7 +522,6 @@ export function aggregateScores(scores: CaseScores[]): AggregateScores {
       hardHallucination: acc.hardHallucination + score.hardHallucination,
       faithfulness: acc.faithfulness + score.faithfulness,
       relevance: acc.relevance + score.relevance,
-      citationCorrectness: acc.citationCorrectness + score.citationCorrectness,
       completeness: acc.completeness + score.completeness,
       refusalCalibration: acc.refusalCalibration + score.refusalCalibration,
       citationVerification: acc.citationVerification + score.citationVerification,
@@ -533,7 +532,6 @@ export function aggregateScores(scores: CaseScores[]): AggregateScores {
       hardHallucination: 0,
       faithfulness: 0,
       relevance: 0,
-      citationCorrectness: 0,
       completeness: 0,
       refusalCalibration: 0,
       citationVerification: 0,
@@ -549,12 +547,20 @@ export function aggregateScores(scores: CaseScores[]): AggregateScores {
   const unverifiedCitationCount = scores.filter((score) => score.citationVerification === 0).length;
   const danglingCaseCount = scores.filter((score) => score.danglingMarkerRate > 0).length;
 
+  // citationCorrectness is averaged over ANSWERABLE cases only. A refusal has no article to cite, so
+  // the scorer returns a vacuous 1.0 for it — including those in the mean would flatter the metric and
+  // hide answerable-case citation errors. Refusal correctness is already measured by refusalCalibration
+  // + under-refusal, so citationCorrectness stays a pure answerable-case signal. (Fase 4 actie 6:
+  // requires a baseline re-record — the value shifts vs a baseline recorded over all cases.)
+  const answerableCitationCorrectness =
+    answerable.length === 0 ? 0 : answerable.reduce((acc, score) => acc + score.citationCorrectness, 0) / answerable.length;
+
   const count = scores.length;
   return {
     hardHallucination: sum.hardHallucination / count,
     faithfulness: sum.faithfulness / count,
     relevance: sum.relevance / count,
-    citationCorrectness: sum.citationCorrectness / count,
+    citationCorrectness: answerableCitationCorrectness,
     completeness: sum.completeness / count,
     refusalCalibration: sum.refusalCalibration / count,
     citationVerification: sum.citationVerification / count,
