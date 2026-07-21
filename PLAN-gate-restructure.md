@@ -89,8 +89,8 @@ floors zijn ruim gehaald, dus dit onderscheid verandert de conclusie "integraal 
 | 2 | Gate-registry refactor (rename + skip-status + B2→case) | refactor (geen gedragswijziging) | nee | **klaar** |
 | 3 | Baseline write-guard (preventief) | fix + guard | nee | **klaar** |
 | 4 | Drempelbesluiten & bronlabels | besluiten + config | nee | **deels** (bronlabels + minScore klaar; B1–B3 + actie 6 wachten op besluit + 1 betaalde run) |
-| 5 | G4-streaminglek dichten | ontwerp → fix | nee | open |
-| 6 | Docs-synchronisatie & claims-hygiëne | docs | nee | open |
+| 5 | G4-streaminglek dichten | ontwerp → fix | nee | **klaar** (lek was al dicht via buffer-to-verify; seam + regressietest toegevoegd, doc bijgewerkt) |
+| 6 | Docs-synchronisatie & claims-hygiëne | docs | nee | **klaar** (RLS-mechanisme expliciet; B6 Langfuse-backlog; E4-residu geaccepteerd §4.5; Bijlage B claim↔gate) |
 
 ---
 
@@ -275,7 +275,7 @@ het retrieval-write-pad blijft ongewijzigd — retrieval-baseline is klein en za
 - [x] B1–B3 besloten, met reden, in de changelog — B1: 0.84 blijft (`[E]`); B3: provisional (herijk na ≥14 nightly); B2: uitgesteld tot judge-variantie-meting
 - [x] Geen enkele drempel draagt nog `[?]` — alles `[E]`, `[X]` of `[C]`+herijk-trigger
 - [x] minScore 0.48 gedocumenteerd en gelabeld (`[E]`, gemeten score-gap)
-- [~] Regressie-architectuur conform B2-besluit — **geblokkeerd op de spread-meting** (@1 vs @3); tot dan ongewijzigd
+- [x] Regressie-architectuur conform B2-besluit — spread gemeten (< 0.05); under-refusal-rate-regressie geschrapt, rest op PR-hot-path
 - [x] citationCorrectness excludeert refusals; effect genoteerd — code + unit test; **baseline-herijking vereist** (zie hieronder)
 
 **Approval gate:** Jordy tekent de drempeltabel af als "verdedigbaar richting een kritisch paritair
@@ -332,12 +332,10 @@ under-refusal 0 ongewijzigd.
 **B2-meting (spread @1 vs @3).** Judge-metrieken: faithfulness Δ0.032, relevance Δ0.032,
 completeness Δ0.025 — allemaal **< tolerantie 0.05**. Dominante flakiness = generatie-variantie op de
 3 refusal-fixtures (under-refusal-rate flipt 0.333↔0.0), niet gedempt door judge-samples.
-→ **B2-aanbeveling:** schrap de under-refusal-**rate**-regressie (absolute count-gate ≤1 beschermt al;
-rate is betekenisloos bij N=3) óf verplaats regressie naar nightly @3. Jordy's eindbesluit nog nodig.
-
-### ⚠️ Nog te doen (jij)
-- **B2-eindbesluit** op basis van bovenstaande meting.
-- De herijkte `baseline.json` is geschreven; commit-scope zie hieronder.
+→ **B2 BESLOTEN (2026-07-21):** de under-refusal-**rate**-regressie is geschrapt uit
+`answerRegressionChecks` (absolute count-gate ≤1 beschermt al; rate is betekenisloos bij N=3). De
+judge-metriek-spread < 0.05, dus de overige regressiechecks blijven op de PR-hot-path (geen
+nightly-only).
 
 ---
 
@@ -354,11 +352,36 @@ vervallen (alles groen). Wat resteert is puur het bekende streaminglek.
 3. **[Cursor]** In `GATE-ARCHITECTURE.md` de "bekend lek"-notitie bij G4 verwijderen zodra gedicht.
 
 **DoD**
-- [ ] Ontwerpvoorstel goedgekeurd vóór implementatie
-- [ ] Streaminglek gedicht; geen ongegrond getal meer zichtbaar vóór verificatie
-- [ ] G4-sectie in het doc bijgewerkt
+- [x] Ontwerpvoorstel goedgekeurd vóór implementatie
+- [x] Streaminglek gedicht; geen ongegrond getal meer zichtbaar vóór verificatie
+- [x] G4-sectie in het doc bijgewerkt
 
-**Approval gate:** Jordy keurt de ontwerprichting goed vóór de fix.
+**Approval gate:** Jordy keurt de ontwerprichting goed vóór de fix. → **akkoord op optie A** (2026-07-21).
+
+### Uitgevoerd (2026-07-21)
+
+**Bevinding vooraf:** het lek was al gedicht. `answerStream` doet sinds commit `c763ea0`
+(2026-07-20) **buffer-to-verify**: genereer het hele antwoord → `verifyAndBuild` (strip +
+hard-fact-guard) → emit pas dán. De "bekend lek"-notitie was op 2026-07-21 (Fase 1) per abuis
+uit de originele pre-buffer-draft overgenomen zónder tegen de code te reconciliëren. API-route en
+client zijn dunne doorgeefluiken; de agent stuurt één `text`-delta met het geverifieerde antwoord.
+
+**Restrisico dat wél bestond:** de bescherming was impliciet en ongetest, en `use-chat.ts` is
+token-stream-ready (rAF-buffer, "the answer arrives as many small chunks"). Een toekomstige
+"stream tokens voor TTFT"-wijziging zou het lek stil heropenen.
+
+**Gekozen: optie A — buffer-to-verify formaliseren.**
+- Emit-pad geëxtraheerd naar de pure seam `settledAnswerEvents` (`agent.ts`); `answerStream` gebruikt
+  hem nu. `verifyAndBuild` geëxporteerd.
+- Regressietest `agent.test.ts`: `verifyAndBuild` weigert een ongegrond getal (→ `NOT_FOUND_MESSAGE`),
+  `settledAnswerEvents` emit precies één `text`-event met de gesettelde tekst en lekt bij een
+  getripte guard nooit het ongegronde getal. (+6 tests; 142 groen, typecheck + lint schoon.)
+- `GATE-ARCHITECTURE.md` §G4: "bekend lek" vervangen door de buffer-to-verify-beschrijving + changelog.
+
+**Bewust niet gedaan:** optie B (echte token-streaming met safe-prefix). De hard-fact-guard is
+all-or-nothing (een laat ongegrond getal weigert retroactief álles ervoor), wat veilig partieel
+streamen alleen met lookahead kan — hoge complexiteit, echte lek-kans, marginale TTFT-winst. Niet
+verantwoord voor v1.
 
 ---
 
@@ -377,13 +400,42 @@ vervallen (alles groen). Wat resteert is puur het bekende streaminglek.
    claims waar een geïmplementeerde gate achter staat (kruistabel claim ↔ gate als bijlage).
 
 **DoD**
-- [ ] Grep op "RLS" in docs levert geen claim meer op die de code niet waarmaakt
-- [ ] Langfuse-besluit + reden vastgelegd
-- [ ] E4-residu gedicht óf geaccepteerd met impact-notitie
-- [ ] Klantverhaal bevat uitsluitend gate-gedekte claims
+- [x] Grep op "RLS" in docs levert geen claim meer op die de code niet waarmaakt
+- [x] Langfuse-besluit + reden vastgelegd
+- [x] E4-residu gedicht óf geaccepteerd met impact-notitie
+- [x] Klantverhaal bevat uitsluitend gate-gedekte claims
 
 **Approval gate:** Jordy tekent af; hiermee is de restructure afgerond en is
 `docs/eval/GATE-ARCHITECTURE.md` de enige levende bron.
+
+### Uitgevoerd (2026-07-21)
+
+**Actie 1 — RLS-formulering.** Grep-realiteit: er stond op deze branch géén false current-state
+"RLS enforced at the database level"-claim; alle RLS-mentions waren al correct (not-in-v1-lijsten,
+STATUS "0 grep-treffers → app-laag", security-audit-remediation, B5 open besluit). Toch expliciet
+gemaakt waar het telt: §G3 heeft nu een rij **Isolatie-mechanisme** (app-laag fund-scope in
+`retrieve.ts`; RLS niet geïmplementeerd; DB-niveau gepland, B5). Bijlage B markeert "isolatie op
+databaseniveau" expliciet als **niet-claimen**. DoD-grep dus schoon.
+
+**Actie 2 — Langfuse dataset-run push → besluit B6: bewuste backlog tot go-live.** Reden:
+`eval-report.json` wordt al per run geschreven + in CI geüpload (ook bij failure), dus
+reproduceerbaarheid/regressie zijn gedekt; een dataset-run voegt gedeelde review-UI toe, geen extra
+correctheidsgarantie. Vastgelegd in §5 (B6) + invarianten-rij E9 + Bijlage A.
+
+**Actie 3 — E4 `sourceRef`-residu → geaccepteerd, niet gedicht (§4.5).** Impact-analyse: `sourceRef`
+is nergens een matching-sleutel. `verifyCitations` matcht op `chunkId` (met whitespace-robuuste
+`resolveChunkContent`-fallback die óók `"<id> (Artikel 5, lid 2)"` oplost) + quote-verbatim tegen
+content. Het formaat verschijnt alleen als leesbare context-anchor + UI-label. Eval-fixtures zijn
+intern consistent; het echte `buildSourceRef`-formaat draait nachtelijk in G3. Unificeren = speculatief
+(regel van drie). Vastgelegd in doc §4.5 + STATUS §7 + Bijlage A.
+
+**Actie 4 — klantverhaal → Bijlage B (claim↔gate-kruistabel).** Gekozen: kruistabel als bijlage in de
+canonieke doc; standalone procurement-pack uitgesteld naar PLAN-v3 Fase 17. B.1 = gedekte claims (elk
+met gate + bewijs), B.2 = niet-claimen/te-nuanceren (RLS DB-niveau, corpus-actualiteit, multi-tenant,
+Langfuse-datasets) met de correcte formulering. De klantversie-alinea (§2) bevat uitsluitend B.1-claims.
+
+**Extra (claims-hygiëne):** STATUS.md corrigeerde de achterhaalde "`PLAN-v3` bestaat niet"-claim
+(`PLAN-v3.md` is sinds `a9299a1` getrackt) op drie plekken.
 
 ---
 

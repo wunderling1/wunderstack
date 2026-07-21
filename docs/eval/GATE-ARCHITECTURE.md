@@ -106,6 +106,7 @@ productie (`cao/agent.ts`), niet in de eval-harness, en is daarom géén registr
 |---|---|
 | **Faalscenario's** | (a) De echte pipeline (rewrite → pgvector → rerank → assemble) presteert slechter dan de synthetische proxy. (b) Fund-antwoorden kloppen niet op de echte corpus. (c) Cross-fund leakage. (d) Sluipende kwaliteitsdaling. (e) *Gereserveerd:* corpus-actualiteit. |
 | **Checks** | **G3-pipeline:** productie-retrieval op fund-fixtures; minScore refuse-guard op out-of-corpus probes. **G3-fund:** fund golden set (per fonds, corpus-versioned) via productie-pipeline; refusal-guard. **G3-isolation:** live 0-leakage-probe per fund. **G3-freshness *(gereserveerd, PLAN-v3 Fase 16)*:** corpus-versie vs. vigerende CAO-versie. |
+| **Isolatie-mechanisme** | Fund-isolatie wordt afgedwongen op de **applicatielaag**: de retrieval-seam (`packages/rag` → `retrieve.ts`) scoopt elke query verplicht op `fund` en een unscoped query parse-faalt (G1-contract). **Postgres RLS is (nog) niet geïmplementeerd** — `grep create policy / enable row level security` over de repo = 0 treffers. G3-isolation bewíjst 0 cross-fund leakage op app-niveau; het is geen database-niveau-garantie. RLS-vs-app-seam is open besluit B5; DB-niveau-isolatie staat gepland (PLAN-v3 Fase 16). Klant-/procurement-teksten mogen daarom géén "isolatie op databaseniveau" claimen tot RLS bestaat. |
 | **Blocking** | Nightly: fail = rode schedule-run + melding. Of nightly-fail een deploy-gate wordt: open besluit B4. |
 | **Herkomst** | Gate B-integration + Gate F + Gate D-integration. |
 | **Nulmeting 2026-07-21** | PASS (lokaal met DB). G3-pipeline hit@1 95.8%, minScore-guard 3/3 leeg @ 0.48; G3-fund [etd] hit@1 95.7%, refusal-guard 3/3 leeg; G3-isolation 0 cross-fund leakage over 3 fondsen. |
@@ -116,7 +117,7 @@ productie (`cao/agent.ts`), niet in de eval-harness, en is daarom géén registr
 |---|---|
 | **Faalscenario** | Een antwoord met harde feiten (bedragen, percentages, termijnen) zonder geverifieerde citatie bereikt de gebruiker. *Herkomst: reëel productie-incident (pro-rata-hallucinatie).* |
 | **Checks** | `verifyAndBuild` → `hasUngroundedHardFact(answer, grounding, userSupplied)` → `NOT_FOUND_MESSAGE`. Gedeelde regex (`hard-facts.ts`) tussen runtime en eval, zodat guard en meting nooit uiteenlopen. |
-| **Bekend lek** | Streaming-flash: een ongegrond getal kan kort zichtbaar zijn vóór replace. Onderdeel van de restructure (plan Fase 5), geen cosmetische backlog. |
+| **Streaming (buffer-to-verify)** | Géén token-streaming. `answerStream` genereert het hele antwoord, draait `verifyAndBuild` (strip + hard-fact-guard) en emit dán pas via de enige seam `settledAnswerEvents` — één `text`-delta met de gesettelde tekst (of `NOT_FOUND_MESSAGE`). De client ziet nooit een partiële stream, dus er is niets te retracten: het eerder genoemde "streaming-flash"-lek bestaat niet meer. De hard-fact-guard is all-or-nothing (een laat ongegrond getal weigert retroactief álles ervoor), wat token-streaming principieel onveilig maakt; buffer-to-verify is daarom de bewuste keuze (plan Fase 5, optie A). Geborgd door `agent.test.ts` (`verifyAndBuild` + `settledAnswerEvents`): een getripte guard levert alleen `NOT_FOUND_MESSAGE`, nooit het ongegronde getal. TTFT-kost wordt gemaskeerd door de `status`-fasen (searching → retrieved → generating). |
 | **Blocking** | Ja — het serve-path vervangt het antwoord. Enige gate die per individueel antwoord blokkeert. |
 | **Herkomst** | E13. |
 
@@ -191,10 +192,10 @@ CI-config; falen = rode `verify`, maar ze verschijnen niet in het lagenmodel of 
 | Eén verified-answer-seam | `generateVerifiedAnswer`/`generateAnswerWithRepair` gedeeld door `answer()`, `answerStream()` én de eval | zie §4.3 |
 | Judge-robuustheid | exact één parse-retry, fail-loud, geen default scores; mediaan over `EVAL_JUDGE_SAMPLES` | E2/P3b |
 | Golden-set-schema | refusal-cases ≥ 1 distractor; loader gooit zonder `FUND_SET_META` | E3/E12 |
-| Shared assemble | eval-context = productie-`assemble()` (snapshot-test) | E4 |
+| Shared assemble | eval-context = productie-`assemble()` (snapshot-test); geaccepteerd residu: `sourceRef`-formaat (zie §4.5) | E4 |
 | K-alignment | candidateK 15 → topK 5 = wat het model ziet = wat de gate meet | E6 |
 | Baseline-integriteit | een baseline die zelf de absolute G2-floors niet haalt mag niet geschreven worden (write-guard, live) | zie §4.4 |
-| Run-artefact | `eval-report.json` geschreven en geüpload, ook bij failure | E9 |
+| Run-artefact | `eval-report.json` geschreven en geüpload, ook bij failure. Langfuse dataset-run push (E9 stap 2) = **bewuste backlog** tot go-live (besluit B6) | E9 |
 | Fixture-hygiëne | hash-guard: fixture-edit zonder corpus-version-bump → fail | E10 |
 | CI-afdwinging | branch protection: `verify` required, merge queue actief | plan Fase 0 (repo-side) |
 
@@ -292,6 +293,27 @@ regressiecheck vergelijkt daarna tegen een rode referentie en dekt de degradatie
 De CI-`write-baseline`-job draait de eval mét `EVAL_WRITE_BASELINE`; de guard zit in het eval-proces
 zelf, dus de job erft de bescherming zonder extra `ci.yml`-stap.
 
+### 4.5 Geaccepteerd residu — `sourceRef`-formaat (E4)
+
+De eval-fixture-adapter en de productie-ingest bouwen `sourceRef` net anders op:
+
+- Fixture (`golden-set.ts` `sourceRefFor`): `` `Artikel ${passage.article}` `` → bv. `"Artikel 5.2"`, **zonder los lid-component**.
+- Productie-ingest (`scripts/ingest/chunk.ts` `buildSourceRef(chapter, article, lid)`): `"Artikel 5, lid 2"`, chapter/lid-bewust.
+
+**Impact op citatie-matching: geen.** `sourceRef` is nergens een matching-sleutel. `verifyCitations`
+matcht op (a) `chunkId` — met een whitespace-robuuste fallback in `resolveChunkContent` die het bare
+id vóór de eerste spatie neemt, dus óók `"<id> (Artikel 5, lid 2)"` correct oplost — en (b) het quote
+verbatim tegen de chunk-content. Het `sourceRef`-formaat verschijnt alleen als leesbare anchor
+`(sourceRef)` in de assemble-context en als label op de UI-citatiekaart. De eval-fixtures-fund is
+intern consistent (retrieval én ingest gebruiken dezelfde `sourceRefFor`); de divergentie bestaat
+alleen tegen een echte full-CAO-ingest via `chunk.ts` — en dát formaat wordt **nachtelijk in G3**
+(productie-pipeline op de echte corpus) wél gedraaid.
+
+**Verdict: geaccepteerd, niet gedicht.** Unificeren zou de fixtures verrijken met een lid-veld dat
+`buildSourceRef` spiegelt — een speculatieve wijziging zonder matching-winst (regel van drie: geen
+tweede usecase dwingt het af). Herzien wanneer een fonds-corpus lid-dragende anchors nodig heeft in
+de G2-fixtures zelf.
+
 ### Change-control op `src/evals/` (preventie, want er is geen tweede reviewer)
 
 Als solo-founder is er geen tweede menselijke reviewer; de merge zelf is de enige poort. Twee
@@ -323,10 +345,11 @@ niet vaststaat.
 | # | Besluit | Status / uitkomst |
 |---|---|---|
 | B1 | relevance-drempel 0.84 of 0.85 | **BESLOTEN (2026-07-21): 0.84 blijft** — empirisch onderbouwd (gemeten judge-ruis 0.845–0.865 @3 samples; 0.84 net onder de spread zodat één flaky draw de gate niet flipt). Label `[E]`. |
-| B2 | regressiechecks nightly-only (na judge-variantie-meting) | **GEMETEN (2026-07-21).** Judge-metriek-spread @1 vs @3: faithfulness Δ0.032, relevance Δ0.032, completeness Δ0.025 — allemaal **< tolerantie 0.05**. Maar de @1-run **faalde een regressiegate** op under-refusal-rate (0.333 vs 0.000): puur generatie-variantie op de 3 refusal-fixtures (rate 0/33/67%), niet gedempt door judge-samples. Aanbeveling: judge-ruis alleen rechtvaardigt geen nightly-only; wél de under-refusal-**rate**-regressie schrappen (de absolute **count**-gate ≤1 beschermt al en de rate is betekenisloos bij N=3) óf regressie naar nightly @3 verplaatsen. Jordy's eindbesluit nog nodig. |
+| B2 | regressiechecks nightly-only (na judge-variantie-meting) | **BESLOTEN (2026-07-21): under-refusal-*rate*-regressie geschrapt.** Meting: judge-metriek-spread @1 vs @3 (faithfulness Δ0.032, relevance Δ0.032, completeness Δ0.025) blijft **< tolerantie 0.05** → judge-ruis rechtvaardigt geen nightly-only; de overige regressiechecks blijven op de PR-hot-path. De @1-run faalde puur op under-refusal-rate (0.333 vs 0.000) = generatie-variantie bij N=3 fixtures; die rate-regressie is nu verwijderd (`answerRegressionChecks`), de absolute **count**-gate ≤1 blijft de bescherming. |
 | B3 | drempel-inversie G2 vs G3 opheffen | **BESLOTEN (2026-07-21): provisional laten** — G3-drempels `[C]`, herijken na ≥ 14 nightly-runs op gemeten data, daarna ≥ G2-niveau of expliciet gemotiveerd verschil. |
 | B4 | moet G3-fail iets blokkeren (deploy-gate) of blijft het visibility | visibility tot go-live; deploy-gate opnieuw beoordelen bij afronding PLAN-v3 Fase 13 |
-| B5 | Gate D ooit RLS-afgedwongen of app-seam voldoende | app-seam interim; klantformuleringen aanpassen tot RLS bestaat |
+| B5 | Gate D ooit RLS-afgedwongen of app-seam voldoende | app-seam interim; klantformuleringen aanpassen tot RLS bestaat (zie §G3 isolatie-mechanisme + Bijlage B) |
+| B6 | Langfuse dataset-run push (E9 stap 2): backlog of harde eis | **BESLOTEN (2026-07-21): bewuste backlog tot go-live.** Reden: het `eval-report.json`-artefact wordt al bij elke run geschreven én in CI geüpload (ook bij failure), dus reproduceerbaarheid + regressie zijn gedekt; een Langfuse dataset-run voegt vooral gedeelde review-UI toe, geen extra correctheidsgarantie. Herzien bij go-live / eerste getekende fonds. |
 
 ---
 
@@ -341,6 +364,9 @@ niet vaststaat.
 | 2026-07-21 | Besluiten (Fase 4): **B1 relevance 0.84 blijft** (empirisch); **B3 G3-drempels provisional** (herijk na ≥14 nightly); **B2 uitgesteld** tot judge-variantie-meting | verdedigbare, gelogde drempeltabel richting bestuur | Jordy |
 | 2026-07-21 | **Actie 6:** `citationCorrectness` middelt nu over answerable cases (refusals uitgesloten) i.p.v. alle cases | een correcte refusal scoort vacuous 1.0 en flatteerde het gemiddelde; refusal-correctheid zit al in refusalCalibration + under-refusal. **Effect:** de gerapporteerde waarde daalt t.o.v. een baseline over alle cases → **baseline-herijking vereist** vóór de citationCorrectness-regressiecheck weer klopt (gecoördineerde `write-baseline`-run) | Cursor/Jordy |
 | 2026-07-21 | **Baseline herijkt (corpus v4, @3 samples)** na actie 6: faithfulness 0.994→1.000, completeness 0.913→0.919, overige gelijk (citationCorrectness 1.0, relevance 0.971, under-refusal 0). Write-guard groen; eval integraal PASSED | actie-6-definitie vastleggen zonder de lat te verlagen (nieuwe baseline ≥ oude) | Cursor/Jordy |
+| 2026-07-21 | **B2 besloten:** under-refusal-*rate*-regressiecheck verwijderd uit `answerRegressionChecks` | rate is noisy bij N=3 refusal-fixtures (@1-draw flipte de gate op 0.333); absolute count-gate ≤1 beschermt al | Cursor/Jordy |
+| 2026-07-21 | **Fase 5 (G4-streaminglek):** "bekend lek"-notitie verwijderd; §G4 herschreven naar buffer-to-verify (optie A). Emit-pad geëxtraheerd naar de pure seam `settledAnswerEvents` (agent.ts) en samen met `verifyAndBuild` geborgd door `agent.test.ts` | het lek was al gedicht door buffer-to-verify (commit `c763ea0`, 2026-07-20); de notitie was per abuis uit de pre-buffer-draft overgenomen. Bescherming was impliciet/ongetest en de client is token-stream-ready → regressietest legt het vast | Cursor/Jordy |
+| 2026-07-21 | **Fase 6 (docs-hygiëne):** §G3 isolatie-mechanisme expliciet gemaakt (app-laag, RLS niet geïmplementeerd); §4.5 toegevoegd (E4 `sourceRef`-residu **geaccepteerd**, geen matching-impact); **B6** vastgelegd (Langfuse dataset-run push = backlog); **Bijlage B** claim↔gate-kruistabel toegevoegd (gedekt vs. niet-claimen) | claims-hygiëne: geen doc-claim mag verder gaan dan een geïmplementeerde gate; RLS-formulering, Langfuse-besluit en E4-residu vastleggen | Cursor/Jordy |
 
 ---
 
@@ -364,11 +390,11 @@ niet vaststaat.
 | E1 | invariant Eval scoort het productiemodel | |
 | E2 | invariant Judge-robuustheid | |
 | E3 | invariant Golden-set-schema + G2-answer refusal-metrics | residu: citationCorrectness=1 op refusals → plan Fase 4 |
-| E4 | invariant Shared assemble | residu: sourceRef-formaat → plan Fase 6 |
+| E4 | invariant Shared assemble | residu sourceRef-formaat **geaccepteerd** (§4.5), geen matching-impact |
 | E5 | G2-retrieval (rerank-checks) | |
 | E6 | invariant K-alignment | |
 | E7 | G2-answer regressie + invariant Baseline-integriteit | |
-| E9 | invariant Run-artefact | Langfuse-push: besluit plan Fase 6 |
+| E9 | invariant Run-artefact | Langfuse dataset-run push = backlog (besluit B6) |
 | E10 | invariant Fixture-hygiëne | |
 | E11 | G3-pipeline | ≡ B-integration |
 | E12 | invariant Golden-set-schema + G3-fund | |
@@ -390,3 +416,35 @@ niet vaststaat.
 
 `PLAN-eval-gates.md` is gearchiveerd (superseded door dit document); zie de banner bovenaan dat
 bestand.
+
+---
+
+## Bijlage B — Claim ↔ gate kruistabel (klant / procurement)
+
+Doel: elke klant-/procurement-claim mag **alleen** gebruikt worden als er een geïmplementeerde gate
+of mechanisme achter staat. Deze tabel is de bron voor procurement-materiaal; de standalone
+procurement-pack (PLAN-v3 Fase 17) put hieruit en voegt niets toe wat hier niet gedekt is. De
+klantversie-alinea (§2) bevat uitsluitend claims uit de rij-groep **"gedekt"** hieronder.
+
+### B.1 Gedekt — vrij te gebruiken
+
+| Klant-claim | Gedekt door | Bewijs |
+|---|---|---|
+| "Het systeem antwoordt alleen op basis van de CAO-teksten (geen algemene kennis)." | G2-answer (softFaithfulness- + hardHallucination-floors) · G4 runtime hard-fact-guard | §G2 · §G4 |
+| "Een hard feit (bedrag, percentage, termijn) zonder geverifieerde bron wordt niet gegeven." | **G4** `verifyAndBuild` → `hasUngroundedHardFact`-guard, per individueel antwoord | §G4 (blocking, buffer-to-verify) |
+| "Elke bronvermelding is verifieerbaar: het citaat staat letterlijk in de aangehaalde CAO-tekst." | G2-answer (citationVerification, orphan/dangling) · runtime `verifyCitations` (verbatim, strip-on-fail) | §G2 · `verify-citations.ts` |
+| "We toetsen bij elke codewijziging of de spelregels nog in het systeem staan." | G1-contract (change-detector) | §G1 |
+| "We toetsen het gedrag op een vaste, met domeinexperts samengestelde set voorbeeldvragen." | G2 (gedrag op golden-set-fixtures) · invariant Golden-set-schema | §G2 · §4.0 |
+| "Elke nacht draait dezelfde toets op de echte CAO-teksten van het fonds." | G3 (nightly, productie-pipeline op echte corpus) | §G3 |
+| "De kwaliteitslat is een CI-poort: zakt een meting weg, dan blokkeert de merge." | G2 blocking (`EVAL_REQUIRE_ALL`) · invariant Skip ≠ pass · invariant Baseline-integriteit | §4.2 · §4.4 |
+| "Fondsdata wordt per fonds gescheiden gehouden." | G3-isolation (0 cross-fund leakage, **applicatielaag**) | §G3 isolatie-mechanisme |
+| "Het standaard request-pad is EU-soeverein." | Architectuurkeuze (Mistral · Scaleway · Scalingo · Langfuse EU) — géén gate, wél hard in `000-core.mdc`/`100-stack.mdc` | regels 000/100 |
+
+### B.2 Nog NIET gedekt — niet claimen (of expliciet als "gepland" formuleren)
+
+| Verboden/te-nuanceren claim | Werkelijke stand | Correcte formulering |
+|---|---|---|
+| "Isolatie afgedwongen op **databaseniveau** (Postgres RLS)." | Geen RLS-policies in de repo (0 grep-treffers). Isolatie loopt via de app-laag-query + G3-isolation. | "Isolatie afgedwongen op applicatielaag; RLS gepland (PLAN-v3 Fase 16, besluit B5)." |
+| "De corpus is gegarandeerd actueel t.o.v. de vigerende CAO." | G3-freshness is **gereserveerd**, niet gebouwd. | "Corpus-actualiteit is een geplande gate (PLAN-v3 Fase 16); nu procesmatig geborgd." |
+| "Multi-tenant / meerdere fondsen live." | Bewust niet in v1 (single-tenant demo). | "Single-tenant demo; multi-tenancy volgt bij het eerste getekende fonds." |
+| "Alle metingen zijn gedeeld en herspeelbaar in Langfuse als dataset-runs." | Langfuse dataset-run push niet geïmplementeerd (besluit B6, backlog). Wel: `eval-report.json` per run + CI-upload. | "Elke run levert een machine-leesbaar rapport (in CI bewaard); gedeelde Langfuse-datasets zijn backlog." |

@@ -44,7 +44,7 @@ Wél een belangrijke delta t.o.v. de bestaande audit-documenten (`docs/audit/eva
 **Conflicten / mismatches met de audit-opdracht (`feit`):**
 1. **`E0–E13`-labels bestaan alleen in een auditdoc + commit-messages**, niet in een plan-of-record. Het feitelijke plan gebruikt **P1–P8** (`PLAN-eval-gates.md`). Mapping P↔E is nergens formeel vastgelegd.
 2. **`UI-0 – UI-6` bestaat niet.** De UI-scope leeft als **Fase 13.1–13.3** (`PLAN-ui-fluency.md`) plus audit-items 1–7 (`UI-AUDIT-v1.md`).
-3. **`PLAN-v3` / "Fase 13–16" (productie-hardening, OOMT go-live, multi-tenancy, procurement pack) bestaat NIET** als document. "Fase 13" is in deze repo UI-fluency, geen productie-hardening.
+3. ~~**`PLAN-v3` / "Fase 13–16" bestaat NIET** als document.~~ **Achterhaald (2026-07-21):** `PLAN-v3.md` bestaat nu (toegevoegd in `a9299a1`) en definieert Fase 13–17 (productie-hardening, OOMT go-live, multi-tenancy, procurement pack). Let op: "Fase 13" is in de repo-code UI-fluency; in PLAN-v3 is het productie-hardening — de naam-collisie hieronder blijft gelden.
 4. **Twee "Fase 13"-betekenissen**: de audit-opdracht bedoelt productie-hardening; de repo bedoelt UI-fluency. Naam-collisie.
 
 ## 4. Status per onderdeel
@@ -122,7 +122,7 @@ Bekende UI-gaten (uit `UI-AUDIT-v1.md`, nog open): `citationVerificationFailed` 
 
 ### 4.4 Productie & go-live (PLAN-v3 / "Fase 13–16" — bestaat niet als plan)
 
-Er is **geen `PLAN-v3`** en geen document dat Fase 13–16 (productie-hardening / OOMT go-live / multi-tenancy / procurement pack) definieert (glob `**/PLAN*.md` → alleen PLAN, PLAN-v2, PLAN-eval-gates, PLAN-ui-fluency). De onderstaande productie-relevante items zijn daarom beoordeeld op wat de code + regels zeggen: `feit`.
+**Achterhaald (2026-07-21):** `PLAN-v3.md` bestaat inmiddels (toegevoegd in `a9299a1`) en definieert Fase 13–17 (productie-hardening / OOMT go-live / multi-tenancy / procurement pack). De onderstaande items blijven beoordeeld op wat de **code + regels** waarmaken (een plan is nog geen implementatie): `feit`. Procurement is nu ook gedekt door de claim↔gate-kruistabel in `docs/eval/GATE-ARCHITECTURE.md` (Bijlage B).
 
 | Onderdeel | Status | Bewijs / zoekpoging |
 |---|---|---|
@@ -160,9 +160,9 @@ Fixture-integriteit bewaakt via `GOLDEN_FIXTURE_HASH` (sha256 over beide base-be
 2. **`docs/audit/eval-hardening-audit.md` markeert E13 als NOT IMPLEMENTED**, maar E13 (hard-fact-guard, shared regex, `derived`-category, cases) is nu **wel** aanwezig. `feit`. (Audit is verouderd t.o.v. deze branch.)
 3. **Audit markeert E7 answer-baseline als absent**, maar `baseline.json` heeft nu een `answer`-sectie. `feit`.
 4. **Recorded answer-baseline ligt deels onder de Gate C-drempels** (bv. faithfulness 0.784 < 0.80; citationVerification 0.903 < 0.98; hardHallucination 0.968 < 0.98; underRefusalRate 0.333 > 0.10). Een baseline die onder de harde gate-lat ligt betekent dat Gate C niet groen kan zijn op deze corpus/branch. `feit`.
-5. **Audit-opdracht verwacht labels `E0–E13`, `UI-0–UI-6`, `PLAN-v3 Fase 13–16`**; de repo gebruikt `P1–P8`, `Fase 13.1–13.3`, en heeft **geen** PLAN-v3. `feit`.
+5. **Audit-opdracht verwacht labels `E0–E13`, `UI-0–UI-6`, `PLAN-v3 Fase 13–16`**; de repo gebruikt `P1–P8`, `Fase 13.1–13.3`. `PLAN-v3.md` bestaat inmiddels wél (sinds `a9299a1`). `feit`.
 6. **E10 corpusversie is "4" (plan zei bump naar "2").** Bewuste deviatie, gedocumenteerd in `golden-set.ts`. `feit`.
-7. **`sourceRef`-formaat-divergentie** tussen eval-fixture-adapter (`"Artikel 5.2"`) en prod-ingest `buildSourceRef` (`"Artikel 5, lid 2"`). `feit` (uit audit §E4; blijft in code).
+7. **`sourceRef`-formaat-divergentie** tussen eval-fixture-adapter (`"Artikel 5.2"`) en prod-ingest `buildSourceRef` (`"Artikel 5, lid 2"`). **Geaccepteerd (Fase 6, 2026-07-21):** geen citatie-matching-impact — `sourceRef` is nergens matching-sleutel; het echte formaat draait nachtelijk in G3. Zie `docs/eval/GATE-ARCHITECTURE.md` §4.5. `feit`.
 
 ## 8. Externe checks (buiten repo, handmatig te controleren)
 > Nooit als done/not-done gemarkeerd — alleen handmatig te controleren.
