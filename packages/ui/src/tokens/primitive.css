@@ -1,0 +1,37 @@
+/**
+ * Primitive layer — raw values. Components must NOT reference these directly.
+ * Only semantic.css and theme.css may bind primitives to semantic tokens.
+ */
+
+:root {
+  /* Indigo (anchor = #3135C9) */
+  --indigo-50: #eeeefa;
+  --indigo-100: #d9daf4;
+  --indigo-200: #b4b6ea;
+  --indigo-400: #6165df;
+  --indigo-600: #3135c9;
+  --indigo-700: #2629a3;
+  --indigo-900: #191b66;
+
+  /* Neutrals */
+  --neutral-0: #ffffff;
+  --neutral-50: #f6f6f7;
+  --neutral-100: #f1f2f4;
+  --neutral-200: #e7e8eb;
+  --neutral-400: #9aa0aa;
+  --neutral-500: #5c6470;
+  --neutral-900: #0e1220;
+
+  /* Pastel state tints (bg / fg pairs) */
+  --verified-bg: #e7f5ea;
+  --verified-fg: #2e7d46;
+  --caution-bg: #fbf1de;
+  --caution-fg: #b4791e;
+  --refusal-bg: #f1f2f4;
+  --refusal-fg: #4a515c;
+  --danger-bg: #fbe9ef;
+  --danger-fg: #b03a63;
+
+  /* Aurora (decorative surface, hero only) */
+  --aurora: linear-gradient(105deg, #e9e4f7, #dce7f6, #f6e6df);
+}

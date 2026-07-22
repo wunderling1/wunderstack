@@ -36,6 +36,41 @@
       "when": 1783686488535,
       "tag": "0004_namespace_source_uri_by_fund",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784717921877,
+      "tag": "0005_interaction_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784717927139,
+      "tag": "0006_analytics_reader_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1784719094550,
+      "tag": "0007_analytics_reader_policy",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784721894062,
+      "tag": "0008_hot_ezekiel",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1784723722786,
+      "tag": "0009_foamy_dorian_gray",
+      "breakpoints": true
     }
   ]
 }

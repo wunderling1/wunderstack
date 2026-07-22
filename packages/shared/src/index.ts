@@ -36,4 +36,15 @@ export {
 
 export { parseCaoFunds, isFundScopeConfigured } from "./config/funds.js";
 
+export {
+  tenantThemeSchema,
+  tenantTextsSchema,
+  tenantPublicConfigSchema,
+  isTenantKeyFormat,
+  DEFAULT_ARTICLE_50_NOTICE,
+  type TenantTheme,
+  type TenantTexts,
+  type TenantPublicConfig,
+} from "./contracts/tenant-config.js";
+
 export { EVAL_FIXTURE_FUND } from "./config/eval.js";

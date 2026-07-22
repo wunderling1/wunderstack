@@ -1,1 +1,1 @@
-web: pnpm --filter demo start
+web: pnpm --filter runtime start

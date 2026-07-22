@@ -1,0 +1,44 @@
+/*
+ * Tailwind entry for the embed bundle (Fase 4). Compiled by build.mjs and injected into the shadow
+ * root. Scans the embed + @wunderstack/ui sources so every utility used by the trust-patterns is
+ * generated. The token :root blocks are added separately (rewritten to :host) so the design tokens
+ * resolve inside the shadow tree, independent of the host page. This is the runtime-theming seam
+ * (D17): the embed carries its own tokens; the tenant theme overrides them at runtime.
+ */
+@import "tailwindcss";
+@source ".";
+@source "../../ui/src";
+
+@theme inline {
+  --color-page: var(--color-page);
+  --color-surface: var(--color-surface);
+  --color-surface-sunk: var(--color-surface-sunk);
+  --color-border: var(--color-border);
+  --color-text: var(--color-text);
+  --color-text-muted: var(--color-text-muted);
+  --color-text-subtle: var(--color-text-subtle);
+  --color-primary: var(--color-primary);
+  --color-primary-hover: var(--color-primary-hover);
+  --color-primary-tint: var(--color-primary-tint);
+  --color-on-primary: var(--color-on-primary);
+  --color-state-verified-bg: var(--state-verified-bg);
+  --color-state-verified-fg: var(--state-verified-fg);
+  --color-state-caution-bg: var(--state-caution-bg);
+  --color-state-caution-fg: var(--state-caution-fg);
+  --color-state-refusal-bg: var(--state-refusal-bg);
+  --color-state-refusal-fg: var(--state-refusal-fg);
+  --color-state-danger-bg: var(--state-danger-bg);
+  --color-state-danger-fg: var(--state-danger-fg);
+  --radius-control: var(--radius-control);
+  --radius-card: var(--radius-card);
+  --radius-pill: var(--radius-pill);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
+  --text-xs: var(--text-xs);
+  --text-sm: var(--text-sm);
+  --text-base: var(--text-base);
+  --text-lg: var(--text-lg);
+  --text-xl: var(--text-xl);
+  --text-2xl: var(--text-2xl);
+  --text-3xl: var(--text-3xl);
+}

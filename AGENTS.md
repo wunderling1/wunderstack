@@ -30,7 +30,8 @@ managed Postgres + pgvector · Scaleway embeddings · Drizzle · Zod · Langfuse
 Volledige lijst + versiebeleid: `.cursor/rules/100-stack.mdc`.
 
 ## Repo-structuur
-`apps/demo` (Next.js: demo, widget, API) · `packages/ai` (model-naad) · `packages/agents`
+`apps/runtime` (Next.js API-only: agent-API, webhook, hardening) · `apps/playground` (publieke
+tenant-zero-demo-UI) · `packages/ai` (model-naad) · `packages/agents`
 (agent-defs, Mastra erin) · `packages/rag` · `packages/connectors` (airlock naar niet-EU-bronnen)
 · `packages/db` (Drizzle) · `packages/shared`.
 Pijl-regel: apps importeren uit packages, nooit andersom (CI-afgedwongen).

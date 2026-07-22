@@ -1,0 +1,36 @@
+{
+  "name": "dashboard",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --webpack --port 3002",
+    "build": "next build --webpack",
+    "start": "next start --port 3002",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test:unit": "tsx --test 'lib/**/*.test.ts'",
+    "create-user": "tsx --env-file-if-exists=../../.env scripts/create-user.mts"
+  },
+  "dependencies": {
+    "@wunderstack/analytics": "workspace:*",
+    "@wunderstack/db": "workspace:*",
+    "@wunderstack/shared": "workspace:*",
+    "@wunderstack/ui": "workspace:*",
+    "next": "16.2.9",
+    "next-auth": "5.0.0-beta.32",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.2",
+    "@types/node": "22.20.0",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "eslint": "10.6.0",
+    "postcss": "^8.5.16",
+    "tailwindcss": "^4.3.2",
+    "tsx": "4.22.4",
+    "typescript": "6.0.3"
+  }
+}

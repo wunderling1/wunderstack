@@ -5,8 +5,10 @@
  * in production. Temperature 0 is deliberate for a compliance agent: answers should be
  * deterministic and grounded, not creative.
  *
- * `maxTokens` mirrors `@wunderstack/ai`'s `DEFAULT_MAX_OUTPUT_TOKENS` (1024). Kept as a plain
- * literal here to avoid a shared → ai dependency cycle.
+ * `maxTokens` is 2048: a full CAO answer plus its verbatim citation block (several long quotes)
+ * can exceed 1024 tokens and get truncated mid-JSON, which fails the citation contract and strips
+ * every source from the served answer. Kept as a plain literal here to avoid a shared → ai
+ * dependency cycle; still a bounded cap (denial-of-wallet guard), just a roomier one.
  */
 
 export interface GenerationConfig {
@@ -16,5 +18,5 @@ export interface GenerationConfig {
 
 export const GENERATION_CONFIG: GenerationConfig = {
   temperature: 0,
-  maxTokens: 1024,
+  maxTokens: 2048,
 };

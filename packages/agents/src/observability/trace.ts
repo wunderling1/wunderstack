@@ -24,6 +24,12 @@ export interface CaoTraceInput {
   fund: string | undefined;
   topK: number;
   minScore: number;
+  /** Stable per-conversation id; shared with the interaction event-log (one identity model). */
+  sessionId?: string;
+  /** Pseudonymous end-user id; undefined for embed users (no identification in v1). */
+  userId?: string;
+  /** Deployment environment (development | test | production) — surfaced as a Langfuse tag. */
+  environment?: string;
 }
 
 export interface RetrievalHit {
@@ -114,7 +120,19 @@ export function startCaoTrace(mastra: Mastra, input: CaoTraceInput): CaoTrace {
         topK: input.topK,
         minScore: input.minScore,
       },
-      tags: ["cao-agent", ...(input.fund ? [input.fund] : [])],
+      // session_id + user_id give Langfuse the same identity model as the interaction event-log;
+      // fund + environment are the analytics dimensions we filter traces by.
+      metadata: {
+        ...(input.sessionId === undefined ? {} : { sessionId: input.sessionId }),
+        ...(input.userId === undefined ? {} : { userId: input.userId }),
+        ...(input.environment === undefined ? {} : { environment: input.environment }),
+        fund: input.fund ?? null,
+      },
+      tags: [
+        "cao-agent",
+        ...(input.fund ? [input.fund] : []),
+        ...(input.environment ? [input.environment] : []),
+      ],
     });
   } catch {
     root = undefined;

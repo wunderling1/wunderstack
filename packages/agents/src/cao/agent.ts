@@ -1,6 +1,6 @@
 import { Mastra } from "@mastra/core";
 import { Agent } from "@mastra/core/agent";
-import { EMBEDDING_CONFIG, GENERATION_CONFIG } from "@wunderstack/shared";
+import { EMBEDDING_CONFIG, GENERATION_CONFIG, env } from "@wunderstack/shared";
 import { createSovereignModel } from "../model/sovereign-model.js";
 import { buildLangfuseObservability } from "../observability/langfuse.js";
 import { recordNumericTraceScore } from "../observability/feedback.js";
@@ -290,7 +290,15 @@ export function createCaoAgent(): CaoAgent {
       const { question, fund, topK, minScore } = parsedInput;
       const userSupplied = userSuppliedText(parsedInput);
 
-      const trace = startCaoTrace(mastra, { question, fund, topK, minScore });
+      const trace = startCaoTrace(mastra, {
+        question,
+        fund,
+        topK,
+        minScore,
+        ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
+        ...(options.userId === undefined ? {} : { userId: options.userId }),
+        environment: env.NODE_ENV,
+      });
       const traceId = trace.link().traceId ?? null;
       try {
         // Underspecified question: ask one targeted follow-up before spending retrieval/LLM tokens.
@@ -365,7 +373,15 @@ export function createCaoAgent(): CaoAgent {
       const userSupplied = userSuppliedText(parsedInput);
       const requestStart = performance.now();
 
-      const trace = startCaoTrace(mastra, { question, fund, topK, minScore });
+      const trace = startCaoTrace(mastra, {
+        question,
+        fund,
+        topK,
+        minScore,
+        ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
+        ...(options.userId === undefined ? {} : { userId: options.userId }),
+        environment: env.NODE_ENV,
+      });
       const traceId = trace.link().traceId ?? null;
       try {
         const clarification = detectClarification(question);

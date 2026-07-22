@@ -1,0 +1,30 @@
+{
+  "name": "@wunderstack/embed",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./embed.js": "./dist/embed.js"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@wunderstack/ui": "workspace:*",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.2",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "esbuild": "^0.25.0",
+    "eslint": "10.6.0",
+    "postcss": "^8.5.16",
+    "tailwindcss": "^4.3.2",
+    "typescript": "6.0.3"
+  }
+}

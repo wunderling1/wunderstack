@@ -102,6 +102,100 @@ export const evalCases = pgTable("eval_cases", {
   tags: text("tags").array().notNull().default([]),
 });
 
+/**
+ * One row per user interaction with an agent (Fase 1 event-log). This is the analytics fact table
+ * the dashboard reads (via @wunderstack/analytics + the read-only `analytics_reader` role), kept
+ * separate from Langfuse: Langfuse is per-trace debugging, this is the durable product-metrics log
+ * that lives in the fund's own database.
+ *
+ * Identity model (D15): `tenantId` is the instance/deployment key, `fund` the customer-domain word
+ * (1-to-1 in v1). `sessionId` is shared with the Langfuse trace so one identity model spans both.
+ * `userId` is nullable — embed end-users are pseudonymous (no identification in v1, AVG). `question`
+ * is logged to drive the "unanswered questions" corpus-roadmap signal; retention is 90 days (see
+ * docs/decisions/DECISION-analytics-retention.md). `feedback` is filled in later by the feedback
+ * endpoint, matched on `traceId`.
+ */
+export const interactionEvents = pgTable(
+  "interaction_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: text("tenant_id").notNull(),
+    agentId: text("agent_id").notNull(),
+    // Data-plane key (the fund whose corpus answered). Kept alongside tenantId for per-fund KPIs.
+    fund: text("fund").notNull(),
+    sessionId: text("session_id").notNull(),
+    // Nullable: embed end-users are pseudonymous in v1 (no identification, AVG).
+    userId: text("user_id"),
+    // Langfuse trace id for this answer; links the durable event to per-trace debugging and lets the
+    // feedback endpoint attach a signal after the fact. Null when tracing is unconfigured.
+    traceId: text("trace_id"),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
+    // "answered" | "refused" | "clarified" | "error" — the outcome of the turn.
+    outcome: text("outcome").notNull(),
+    citationCount: integer("citation_count").notNull().default(0),
+    // Potentially-sensitive free text; logged for the corpus-roadmap signal, 90-day retention.
+    question: text("question"),
+    // Coarse theme metadata (roadmap signal). Null until a classifier exists (deferred, regel van drie).
+    theme: text("theme"),
+    // "up" | "down"; filled in by the feedback endpoint, matched on traceId. Null = no feedback given.
+    feedback: text("feedback"),
+  },
+  (table) => [
+    index("interaction_events_tenant_occurred_idx").on(table.tenantId, table.occurredAt),
+    index("interaction_events_fund_idx").on(table.fund),
+    index("interaction_events_session_idx").on(table.sessionId),
+    index("interaction_events_trace_idx").on(table.traceId),
+  ],
+);
+
+/**
+ * Dashboard users (Fase 3). Backs Auth.js Credentials login for `apps/dashboard`.
+ *
+ * Roles: `admin` (Wunderling, cross-tenant, `tenantId` is null) and `fund` (scoped to exactly one
+ * tenant via `tenantId`, the D15 technical key). Passwords are stored as a self-describing
+ * `scrypt$<salt>$<hash>` string (node:crypto scrypt — no external hashing dependency). This table is
+ * written only out-of-band by the `create-user` seed script (using the read-write role); the
+ * dashboard itself connects read-only and only SELECTs for login.
+ */
+export const users = pgTable(
+  "users",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    email: text("email").notNull(),
+    name: text("name"),
+    passwordHash: text("password_hash").notNull(),
+    // "admin" (cross-tenant) | "fund" (scoped to tenantId).
+    role: text("role").notNull(),
+    // Null for admin; the tenant a fund user is scoped to (D15 key).
+    tenantId: text("tenant_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("users_email_uq").on(table.email)],
+);
+
+/**
+ * Per-tenant embed configuration (Fase 4). Lives on the fondsinstance; drives the embeddable widget.
+ *
+ * - `publicKey` is the embed's public tenant-key (safe to expose; access is gated by CORS + rate
+ *   limiting, not key secrecy). Rotating it invalidates old snippets.
+ * - `corsAllowlist` are the origins allowed to call the API with this key (browser cross-origin).
+ * - `theme` / `texts` are the curated token subset + NL copy served by `GET /config` (D17 runtime
+ *   theming — replaces the compile-time `[data-fund]` seam as the product mechanism).
+ *
+ * Written only by the console via the `tenant_config_writer` role (or DATABASE_URL locally); read by
+ * the runtime (`GET /config`) and the dashboard.
+ */
+export const tenantConfig = pgTable("tenant_config", {
+  tenantId: text("tenant_id").primaryKey(),
+  publicKey: text("public_key").notNull(),
+  corsAllowlist: text("cors_allowlist").array().notNull().default([]),
+  agentId: text("agent_id").notNull().default("cao"),
+  theme: jsonb("theme").$type<Record<string, unknown>>().notNull().default({}),
+  texts: jsonb("texts").$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export type Document = typeof documents.$inferSelect;
 export type NewDocument = typeof documents.$inferInsert;
 export type Chunk = typeof chunks.$inferSelect;
@@ -110,3 +204,9 @@ export type AgentConfig = typeof agentConfig.$inferSelect;
 export type NewAgentConfig = typeof agentConfig.$inferInsert;
 export type EvalCase = typeof evalCases.$inferSelect;
 export type NewEvalCase = typeof evalCases.$inferInsert;
+export type InteractionEvent = typeof interactionEvents.$inferSelect;
+export type NewInteractionEvent = typeof interactionEvents.$inferInsert;
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
+export type TenantConfig = typeof tenantConfig.$inferSelect;
+export type NewTenantConfig = typeof tenantConfig.$inferInsert;

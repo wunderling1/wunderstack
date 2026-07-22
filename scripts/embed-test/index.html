@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Embed cross-origin testpagina</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 0; padding: 3rem; color: #111; }
+      main { max-width: 40rem; }
+      code { background: #f1f1f4; padding: 0.1rem 0.3rem; border-radius: 4px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Embed cross-origin testpagina</h1>
+      <p>
+        Dit is een <strong>vreemde origin</strong> (serveer deze map op een andere poort dan de
+        runtime) om de embed cross-origin te bewijzen. Serveer bijv. met:
+      </p>
+      <pre><code>npx serve scripts/embed-test -l 4173</code></pre>
+      <p>
+        Zet daarna in het console (<code>/admin/embed</code>) de CORS-allowlist van de tenant op
+        <code>http://localhost:4173</code> en plak de gegenereerde snippet hieronder in (vervang de
+        <code>data-key</code>). De widget verschijnt rechtsonder.
+      </p>
+
+      <!-- Plak hier de snippet uit /admin/embed (met de echte data-key): -->
+      <script
+        src="http://localhost:3000/embed.js"
+        data-key="pk_REPLACE_ME"
+        data-agent="cao"
+        async
+      ></script>
+    </main>
+  </body>
+</html>

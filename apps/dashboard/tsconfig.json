@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "jsx": "preserve",
+    "allowJs": true,
+    "resolveJsonModule": true,
+    "incremental": true,
+    "noEmit": true,
+    // This app never emits .d.ts (Next builds it). Disabling declaration avoids TS2883 on Auth.js's
+    // inferred `auth`/`signIn` exports, whose types reference non-portable internal next-auth types.
+    "declaration": false,
+    "plugins": [{ "name": "next" }],
+    "paths": {
+      "@/*": ["./*"]
+    }
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}

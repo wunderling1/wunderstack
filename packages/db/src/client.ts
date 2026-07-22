@@ -8,6 +8,8 @@ export type Database = PostgresJsDatabase<typeof schema>;
 
 let client: ReturnType<typeof postgres> | undefined;
 let cached: Database | undefined;
+let writerClient: ReturnType<typeof postgres> | undefined;
+let writerCached: Database | undefined;
 
 /**
  * The single access point to the database (the seam that keeps swapping providers cheap).
@@ -31,6 +33,29 @@ export function getDb(): Database {
 }
 
 /**
+ * A dedicated writer connection for the tenant_config tables (Fase 4, second DB role). Uses
+ * TENANT_CONFIG_WRITER_DATABASE_URL when set (a DB user granted write on tenant_config only), else
+ * falls back to DATABASE_URL — so the console can write theming/keys even when the main connection is
+ * read-only in deployment, without granting broad write access. Separate pool from getDb().
+ */
+export function getWriterDb(): Database {
+  if (writerCached) {
+    return writerCached;
+  }
+
+  const url = env.TENANT_CONFIG_WRITER_DATABASE_URL ?? env.DATABASE_URL;
+  if (!url) {
+    throw new Error(
+      "Neither TENANT_CONFIG_WRITER_DATABASE_URL nor DATABASE_URL is set; cannot open a writer connection.",
+    );
+  }
+
+  writerClient = postgres(url, { max: 5 });
+  writerCached = drizzle(writerClient, { schema });
+  return writerCached;
+}
+
+/**
  * Close the pooled connection so a short-lived process (ingest script, eval run) can exit cleanly.
  * The postgres.js pool keeps open sockets that otherwise hold the event loop open forever. No-op when
  * the DB was never used. Long-lived servers never need this — they keep the pool for the process.
@@ -40,5 +65,10 @@ export async function closeDb(): Promise<void> {
     await client.end({ timeout: 5 });
     client = undefined;
     cached = undefined;
+  }
+  if (writerClient) {
+    await writerClient.end({ timeout: 5 });
+    writerClient = undefined;
+    writerCached = undefined;
   }
 }

@@ -7,6 +7,14 @@
 export { createCaoAgent } from "./cao/agent.js";
 
 export {
+  agentDescriptorSchema,
+  listAgents,
+  getAgent,
+  resetAgentCache,
+  type AgentDescriptor,
+} from "./catalog.js";
+
+export {
   recordFeedbackScore,
   recordNumericTraceScore,
   feedbackScoreSchema,
