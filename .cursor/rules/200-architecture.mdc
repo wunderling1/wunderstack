@@ -12,7 +12,8 @@ Eén repo voor de boutique (los van Qonvo/BullyLink/Bully Agency). Turborepo + p
 Voorgestelde layout:
 ```
 apps/
-  demo/            # Next.js: demo-UI, embeddable widget, REST/webhook API
+  runtime/         # Next.js API-only: agent-API, REST/webhook, hardening (fonds-agnostisch, D14)
+  playground/      # Next.js UI-only: publieke tenant-zero-demo, proxyt /api naar runtime (D13)
   _template/       # scaffold voor toekomstige apps (pas bouwen bij 2e app)
 packages/
   ai/              # model-abstractie (de naad naar Mistral e.a.)
@@ -48,7 +49,7 @@ geïsoleerd, expliciet opt-in in de data-plane. Details en juridische poort: `60
 
 ## Koppelvlak naar de kanalen van het fonds
 Alleen via: (a) embeddable widget (script/iframe) en (b) REST API + webhooks.
-De infra koppelt NIET in je eigen sites. Alle externe toegang loopt via de API van `apps/demo`.
+De infra koppelt NIET in je eigen sites. Alle externe toegang loopt via de API van `apps/runtime`.
 
 ## Next.js-rol
 UI + API-entrypoint + streaming. Route-handlers zijn dunne controllers: valideren (Zod),

@@ -251,6 +251,10 @@ const FUND_SET_META: Record<string, FundSetMeta> = {
   // ETD — CAO Elektrotechnische Detailhandel 2023. Scored against the ingested ETD passages
   // (fund "eval-fixtures"); review log: fixtures/golden-set.REVIEW.md (fund layer section).
   etd: { fund: "eval-fixtures", corpusVersion: "etd-1" },
+  // Demo — the fictional "CAO Fictief" (Fase 5, tenant zero). Scored against the ingested demo corpus
+  // (fund "demo", from scripts/ingest/demo-corpus). Runs on the nightly integration gate once that
+  // corpus is ingested into the gate DB; base gates are unaffected (base fixture hash unchanged).
+  demo: { fund: "demo", corpusVersion: "demo-1" },
 };
 
 export interface GoldenFundSet {

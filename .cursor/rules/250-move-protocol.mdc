@@ -1,0 +1,29 @@
+---
+description: Verhuisprotocol en monorepo-grenzen bij het verplaatsen van code tussen apps/packages
+alwaysApply: true
+---
+
+# Verhuisprotocol & monorepo-grenzen
+
+Bij het verplaatsen of hernoemen van code binnen de monorepo (zie `docs/plans/PLAN-ui-ecosystem.md`):
+
+- **Verplaatsen en refactoren nooit in dezelfde PR.** Eén soort verandering per PR: eerst `git mv` +
+  import-fixes (functioneel identiek), daarna pas gedragswijzigingen. Elke PR moet groen zijn op de gates.
+- **Elk tussenstadium blijft werkend en deploybaar.** De monorepo blijft één geheel; verhuizingen breken
+  geen bestaande app.
+
+## Grensregels (CI-afgedwongen — één toolset, geen tweede)
+
+- `apps/*` importeren uit `packages/*`, **nooit** andersom (`no-packages-to-consumers`).
+- `packages/ui` kent geen `packages/agents`-concepten (`no-ui-to-agents`); UI is props-in.
+- `apps/playground` is UI-only en importeert nooit `packages/agents` (`no-playground-to-agents`); het praat
+  met de runtime over HTTP.
+- Handhaving loopt via de **bestaande** dependency-cruiser (`.dependency-cruiser.cjs`) + ESLint
+  `no-restricted-imports` + `scripts/check-ui-boundaries.sh`. Introduceer géén tweede grenstool (v4-principe).
+- Voeg een nieuwe app/package toe aan deze regelset zodra hij bestaat.
+
+## Rol per surface
+
+- `apps/runtime` — API-only, fonds-agnostisch (D14). Geen UI.
+- `apps/playground` — publieke tenant-zero-demo-UI (D13). Geen agent-/businesslogica.
+- `packages/tenant` — enige bron voor tenant↔fund-mapping (D15).

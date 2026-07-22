@@ -20,6 +20,10 @@ const envSchema = z.object({
   // public demo can boot without a database; @wunderstack/db asserts its presence
   // at the point of connection.
   DATABASE_URL: optional(z.url()),
+  // Optional dedicated writer connection for the tenant_config tables (Fase 4, second DB role). Falls
+  // back to DATABASE_URL when unset. In deployment this is a DB user granted write on tenant_config
+  // only, so the console can theme/rotate keys without holding broad write access.
+  TENANT_CONFIG_WRITER_DATABASE_URL: optional(z.url()),
   // Provider credentials for the sovereign default path (@wunderstack/ai).
   // Optional at parse time; each is asserted where it is actually used.
   MISTRAL_API_KEY: optional(z.string().min(1)),
@@ -79,6 +83,11 @@ const envSchema = z.object({
   // the chunker as NaN.
   INGEST_CHUNK_CHARS: optional(z.coerce.number().int().positive()),
   INGEST_OVERLAP_CHARS: optional(z.coerce.number().int().positive()),
+  // Tenant-zero hardening (Fase 5): a global daily ceiling on chat requests across the whole runtime
+  // process — a denial-of-wallet backstop on top of the per-IP and per-key limits. Counts every chat
+  // attempt that reaches the expensive path; resets at UTC midnight. Unset or 0 = disabled (dev). Like
+  // the other rate-limit counters this is per process (see apps/runtime/lib/rate-limit.ts).
+  RUNTIME_DAILY_CAP: optional(z.coerce.number().int().nonnegative()),
 });
 
 export type Env = z.infer<typeof envSchema>;

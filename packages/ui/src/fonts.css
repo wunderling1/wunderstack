@@ -1,0 +1,23 @@
+/**
+ * General Sans — self-host woff2 in ./fonts/ when available (Fontshare, commercial use OK).
+ * Uncomment @font-face blocks after adding GeneralSans-Medium.woff2 and GeneralSans-Bold.woff2.
+ * Until then, --font-body / --font-display fall back to ui-sans-serif / system-ui.
+ */
+
+/*
+@font-face {
+  font-family: "General Sans";
+  src: url("./fonts/GeneralSans-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "General Sans";
+  src: url("./fonts/GeneralSans-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+*/

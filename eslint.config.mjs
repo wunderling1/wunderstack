@@ -38,6 +38,23 @@ export default tseslint.config(
     },
   },
   {
+    files: ["packages/ui/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@wunderstack/agents", "@wunderstack/agents/**", "**/packages/agents/**"],
+              message:
+                "Hard rule A: packages/ui must not import packages/agents. UI is props-in; apps wire data.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ["packages/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-imports": [

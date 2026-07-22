@@ -1,0 +1,179 @@
+"use client";
+
+import {
+  AgentStatusBadge,
+  AnswerCard,
+  Button,
+  Card,
+  Chip,
+  CitationBadge,
+  CitationBlock,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  Field,
+  IconButton,
+  KpiTile,
+  RefusalNotice,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@wunderstack/ui";
+import { ArrowRight } from "lucide-react";
+import type { ReactNode } from "react";
+
+/**
+ * Lightweight design-system preview (D16 / Fase 2). Not Storybook — a single route that renders every
+ * primitive and trust-pattern so the shared `@wunderstack/ui` surface can be eyeballed in one place.
+ */
+export default function UiPreviewPage() {
+  return (
+    <main className="mx-auto w-full max-w-4xl px-6 py-12">
+      <header className="mb-10">
+        <h1 className="font-display text-3xl font-semibold">Design system — preview</h1>
+        <p className="mt-1 text-sm text-text-muted">
+          Primitives en trust-patterns uit <code>@wunderstack/ui</code>. Alleen semantische tokens.
+        </p>
+      </header>
+
+      <Section title="Buttons">
+        <div className="flex flex-wrap items-center gap-3">
+          <Button>Primary</Button>
+          <Button variant="secondary">Secondary</Button>
+          <Button variant="ghost">Ghost</Button>
+          <Button size="default">Control-radius</Button>
+          <IconButton label="Volgende">
+            <ArrowRight className="h-4 w-4" />
+          </IconButton>
+        </div>
+      </Section>
+
+      <Section title="Chips & status">
+        <div className="flex flex-wrap items-center gap-3">
+          <Chip variant="verified">Geverifieerd</Chip>
+          <Chip variant="caution">Let op</Chip>
+          <Chip variant="refusal">Niet in de bron</Chip>
+          <Chip variant="danger">Fout</Chip>
+          <AgentStatusBadge status="operational" />
+          <AgentStatusBadge status="degraded" />
+          <AgentStatusBadge status="offline" />
+        </div>
+      </Section>
+
+      <Section title="Field">
+        <Field placeholder="Stel je vraag…" className="max-w-sm" />
+      </Section>
+
+      <Section title="KPI tiles">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+          <KpiTile label="Vragen (30d)" value="1.284" hint="+12% t.o.v. vorige periode" />
+          <KpiTile
+            label="Beantwoord met geverifieerde citaties"
+            value="87%"
+            hint="v1-maat: geverifieerde citaties"
+          />
+          <KpiTile label="Onbeantwoord" value="163" hint="corpus-roadmap-signaal" />
+        </div>
+      </Section>
+
+      <Section title="Trust-patterns — conversatie">
+        <div className="flex flex-col gap-4">
+          <AnswerCard role="user">Hoeveel vakantiedagen krijg ik volgens de CAO?</AnswerCard>
+          <AnswerCard role="agent">
+            Volgens de CAO heb je recht op 25 vakantiedagen per jaar bij een voltijds dienstverband
+            <CitationBadge refNumber={1} className="ml-1" />.
+          </AnswerCard>
+          <RefusalNotice>
+            Dit staat niet in de CAO-tekst die ik tot mijn beschikking heb. Ik kan er daarom geen
+            onderbouwd antwoord op geven.
+          </RefusalNotice>
+        </div>
+      </Section>
+
+      <Section title="Trust-patterns — citaties">
+        <div className="flex flex-col gap-3">
+          <CitationBlock
+            refNumber={1}
+            verification="verified"
+            label="Artikel 12.3 — Vakantie"
+            quote="De werknemer heeft recht op 25 vakantiedagen per kalenderjaar bij een voltijds dienstverband."
+          />
+          <CitationBlock
+            refNumber={2}
+            verification="caution"
+            label="Bijlage A — Indicatief"
+            quote="Afwijkende afspraken kunnen per onderneming gelden; raadpleeg de bedrijfsregeling."
+          />
+        </div>
+      </Section>
+
+      <Section title="Table">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Agent</TableHead>
+              <TableHead>Release</TableHead>
+              <TableHead>Status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow>
+              <TableCell>CAO-agent</TableCell>
+              <TableCell className="font-mono text-xs">v0.4.1</TableCell>
+              <TableCell>
+                <AgentStatusBadge status="operational" />
+              </TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>Verzuim-agent</TableCell>
+              <TableCell className="font-mono text-xs">v0.1.0</TableCell>
+              <TableCell>
+                <AgentStatusBadge status="degraded" />
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </Section>
+
+      <Section title="Dialog">
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button variant="secondary">Open dialog</Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Snippet kopiëren</DialogTitle>
+              <DialogDescription>
+                Plak dit script in de website van het fonds om de agent in te sluiten.
+              </DialogDescription>
+            </DialogHeader>
+            <Card className="bg-surface-sunk p-3 font-mono text-xs">
+              &lt;script src=&quot;https://api.wunderling.nl/embed.js&quot;&gt;&lt;/script&gt;
+            </Card>
+            <div className="mt-4 flex justify-end">
+              <DialogClose asChild>
+                <Button>Klaar</Button>
+              </DialogClose>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </Section>
+    </main>
+  );
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="mb-10">
+      <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-text-subtle">{title}</h2>
+      {children}
+    </section>
+  );
+}

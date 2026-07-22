@@ -1,0 +1,46 @@
+/**
+ * Semantic layer — what components consume via Tailwind utilities or var(--color-*).
+ */
+
+:root {
+  /* Surfaces / text / border */
+  --color-page: var(--neutral-50);
+  --color-surface: var(--neutral-0);
+  --color-surface-sunk: var(--neutral-100);
+  --color-border: var(--neutral-200);
+  --color-text: var(--neutral-900);
+  --color-text-muted: var(--neutral-500);
+  --color-text-subtle: var(--neutral-400);
+
+  /* Primary */
+  --color-primary: var(--indigo-600);
+  --color-primary-hover: var(--indigo-700);
+  --color-primary-tint: var(--indigo-50);
+  --color-on-primary: var(--neutral-0);
+
+  /* State (bg + fg) */
+  --state-verified-bg: var(--verified-bg);
+  --state-verified-fg: var(--verified-fg);
+  --state-caution-bg: var(--caution-bg);
+  --state-caution-fg: var(--caution-fg);
+  --state-refusal-bg: var(--refusal-bg);
+  --state-refusal-fg: var(--refusal-fg);
+  --state-danger-bg: var(--danger-bg);
+  --state-danger-fg: var(--danger-fg);
+
+  /* Shape */
+  --radius-control: 10px;
+  --radius-card: 16px;
+  --radius-pill: 999px;
+
+  /* Type */
+  --font-display: "General Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "General Sans", ui-sans-serif, system-ui, sans-serif;
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-lg: 20px;
+  --text-xl: 25px;
+  --text-2xl: 31px;
+  --text-3xl: 39px;
+}

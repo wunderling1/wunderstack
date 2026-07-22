@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { EVAL_FIXTURE_FUND } from "@wunderstack/shared";
+
 import {
   goldenCaseSchema,
   goldenCases,
@@ -131,8 +133,12 @@ describe("fund layer (E12)", () => {
   });
 
   it("answerable fund cases name an expectedArticle that the fund corpus can surface", () => {
-    // Fund cases are matched on article/lid against the real corpus; ETD is scored against the
-    // ingested base passages, so every answerable article must exist there (or Gate F cannot pass).
+    // Fund cases are matched on article/lid against the real ingested corpus. A BASE-scored set
+    // (fund === EVAL_FIXTURE_FUND, i.e. ETD) is scored against the committed base passages, so every
+    // answerable article must exist there or Gate F cannot pass — that guard stays. A REAL-corpus set
+    // (e.g. demo, scored against a separately ingested corpus that the repo does not carry as passages)
+    // cannot be checked against goldenPassages here; the nightly integration gate checks it against the
+    // ingested corpus instead. For those we only assert the field is present (see golden-set.ts, E12).
     const passageArticles = new Set(
       goldenPassages.map((passage) => passage.article).filter((article): article is string => article !== undefined),
     );
@@ -141,10 +147,12 @@ describe("fund layer (E12)", () => {
       assert.ok(answerable.length > 0, `${set.key} has answerable cases`);
       for (const testCase of answerable) {
         assert.ok(testCase.expectedArticle, `${testCase.id} defines expectedArticle`);
-        assert.ok(
-          passageArticles.has(testCase.expectedArticle),
-          `${testCase.id} expects article ${String(testCase.expectedArticle)} present in the fund corpus`,
-        );
+        if (set.fund === EVAL_FIXTURE_FUND) {
+          assert.ok(
+            passageArticles.has(testCase.expectedArticle),
+            `${testCase.id} expects article ${String(testCase.expectedArticle)} present in the fund corpus`,
+          );
+        }
       }
     }
   });

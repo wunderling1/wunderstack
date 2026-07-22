@@ -1,0 +1,26 @@
+/**
+ * Theming seam — default (Wunderling) on :root; per-fund and dark mode remap semantic layer only.
+ */
+
+/*
+ * Per-fund override: remap the semantic primary only (proves the seam; no component edits).
+ * The "demo" fund is the default Wunderling brand, so it inherits :root indigo — no override.
+ * A real client fund (elektronische-detailhandel) remaps to its own brand colour.
+ */
+[data-fund="elektronische-detailhandel"] {
+  --color-primary: #2e7d46;
+  --color-primary-hover: #256b3a;
+  --color-primary-tint: #e7f5ea;
+}
+
+/* Dark mode seam — flips core neutrals/text; full polish deferred */
+[data-mode="dark"] {
+  --color-page: var(--neutral-900);
+  --color-surface: #1a1f2e;
+  --color-surface-sunk: #252b3d;
+  --color-border: #3a4154;
+  --color-text: var(--neutral-50);
+  --color-text-muted: var(--neutral-400);
+  --color-text-subtle: var(--neutral-500);
+  --color-on-primary: var(--neutral-0);
+}

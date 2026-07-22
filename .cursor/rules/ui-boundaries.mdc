@@ -1,0 +1,27 @@
+---
+description: UI package boundaries — Hard rules A and B
+globs:
+  - packages/ui/**
+  - apps/**
+---
+
+# UI boundaries
+
+## Hard rule A — `packages/ui` never imports `packages/agents`
+
+`@wunderstack/ui` is presentational. Components receive data via props; apps wire agent calls.
+Enforced by ESLint `no-restricted-imports`, dependency-cruiser (`no-ui-to-agents`), and
+`scripts/check-ui-boundaries.sh`.
+
+## Hard rule B — semantic tokens only in components
+
+Components in `packages/ui` must reference only semantic tokens (`--color-*`, `--state-*`,
+`--radius-*`) or their Tailwind semantic utilities (`bg-primary`, `text-state-verified-fg`, etc.).
+Never raw hex values or primitive token names (`--indigo-*`, `--neutral-*`) in component files.
+
+Primitive and semantic CSS lives under `packages/ui/src/tokens/`.
+
+## Removability
+
+`apps/playground` is a leaf consumer. Removing it must leave the repo green (only route registration
+removed). `apps/runtime` is API-only and does not consume `packages/ui`.

@@ -114,6 +114,13 @@ export interface CaoAnswerOptions {
    * client connection so a disconnect stops the model call instead of burning tokens.
    */
   signal?: AbortSignal;
+  /**
+   * Stable per-conversation id. Threaded onto the Langfuse trace so tracing and the interaction
+   * event-log share one identity model (Fase 1). Undefined = untagged.
+   */
+  sessionId?: string;
+  /** Pseudonymous end-user id for the trace; undefined for embed users (no identification in v1). */
+  userId?: string;
 }
 
 /**

@@ -42,7 +42,10 @@ jobs:
       - name: Depcruise (arrow rule)
         run: pnpm depcruise
 
-      # Fast, offline unit tests (no API keys): parse/retry contracts and other pure logic.
+      - name: UI boundaries
+        run: pnpm check-ui-boundaries
+
+      # Fast, offline unit tests
       - name: Unit tests
         run: pnpm turbo run test:unit
 
