@@ -64,8 +64,11 @@ jobs:
       # (answer-level LLM-judge). On fork PRs without secrets, Gate A still runs and B/C skip.
       # EVAL_REQUIRE_ALL turns a skip into a FAIL when landing on main (merge queue), on the
       # protected branch, or nightly — so "skipped != passed". EVAL_JUDGE_SAMPLES=3 on
-      # merge/push/nightly (Tier B); PRs keep 1 to stay cheap.
-      # See packages/agents/src/evals/cao.eval.ts.
+      # merge/push/nightly (Tier B); PRs keep 1 to stay cheap. EVAL_GENERATION_SAMPLES=3 wherever
+      # the answer gate is REQUIRED (same condition as EVAL_REQUIRE_ALL, incl. same-repo PRs):
+      # best-of-N is the sanctioned lever against single-sample variance on the zero-tolerance count
+      # gates (citation-verification, dangling-marker), which are judge-INDEPENDENT so more judge
+      # samples cannot help them — see packages/agents/src/evals/cao.eval.ts.
       - name: Eval (accuracy gate)
         run: pnpm turbo run test
         env:
@@ -83,6 +86,11 @@ jobs:
           # Median over 3 samples damps single-draw judge noise on the merge/nightly path (Tier B).
           # PRs keep 1 to keep the hot path cheap; write-baseline also uses 3 (see below).
           EVAL_JUDGE_SAMPLES: ${{ (github.event_name == 'schedule' || github.event_name == 'merge_group' || github.event_name == 'push') && '3' || '1' }}
+          # Best-of-N generation attempts per Gate C case. Set to 3 exactly where the answer gate is
+          # required (mirrors EVAL_REQUIRE_ALL, incl. same-repo PRs) to tame single-sample variance on
+          # the count-based citation-verification / dangling gates; explicit 2 (= production default)
+          # on cheap/fork paths where B/C skip. write-baseline also uses 3 (see below).
+          EVAL_GENERATION_SAMPLES: ${{ (github.event_name == 'merge_group' || github.event_name == 'push' || github.event_name == 'schedule' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)) && '3' || '2' }}
 
       # Per-run artefact (E9): commit SHA, model ids, per-case scores, aggregates, gate results,
       # rerank counts, judge parse-retries. Uploaded even on failure — a red run is when it matters.
@@ -122,6 +130,9 @@ jobs:
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
           EVAL_WRITE_BASELINE: "1"
           EVAL_JUDGE_SAMPLES: "3"
+          # Record the baseline under the same best-of-N regime the required paths run (see verify job),
+          # so the regression reference is apples-to-apples with merge/push/nightly and same-repo PRs.
+          EVAL_GENERATION_SAMPLES: "3"
 
       - name: Upload baseline artifact
         uses: actions/upload-artifact@v4
