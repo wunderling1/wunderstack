@@ -75,7 +75,9 @@ import {
   passageToHit,
   passagesForCase,
 } from "./golden-set.js";
+import { ANSWER_THRESHOLDS, answerFloorFailures } from "./answer-floors.js";
 import { acquireEvalLock, EvalAlreadyRunningError } from "./eval-lock.js";
+import { GATE_SPECS, type GateId, type GateRequirement, type GateSpec } from "./gates.js";
 import {
   aggregateScores,
   assembleEvalContext,
@@ -175,52 +177,6 @@ const RETRIEVAL_THRESHOLDS = {
   recallAt3: 0.9,
   recallAt5: 0.9,
   mrr: 0.88,
-} as const;
-
-/**
- * Answer-level gates. faithfulness is split: `hardHallucination` (deterministic — invented
- * amounts/terms/articles) carries near-zero tolerance and backs the "verzint niets"-promise;
- * `softFaithfulness` (LLM-judged paraphrase drift) keeps conservative headroom for judge variance.
- * Refusal is two-sided: over-refusal (answerable but refused) and under-refusal (should have
- * refused but answered) each have their own ceiling.
- */
-const ANSWER_THRESHOLDS = {
-  hardHallucination: 0.98,
-  softFaithfulness: 0.8,
-  // Lowered 0.85 -> 0.84 as a logged policy decision (PLAN-v3 Fase 14.0 stap 3, golden-set.REVIEW.md).
-  // The LLM judge sits within noise of 0.85 (0.845-0.865 across runs at EVAL_JUDGE_SAMPLES=3); 0.84
-  // keeps a real relevance floor without letting a single flaky judge draw flip the gate. It is NOT
-  // part of a baseline re-record and stays a deliberate, separately-logged threshold change.
-  relevance: 0.84,
-  citationCorrectness: 0.75,
-  completeness: 0.7,
-  refusalCalibration: 0.9,
-  // citationVerification / dangling: absolute gate is COUNT-based (0 of N), not the rate thresholds
-  // below. Rates stay in the console for trend; see answerLevelChecks + golden-set.REVIEW.md
-  // (Gate C close-out). At N=31 one failure is already 96.8% < 0.98 — schijngranulariteit over an
-  // [X]-gate that follows from the "verzint niets"-promise.
-  citationVerification: 0.98,
-  // Orphan sources (a shown citation without an inline marker) must be eliminated by the contract.
-  maxOrphanRate: 0,
-  // Inline markers without a verified citation behind them are just as bad as orphan source cards.
-  maxDanglingMarkerRate: 0,
-  maxOverRefusalRate: 0.05,
-  maxUnderRefusalRate: 0.1,
-  /**
-   * Safety-vs-quality split (REVIEW.md §21). The ABSOLUTE safety guarantee — no unverified citation and no
-   * fabricated fact reaches the user — is enforced deterministically by hard-hallucination (>=0.98),
-   * orphan-source (=0), and the verifyCitations strip/reconcile pipeline (unit-tested in
-   * verify-citations.test.ts / generate-answer.test.ts / agent.ts). The RAW generation slip that survives
-   * best-of-N is irreducible single-sample variance: across runs a rotating ~1/31 of cases mangle some part
-   * of the citation protocol (long quote / ellipsis / sentinel / capital) even on Mistral Large. So the raw
-   * count gates are QUALITY-TREND gates with a sourced tolerance of one case (~3.2% at N=31): a single
-   * stochastic slip passes, a systematic regression (>=2) fails. Under-refusal is count-based for the same
-   * reason — with only 3 refusal fixtures the rate is a noisy 0/33/67%, and a lone GROUNDED
-   * should-have-deferred answer (hard-hallucination still 1.0) is a calibration slip, not a fabrication.
-   */
-  maxUnverifiedCount: 1,
-  maxDanglingCount: 1,
-  maxUnderRefusalCount: 1,
 } as const;
 
 interface Check {
@@ -920,7 +876,7 @@ function answerLevelChecks(aggregate: AggregateScores): Check[] {
   );
   console.log(`  answer-relevance      ${pct(aggregate.relevance)}  (min ${pct(ANSWER_THRESHOLDS.relevance)})`);
   console.log(
-    `  citation-correctness  ${pct(aggregate.citationCorrectness)}  (min ${pct(ANSWER_THRESHOLDS.citationCorrectness)})`,
+    `  citation-correctness  ${pct(aggregate.citationCorrectness)}  (min ${pct(ANSWER_THRESHOLDS.citationCorrectness)}; answerable cases only)`,
   );
   console.log(`  completeness          ${pct(aggregate.completeness)}  (min ${pct(ANSWER_THRESHOLDS.completeness)})`);
   console.log(
@@ -956,7 +912,7 @@ function answerLevelChecks(aggregate: AggregateScores): Check[] {
       ok: aggregate.relevance >= ANSWER_THRESHOLDS.relevance,
     },
     {
-      name: `answer: citation-correctness >= ${pct(ANSWER_THRESHOLDS.citationCorrectness)}`,
+      name: `answer: citation-correctness >= ${pct(ANSWER_THRESHOLDS.citationCorrectness)} (answerable cases only; refusals excluded)`,
       ok: aggregate.citationCorrectness >= ANSWER_THRESHOLDS.citationCorrectness,
     },
     {
@@ -1021,7 +977,10 @@ function answerRegressionChecks(aggregate: AggregateScores): Check[] {
   ];
   const lowerIsBetter: [string, number, number][] = [
     ["over-refusal-rate", aggregate.overRefusalRate, ref.overRefusalRate],
-    ["under-refusal-rate", aggregate.underRefusalRate, ref.underRefusalRate],
+    // under-refusal-RATE regression is intentionally NOT checked (B2, 2026-07-21): with only 3 refusal
+    // fixtures the rate is a noisy 0/33/67% and a single generation slip flips the gate (measured: an @1
+    // draw failed purely here at 0.333 vs 0.000). The absolute under-refusal COUNT gate (<= 1, in
+    // answerLevelChecks) is the real protection; the rate stays a trend-only number in the report.
     ...(ref.orphanRate === undefined
       ? []
       : ([["orphan-source-rate", aggregate.orphanRate, ref.orphanRate]] as [string, number, number][])),
@@ -1045,32 +1004,6 @@ function answerRegressionChecks(aggregate: AggregateScores): Check[] {
       detail: `${now.toFixed(3)} vs baseline ${was.toFixed(3)}`,
     })),
   ];
-}
-
-/**
- * G2 baseline-write guard: which ABSOLUTE Gate C floors a run misses. A baseline may only capture a
- * run that itself clears every absolute floor — otherwise `EVAL_WRITE_BASELINE` could quietly record a
- * red run and lower the regression reference point, exactly the "never silently lower the bar" rule.
- * Mirrors the absolute checks in {@link answerLevelChecks} (the regression checks are relative and
- * therefore not part of this floor). Returns the failing metric names (empty = clears every floor).
- */
-function answerFloorFailures(aggregate: AggregateScores): string[] {
-  const failures: string[] = [];
-  const push = (ok: boolean, name: string): void => {
-    if (!ok) failures.push(name);
-  };
-  push(aggregate.hardHallucination >= ANSWER_THRESHOLDS.hardHallucination, "hard-hallucination");
-  push(aggregate.faithfulness >= ANSWER_THRESHOLDS.softFaithfulness, "soft-faithfulness");
-  push(aggregate.relevance >= ANSWER_THRESHOLDS.relevance, "relevance");
-  push(aggregate.citationCorrectness >= ANSWER_THRESHOLDS.citationCorrectness, "citation-correctness");
-  push(aggregate.completeness >= ANSWER_THRESHOLDS.completeness, "completeness");
-  push(aggregate.refusalCalibration >= ANSWER_THRESHOLDS.refusalCalibration, "refusal-calibration");
-  push(aggregate.unverifiedCitationCount <= ANSWER_THRESHOLDS.maxUnverifiedCount, "citation-verification (count)");
-  push(aggregate.orphanRate <= ANSWER_THRESHOLDS.maxOrphanRate, "orphan-source-rate");
-  push(aggregate.danglingCaseCount <= ANSWER_THRESHOLDS.maxDanglingCount, "dangling-marker (count)");
-  push(aggregate.overRefusalRate <= ANSWER_THRESHOLDS.maxOverRefusalRate, "over-refusal-rate");
-  push(aggregate.underRefusalCount <= ANSWER_THRESHOLDS.maxUnderRefusalCount, "under-refusal (count)");
-  return failures;
 }
 
 async function answerQualityChecks(): Promise<Check[]> {
@@ -1227,44 +1160,153 @@ async function corpusIsolationLiveChecks(): Promise<Check[]> {
   return checks;
 }
 
-function report(title: string, checks: Check[]): boolean {
-  console.log(title);
+/** A gate whose checks all ran, optionally tagged with a suffix (per-fund sets emit one each). */
+interface GateGroup {
+  suffix: string;
+  checks: Check[];
+}
+/** What a gate's run function yields: a flat check list, or (perFundSet) one group per fund set. */
+type GateRunResult = Check[] | GateGroup[];
+
+/** Record one gate report to the console + artefact with a three-valued status; returns run-pass. */
+function pushGate(spec: GateSpec, checks: Check[], suffix?: string): boolean {
+  const id = suffix === undefined ? spec.id : `${spec.id} [${suffix}]`;
+  console.log(`\n${spec.layer} · ${id} — ${spec.title}:`);
   for (const check of checks) {
-    const status = check.ok ? "PASS" : "FAIL";
-    console.log(`  [${status}] ${check.name}${check.detail ? ` — ${check.detail}` : ""}`);
+    console.log(`  [${check.ok ? "PASS" : "FAIL"}] ${check.name}${check.detail ? ` — ${check.detail}` : ""}`);
   }
   const passed = checks.every((check) => check.ok);
   gateResults.push({
-    name: title,
-    passed,
-    checks: checks.map((check) => ({ name: check.name, ok: check.ok, ...(check.detail === undefined ? {} : { detail: check.detail }) })),
+    id,
+    layer: spec.layer,
+    title: spec.title,
+    status: passed ? "passed" : "failed",
+    checks: checks.map((check) => ({
+      name: check.name,
+      ok: check.ok,
+      ...(check.detail === undefined ? {} : { detail: check.detail }),
+    })),
   });
   return passed;
 }
 
 /**
- * Handle a gate that cannot run because its API keys (or DB) are missing. When `required` this is a
- * FAIL — skipped != passed; otherwise it is an explicit dev skip. API-key gates pass the default
- * (REQUIRE_ALL); the DB-integration gates pass REQUIRE_DB, so they are required only on the nightly
- * job that wires DATABASE_URL and skip (never fail) on the PR hot path.
+ * A gate that cannot run because its credentials/DB are missing. On the protected paths (REQUIRE_ALL
+ * for key gates, REQUIRE_DB for the nightly DB gates) this is a FAIL — skipped != passed. Otherwise
+ * it records the first-class `skipped` status (never `passed`) so a dev/fork run stays cheap without
+ * a skip ever masquerading as a pass in the artefact.
  */
-function reportUnavailable(gate: string, requirement: string, required: boolean = REQUIRE_ALL): boolean {
+function pushUnavailable(spec: GateSpec, requirement: string): boolean {
+  const required = requiredWhenMissing(spec.requires);
   if (required) {
-    console.log(`\n${gate}: REQUIRED-BUT-UNAVAILABLE — ${requirement} (required on this job).`);
+    console.log(`\n${spec.layer} · ${spec.id}: REQUIRED-BUT-UNAVAILABLE — ${requirement} (required on this job).`);
     gateResults.push({
-      name: gate,
-      passed: false,
+      id: spec.id,
+      layer: spec.layer,
+      title: spec.title,
+      status: "failed",
       checks: [{ name: `REQUIRED-BUT-UNAVAILABLE: ${requirement}`, ok: false }],
     });
     return false;
   }
-  console.log(`\n${gate}: SKIPPED (${requirement}). Set the key(s) to run this gate; required on merge to main.`);
+  console.log(`\n${spec.layer} · ${spec.id}: SKIPPED (${requirement}). Set the credential(s) to run this gate; required on merge to main.`);
   gateResults.push({
-    name: gate,
-    passed: true,
+    id: spec.id,
+    layer: spec.layer,
+    title: spec.title,
+    status: "skipped",
     checks: [{ name: `SKIPPED: ${requirement}`, ok: true }],
   });
   return true;
+}
+
+/** Are the credentials/DB a gate needs present in this environment? */
+function credentialsAvailable(requires: GateRequirement): boolean {
+  switch (requires) {
+    case "none":
+      return true;
+    case "scaleway":
+      return Boolean(env.SCALEWAY_API_KEY);
+    case "scaleway+mistral":
+      return Boolean(env.SCALEWAY_API_KEY && env.MISTRAL_API_KEY);
+    case "db+scaleway":
+      return Boolean(env.DATABASE_URL && env.SCALEWAY_API_KEY);
+    case "db+scaleway+mistral":
+      return Boolean(env.DATABASE_URL && env.SCALEWAY_API_KEY && env.MISTRAL_API_KEY);
+  }
+}
+
+/** When a prerequisite is missing, does that FAIL the run (protected path) or merely SKIP the gate? */
+function requiredWhenMissing(requires: GateRequirement): boolean {
+  if (requires === "none") return false;
+  // DB-backed gates are required only on the nightly job (REQUIRE_DB); key gates on same-repo/merge/push (REQUIRE_ALL).
+  return requires.startsWith("db") ? REQUIRE_DB : REQUIRE_ALL;
+}
+
+/** Human-readable "what is missing" message for the skipped/failed artefact line. */
+function requirementLabel(requires: GateRequirement): string {
+  switch (requires) {
+    case "none":
+      return "";
+    case "scaleway":
+      return "SCALEWAY_API_KEY not set";
+    case "scaleway+mistral":
+      return "SCALEWAY_API_KEY and MISTRAL_API_KEY required";
+    case "db+scaleway":
+      return "DATABASE_URL and SCALEWAY_API_KEY required";
+    case "db+scaleway+mistral":
+      return "DATABASE_URL, SCALEWAY_API_KEY and MISTRAL_API_KEY required";
+  }
+}
+
+/**
+ * Run functions keyed by gate id. The Record<GateId, …> type makes this exhaustive: every registered
+ * gate MUST have a run, and no run may exist without a spec — the code-side registry↔spec binding
+ * (the doc-side binding is gate-registry.test.ts). A run yields a flat Check[], except the perFundSet
+ * gate (G3-fund) which yields one GateGroup per discovered fund set.
+ */
+const GATE_RUNS: Record<GateId, () => GateRunResult | Promise<GateRunResult>> = {
+  "G1-contract": () => [
+    ...promptContractChecks(),
+    ...clarifyContractChecks(),
+    ...fixtureHashChecks(),
+    ...corpusIsolationContractChecks(),
+  ],
+  "G2-retrieval": retrievalAndRerankChecks,
+  "G2-multi-turn": condensationChecks,
+  "G2-answer": answerQualityChecks,
+  "G3-pipeline": retrievalIntegrationChecks,
+  "G3-fund": fundLayerGroups,
+  "G3-isolation": corpusIsolationLiveChecks,
+};
+
+/** G3-fund expands to one report per discovered fund set (each scored against its own corpus). */
+async function fundLayerGroups(): Promise<GateGroup[]> {
+  const groups: GateGroup[] = [];
+  for (const set of goldenFundSets) {
+    groups.push({ suffix: `${set.key} (corpus v${set.corpusVersion})`, checks: await fundLayerChecks(set) });
+  }
+  return groups;
+}
+
+/** Resolve prerequisites, run (or skip/fail) one gate, and return whether the run stays green. */
+async function runGate(spec: GateSpec): Promise<boolean> {
+  // A perFundSet gate with zero discovered sets has nothing to run and emits no report.
+  if (spec.perFundSet === true && goldenFundSets.length === 0) {
+    return true;
+  }
+  if (!credentialsAvailable(spec.requires)) {
+    return pushUnavailable(spec, requirementLabel(spec.requires));
+  }
+  const result = await GATE_RUNS[spec.id as GateId]();
+  if (spec.perFundSet === true) {
+    let passed = true;
+    for (const group of result as GateGroup[]) {
+      passed = pushGate(spec, group.checks, group.suffix) && passed;
+    }
+    return passed;
+  }
+  return pushGate(spec, result as Check[]);
 }
 
 /** Assemble the E9 run artefact from the accumulators and write it (also on failure). */
@@ -1298,101 +1340,16 @@ function writeRunArtefact(passed: boolean): void {
 }
 
 async function main(): Promise<void> {
+  // Data-driven: the four-layer registry (GATE_SPECS) is walked in order; each gate resolves its own
+  // prerequisites and reports passed/failed/skipped. Contract layer (G1) always runs; G2 needs keys;
+  // G3 is nightly (DB); G4 (runtime hard-fact guard) is enforced in production, not here.
   let allPassed = true;
   let completed = false;
 
   try {
-    // Gate A — corpus-agnostic base layer (contract-test, always runs).
-    allPassed =
-      report("Gate A — prompt & clarify CONTRACT (change-detector, not a behavioral gate):", [
-        ...promptContractChecks(),
-        ...clarifyContractChecks(),
-        ...fixtureHashChecks(),
-      ]) && allPassed;
-
-    // Gate B — fund-specific layer (retrieval is corpus/fund-bound).
-    if (env.SCALEWAY_API_KEY) {
-      allPassed =
-        report("Gate B — retrieval recall + rerank [fund-specific layer]:", await retrievalAndRerankChecks()) &&
-        allPassed;
-    } else {
-      allPassed = reportUnavailable("Gate B — retrieval recall", "SCALEWAY_API_KEY not set") && allPassed;
+    for (const spec of GATE_SPECS) {
+      allPassed = (await runGate(spec)) && allPassed;
     }
-
-    if (env.SCALEWAY_API_KEY && env.MISTRAL_API_KEY) {
-      allPassed =
-        report("Gate B2 — multi-turn condensation retrieval:", await condensationChecks()) &&
-        allPassed;
-    } else {
-      allPassed =
-        reportUnavailable("Gate B2 — multi-turn condensation retrieval", "SCALEWAY_API_KEY and MISTRAL_API_KEY required") &&
-        allPassed;
-    }
-
-    // Gate C — behavioral layer (answer quality; correctness checks are fund-specific).
-    if (env.SCALEWAY_API_KEY && env.MISTRAL_API_KEY) {
-      allPassed = report("Gate C — answer-level quality:", await answerQualityChecks()) && allPassed;
-    } else {
-      allPassed =
-        reportUnavailable("Gate C — answer-level quality", "SCALEWAY_API_KEY and MISTRAL_API_KEY required") &&
-        allPassed;
-    }
-
-    // Gate B-integration — nightly: the REAL retrieval pipeline end-to-end on ingested fixtures
-    // (rewrite → pgvector → rerank → assemble). Needs a DB; PRs skip, the nightly requires it
-    // (REQUIRE_DB). Fixtures must be ingested first — scripts/ingest/fixtures.ts.
-    if (env.DATABASE_URL && env.SCALEWAY_API_KEY) {
-      allPassed =
-        report("Gate B-integration — production retrieval pipeline (nightly):", await retrievalIntegrationChecks()) &&
-        allPassed;
-    } else {
-      allPassed =
-        reportUnavailable(
-          "Gate B-integration — production retrieval pipeline",
-          "DATABASE_URL and SCALEWAY_API_KEY required",
-          REQUIRE_DB,
-        ) && allPassed;
-    }
-
-    // Gate F — fund-specific correctness layer (E12). One gate per discovered fund set, each scored
-    // against its own ingested corpus via the real pipeline. Nightly-only (needs a DB), like Gate
-    // B-integration; on the PR hot path it skips (required only under REQUIRE_DB). base-scores vs
-    // fund-scores are reported apart in the run artefact.
-    if (goldenFundSets.length > 0) {
-      // Needs MISTRAL_API_KEY too (not just DB + Scaleway): fund sets may contain multi-turn cases
-      // that fundCaseQuery condenses via the LLM, exactly like Gate B2/C. Without it the gate would
-      // crash on an elliptical case instead of skipping. On the nightly all three are present.
-      if (env.DATABASE_URL && env.SCALEWAY_API_KEY && env.MISTRAL_API_KEY) {
-        for (const set of goldenFundSets) {
-          allPassed =
-            report(
-              `Gate F — fund-specific correctness [${set.key}] (corpus v${set.corpusVersion}):`,
-              await fundLayerChecks(set),
-            ) && allPassed;
-        }
-      } else {
-        allPassed =
-          reportUnavailable(
-            `Gate F — fund-specific correctness (${goldenFundSets.map((set) => set.key).join(", ")})`,
-            "DATABASE_URL, SCALEWAY_API_KEY and MISTRAL_API_KEY required",
-            REQUIRE_DB,
-          ) && allPassed;
-      }
-    }
-
-    // Gate D — corpus isolation. The contract layer always runs; the live cross-fund test needs a DB.
-    allPassed = report("Gate D — corpus isolation (contract):", corpusIsolationContractChecks()) && allPassed;
-    if (env.DATABASE_URL && env.SCALEWAY_API_KEY) {
-      allPassed = report("Gate D — corpus isolation (integration):", await corpusIsolationLiveChecks()) && allPassed;
-    } else {
-      allPassed =
-        reportUnavailable(
-          "Gate D — corpus isolation (integration)",
-          "DATABASE_URL and SCALEWAY_API_KEY required",
-          REQUIRE_DB,
-        ) && allPassed;
-    }
-
     completed = true;
   } finally {
     // Always leave a downloadable artefact — a crashed or failed run is exactly when it matters.

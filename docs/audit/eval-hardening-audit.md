@@ -1,5 +1,12 @@
 # Eval Hardening (E0–E13) — Compliance Audit Against Plan
 
+> **⚠️ OUTDATED (2026-07-21).** This audit was written against an earlier working tree; several
+> verdicts are stale. Notably E7 (answer baseline) and E13 (runtime hard-fact guard) are now
+> **implemented**, and the full eval runs **green** on `fix/eval-gate-enforcement` (run 2026-07-21).
+> The E0–E13 labels are historical: the living gate model is the four layers (G1–G4) in
+> `docs/eval/GATE-ARCHITECTURE.md`, which maps every E-label in Bijlage A.1. Keep this file as a
+> point-in-time audit record; do not treat its verdicts as current state.
+
 > Scope: verify that the eval-hardening work was implemented **as specified** for phases E0–E12,
 > plus the two amendments (E0/E8 merge, new phase E13). Method: read of source, CI YAML, fixtures,
 > tests, the committed baseline, and git history. Verdicts are on **behaviour** (call path traced

@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import type { ChatMessage } from "@wunderstack/ai";
 
 import type { GoldenCase, GoldenPassage } from "./golden-set.js";
-import { parseJudgeOutput, runJudgeWithParseRetry, scoreCitationVerification } from "./judge.js";
+import { aggregateScores, parseJudgeOutput, runJudgeWithParseRetry, scoreCitationVerification, type CaseScores } from "./judge.js";
 
 describe("parseJudgeOutput", () => {
   it("parses a clean JSON object", () => {
@@ -137,5 +137,42 @@ describe("scoreCitationVerification — refusal prose scores the delivered outpu
 
     const result = scoreCitationVerification(raw, refusalCase, passages);
     assert.match(result.prose, /16 weken/);
+  });
+});
+
+describe("aggregateScores — citationCorrectness (Fase 4 actie 6)", () => {
+  function caseScore(overrides: Partial<CaseScores>): CaseScores {
+    return {
+      hardHallucination: 1,
+      faithfulness: 1,
+      relevance: 1,
+      citationCorrectness: 1,
+      completeness: 1,
+      refusalCalibration: 1,
+      citationVerification: 1,
+      orphanRate: 0,
+      danglingMarkerRate: 0,
+      refused: false,
+      category: "in_scope",
+      ...overrides,
+    };
+  }
+
+  it("averages citationCorrectness over ANSWERABLE cases only (refusals excluded)", () => {
+    const scores: CaseScores[] = [
+      caseScore({ category: "in_scope", citationCorrectness: 0.6 }),
+      caseScore({ category: "in_scope", citationCorrectness: 0.8 }),
+      // Correct refusals score a vacuous 1.0; they must NOT lift the answerable-case mean.
+      caseScore({ category: "refusal", refused: true, citationCorrectness: 1 }),
+      caseScore({ category: "refusal", refused: true, citationCorrectness: 1 }),
+    ];
+    const aggregate = aggregateScores(scores);
+    // Answerable-only mean = (0.6 + 0.8) / 2 = 0.7, NOT (0.6 + 0.8 + 1 + 1) / 4 = 0.85.
+    assert.equal(aggregate.citationCorrectness, 0.7);
+  });
+
+  it("returns 0 citationCorrectness when there are no answerable cases", () => {
+    const aggregate = aggregateScores([caseScore({ category: "refusal", refused: true, citationCorrectness: 1 })]);
+    assert.equal(aggregate.citationCorrectness, 0);
   });
 });

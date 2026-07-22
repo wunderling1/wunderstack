@@ -20,7 +20,10 @@ const reportPath = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "ev
 // v1: initial (E9). v2: retrievalIntegration (E11). v3: funds[] (E12).
 // v4: AnswerReport.cases carry id/question/answerRaw so under-refusal / citation failures are inspectable (Tier B).
 // v5: AnswerCaseReport carries finishReason + answerChars (truncation diagnostic, Gate C close-out).
-export const EVAL_REPORT_SCHEMA_VERSION = 5;
+// v6: gate registry (four-layer model) — GateReport gains id/layer/title + a THREE-valued status
+//     ("passed" | "failed" | "skipped"); the old boolean `passed`/`name` fields are replaced so a
+//     skipped gate can never masquerade as passed (docs/eval/GATE-ARCHITECTURE.md §4.2).
+export const EVAL_REPORT_SCHEMA_VERSION = 6;
 
 export interface ReportCheck {
   name: string;
@@ -28,9 +31,17 @@ export interface ReportCheck {
   detail?: string;
 }
 
+/** Gate outcome. `skipped` is a first-class status — a gate that could not run is NEVER `passed`. */
+export type GateStatus = "passed" | "failed" | "skipped";
+
 export interface GateReport {
-  name: string;
-  passed: boolean;
+  /** Stable G-identifier, e.g. "G2-retrieval" (per-fund gates append " [key]"). */
+  id: string;
+  /** Layer of the four-layer model: G1 CONTRACT / G2 GEDRAG / G3 PRODUCTIE. */
+  layer: string;
+  /** Human-readable description shown in the console and artefact. */
+  title: string;
+  status: GateStatus;
   checks: ReportCheck[];
 }
 

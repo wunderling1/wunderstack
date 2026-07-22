@@ -123,7 +123,7 @@ function tracingOptionsFor(
  * On a trip we refuse: the answer is replaced with the not-found message and the turn is marked
  * unfound. A grounded answer is unaffected — the number appears in the context.
  */
-function verifyAndBuild(
+export function verifyAndBuild(
   raw: string,
   retrieval: RetrievalOutput,
   userSupplied: string,
@@ -145,6 +145,34 @@ function verifyAndBuild(
   }
 
   return { answer, citations, verificationFailed, hardFactGuardTriggered: false };
+}
+
+/**
+ * G4 buffer-to-verify emit seam: turn an ALREADY-verified answer into the ordered stream events.
+ *
+ * This is the structural guarantee that the streaming path can never leak an ungrounded hard fact:
+ * it accepts a settled `verifyAndBuild` result (guard already applied — `answer` is either the clean
+ * verified prose or `NOT_FOUND_MESSAGE`), so a single `text` delta carries only safe text. There is
+ * no token stream to retract. Streaming tokens as they arrive from the model would require abandoning
+ * this seam — a deliberate change, not an accident. Locked by agent.test.ts.
+ */
+export function* settledAnswerEvents(
+  result: { answer: string; citations: CaoCitation[]; verificationFailed: boolean; hardFactGuardTriggered: boolean; usage: CaoUsage },
+  traceId: string | null,
+): Generator<CaoStreamEvent> {
+  const found = !result.hardFactGuardTriggered;
+  if (result.answer.length > 0) {
+    yield { type: "text", delta: result.answer };
+  }
+  yield {
+    type: "citations",
+    found,
+    needsClarification: false,
+    citations: result.citations,
+    citationVerificationFailed: result.verificationFailed,
+    answer: result.answer,
+  };
+  yield { type: "done", usage: result.usage, traceId };
 }
 
 /** The user's own numbers are premises, not fabrications: question + prior turns count as grounding. */
@@ -391,41 +419,27 @@ export function createCaoAgent(): CaoAgent {
         // We generate the full answer (repairing a violated citation contract once, the SAME seam
         // `answer()` uses so the stream is not a weaker sibling), verify, guard-check, and only then emit
         // the settled prose. The client sees no partial stream, so there is nothing to retract.
-        const { answer, citations, verificationFailed, hardFactGuardTriggered, usage } =
-          await generateVerifiedAnswer({
-            retrieval,
-            answerQuestion: query.answerQuestion,
-            userSupplied,
-            tracingOptions,
-            ...(options.signal === undefined ? {} : { signal: options.signal }),
-          });
-        recordCitationScore(traceId, verificationFailed);
+        const result = await generateVerifiedAnswer({
+          retrieval,
+          answerQuestion: query.answerQuestion,
+          userSupplied,
+          tracingOptions,
+          ...(options.signal === undefined ? {} : { signal: options.signal }),
+        });
+        recordCitationScore(traceId, result.verificationFailed);
 
         // With full buffering the client sees its first character only once the answer is settled, so
         // that instant IS the user-perceived time-to-first-token.
         const ttftMs = performance.now() - requestStart;
         trace.recordTtft(ttftMs);
 
-        // Emit the verified prose, then the citations event whose `answer` is the canonical text the
-        // client reconciles against (it also carries the not-found message when the E13 guard tripped).
-        const found = !hardFactGuardTriggered;
-        if (answer.length > 0) {
-          yield { type: "text", delta: answer };
-        }
-        yield {
-          type: "citations",
-          found,
-          needsClarification: false,
-          citations,
-          citationVerificationFailed: verificationFailed,
-          answer,
-        };
-
-        yield { type: "done", usage, traceId };
+        // Emit the settled (verified, guard-checked) answer via the single buffer-to-verify seam. No
+        // ungrounded hard fact can reach the client because `result.answer` is already the safe text.
+        yield* settledAnswerEvents(result, traceId);
         trace.end({
-          found,
-          citationCount: citations.length,
-          ...(hardFactGuardTriggered ? { refused: true } : {}),
+          found: !result.hardFactGuardTriggered,
+          citationCount: result.citations.length,
+          ...(result.hardFactGuardTriggered ? { refused: true } : {}),
           ttftMs,
         });
       } catch (error) {

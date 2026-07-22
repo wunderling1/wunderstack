@@ -1,6 +1,13 @@
 # Wunderstack Status
 _Gegenereerd: 2026-07-19 · Audit-methode: statische verificatie (geen test-runs) · branch: `fix/citation-pipeline`_
 
+> **Update 2026-07-21 (branch `fix/eval-gate-enforcement`).** De gates worden nu bijgehouden in het
+> vier-lagen-model (G1–G4); het enige levende gate-document is `docs/eval/GATE-ARCHITECTURE.md`.
+> Een volledige eval-run op deze branch is **integraal groen** (`eval-report.json` → `passed: true`).
+> §4.2 hieronder is herschreven naar G-termen en die verse run. Rode-gate-uitspraken elders in dit
+> document (§1, §5, §7, §9, §10) horen bij de oudere `fix/citation-pipeline`-snapshot en zijn op deze
+> branch achterhaald.
+
 > Legenda: ✅ Done (feit, bewijs benoemd) · 🟡 Claimed done / discrepantie · 🔵 In progress (deels bewijs) · ⚪ Not started · ❓ Onduidelijk/niet gevonden · ⚠️ Requires test run.
 > Labels bij claims: `feit` (geverifieerd in code) · `schatting` (afgeleid uit sterke signalen) · `aanname` (plan zegt het, geen bewijs gevonden).
 
@@ -37,7 +44,7 @@ Wél een belangrijke delta t.o.v. de bestaande audit-documenten (`docs/audit/eva
 **Conflicten / mismatches met de audit-opdracht (`feit`):**
 1. **`E0–E13`-labels bestaan alleen in een auditdoc + commit-messages**, niet in een plan-of-record. Het feitelijke plan gebruikt **P1–P8** (`PLAN-eval-gates.md`). Mapping P↔E is nergens formeel vastgelegd.
 2. **`UI-0 – UI-6` bestaat niet.** De UI-scope leeft als **Fase 13.1–13.3** (`PLAN-ui-fluency.md`) plus audit-items 1–7 (`UI-AUDIT-v1.md`).
-3. **`PLAN-v3` / "Fase 13–16" (productie-hardening, OOMT go-live, multi-tenancy, procurement pack) bestaat NIET** als document. "Fase 13" is in deze repo UI-fluency, geen productie-hardening.
+3. ~~**`PLAN-v3` / "Fase 13–16" bestaat NIET** als document.~~ **Achterhaald (2026-07-21):** `PLAN-v3.md` bestaat nu (toegevoegd in `a9299a1`) en definieert Fase 13–17 (productie-hardening, OOMT go-live, multi-tenancy, procurement pack). Let op: "Fase 13" is in de repo-code UI-fluency; in PLAN-v3 is het productie-hardening — de naam-collisie hieronder blijft gelden.
 4. **Twee "Fase 13"-betekenissen**: de audit-opdracht bedoelt productie-hardening; de repo bedoelt UI-fluency. Naam-collisie.
 
 ## 4. Status per onderdeel
@@ -62,41 +69,44 @@ Aanvullend (Fase 9–12, PLAN-v2):
 - Grounding/antwoordcontract + clarify: `cao/prompt.ts`, `cao/clarify.ts` (`detectClarification`). ✅ `feit`
 - Vertrouwens-UI + feedback-loop: `components/chat/citation.tsx`, `feedback.tsx`, `starters.tsx`, `api/feedback/route.ts`, `scripts/eval/harvest-feedback.ts`. ✅ `feit`
 
-### 4.2 Eval & gates (P1–P8 / E0–E13, Gates A–D+)
+### 4.2 Eval & gates (vier-lagen-model G1–G4)
 
-**Feitelijke gates in de code** (`cao.eval.ts:1182–1268`): Gate A (prompt & clarify contract), Gate B (retrieval recall + rerank), Gate B2 (multi-turn condensatie), Gate C (answer-level), Gate B-integration (nightly), Gate F (fund-correctness, nightly), Gate D (corpus-isolatie: contract + integration). Dus **meer dan "A–D"**. `feit`.
+Canoniek document: **`docs/eval/GATE-ARCHITECTURE.md`** (het enige levende gate-document; oude
+labels Gate A–D/B2/F, E0–E13 en P1–P8 leven alleen nog in Bijlage A daarvan).
 
-Verificatie per E-fase (tegen de huidige code, niet tegen de oudere audit):
+**Feitelijke gates in de code** (`cao.eval.ts` `main()`), in G-termen:
 
-| Fase | Status | Bewijs (pad + check) |
+| Laag | Subgate (oud label) | Wanneer | Vereisten |
+|---|---|---|---|
+| **G1** CONTRACT | prompt & clarify + fund-scoping (Gate A + Gate D-contract) | altijd | geen keys |
+| **G2** GEDRAG | retrieval + rerank + `multi-turn` (Gate B + B2), answer-level (Gate C) + regressie | same-repo PR/push/merge | Scaleway + Mistral |
+| **G3** PRODUCTIE | echte pipeline (Gate B-integration), fund-correctness (Gate F), isolation (Gate D-integration) | nightly | DB + Scaleway (+ Mistral) |
+| **G4** RUNTIME | hard-fact-guard in `verifyAndBuild` (`hard-facts.ts`) | elk antwoord | — |
+
+**Invarianten** (infrastructuur, geen gates — geborgd via unit tests + CI-config; zie
+`GATE-ARCHITECTURE.md §4`): eval-scoort-productiemodel (E1), skip≠pass (E0/E8), één
+verified-answer-seam, judge-robuustheid (E2/P3b), golden-set-schema (E3/E12), shared assemble (E4),
+K-alignment (E6), baseline-integriteit (E7 + guard in beraad), run-artefact (E9), fixture-hygiëne
+(E10). Alle `feit` (geverifieerd in code). Restpunten: Langfuse dataset-push (E9 stap 2) niet
+geïmplementeerd; `sourceRef`-formaat-residu (E4); citationCorrectness=1-op-refusals (E3). `feit`.
+
+**Actuele gate-uitslag (verse `pnpm test`-run 2026-07-21, branch `fix/eval-gate-enforcement`,
+`eval-report.json` → `"passed": true`):** `feit`. Lokaal met `DATABASE_URL`, dus inclusief de
+nightly DB-integratiegates. Config: `judgeSamples 1` lokaal (CI gebruikt 3).
+
+| Laag / subgate | Uitslag | Kernmetrics |
 |---|---|---|
-| E0/E8 Enforcement (`EVAL_REQUIRE_ALL`, skip≠pass) | ✅ code / ⚠️ branch-protection extern | `ci.yml:79` expressie; `reportUnavailable` → fail. Branch-protection = §8. `feit` |
-| E1 Generation config | ✅ | `packages/shared/src/config/generation.ts` (temp 0, maxTokens 1024), gebruikt in `agent.ts:230,320` + eval. `feit` |
-| E2 Judge parse-retry | ✅ | `judge.ts` (`parseJudgeOutput`, `runJudgeWithParseRetry`), `judge.test.ts`. `feit` |
-| E3 Refusal + distractors | ✅ | `golden-set.ts:69` superRefine (refusal ⇒ distractor verplicht); 3 refusal-cases in base. `feit` |
-| E4 Shared `assemble()` | ✅ (met residu) | `judge.ts` `assembleEvalContext` → `@wunderstack/rag`, `assemble.test.ts` snapshot. Residu: `sourceRef`-formaat-divergentie (audit §5). `feit` |
-| E5 Rerank-zichtbaarheid | ✅ | Gate B roept prod-`rerank()`; status-telling + MRR-delta-gate. `feit` |
-| E6 K-alignment | ✅ | candidateK 15 → topK 5 (`retrieve.ts`, `config/rerank.ts`); `PRIMARY_K=5`. `feit` |
-| E7 Answer-baseline | ✅ (nieuw!) | `fixtures/baseline.json` bevat nu een **`answer`**-sectie (11 metrics, corpus v4). Weerspreekt audit ("absent"). `feit` |
-| E9 Run-artefact | ✅ / Langfuse-dataset-push ❌ | `report-writer.ts` + `finally`-write; `ci.yml:86` upload `if: always()`. Langfuse dataset-run push niet gevonden. `feit` |
-| E10 Fixture-hygiëne | ✅ | `GOLDEN_FIXTURE_HASH` (sha256 over beide fixtures), review-log `golden-set.REVIEW.md`; versie is **"4"** (deviatie van plan-"2"). `feit` |
-| E11 Gate B-integration (nightly) | ✅ code / ⚠️ nightly-resultaat extern | `scripts/ingest/fixtures.ts`, `retrievalIntegrationChecks` → `retrieveContext`; `ci.yml:52,74`. Nightly-uitkomst = §8. `feit` |
-| E12 Golden-set split (base/fund) | ✅ | `golden-set.base.jsonl` + `golden-set.etd.jsonl`, `loadFundSets()` + `FUND_SET_META`; per-laag rapportage. `feit` |
-| E13 Derived calculations + runtime-guard | ✅ (nieuw!) | `hard-facts.ts` (`HARD_FACT_PATTERNS`, gedeeld), guard in `agent.ts:138–140` (0 citaties + hard fact ⇒ NOT_FOUND); 3 `derived`-cases in `golden-set.base.jsonl`; `hard-facts.test.ts`. **Weerspreekt audit "NOT IMPLEMENTED".** `feit` |
+| G1 — contract (A + D-contract) | ✅ PASS | 13/13 checks |
+| G2-retrieval (B) | ✅ PASS | hit@1 95.8%, recall@3/5 100%, MRR 0.979, rerank 0 failed, delta ≥ 0 |
+| G2 `multi-turn` (B2) | ✅ PASS | 4/4 elliptical cases gedetecteerd + geretrievd (etd-029/030/d02/d03) |
+| G2-answer (C) | ✅ PASS | hardHall 100%, softFaith 100%, relevance 96.8%, citCorrect 100%, completeness 90.6%, refusalCalib 100%, citVerif 100%, orphan 0%, dangling 0%, over/under-refusal 0% |
+| G2-answer regressie | ✅ PASS | alle metrics binnen ±0.05 van baseline |
+| G3-pipeline (B-integration) | ✅ PASS | hit@1 95.8%, minScore-guard 3/3 leeg @ 0.48 |
+| G3-fund [etd] (F) | ✅ PASS | hit@1 95.7%, refusal-guard 3/3 leeg @ 0.48 |
+| G3-isolation (D-integration) | ✅ PASS | 0 cross-fund leakage over 3 fondsen (demo, etd, eval-fixtures) |
 
-**Actuele gate-uitslag (per `packages/agents/eval-report.json`, run 2026-07-18, `"passed": false`):** `feit` op het artefact; live-status ⚠️ requires test run.
-
-| Gate | Uitslag (artefact) | Falende checks |
-|---|---|---|
-| Gate A — prompt & clarify contract | ✅ PASS | — |
-| Gate B — retrieval recall + rerank | ✅ PASS | — |
-| Gate B2 — multi-turn condensatie | 🟡 FAIL | `etd-029`/`etd-030` niet als elliptisch gedetecteerd |
-| Gate C — answer-level | 🟡 FAIL | relevance <85%, completeness <70%, citation-verification <98%, dangling-marker-rate >0%, under-refusal-rate >10%, + completeness-regressie (0.658 vs baseline 0.723) |
-| Gate B-integration (nightly) | ✅ PASS | — |
-| Gate F — fund-correctness [etd] | 🟡 FAIL | refusal-guard: 0/3 out-of-corpus probes leeg bij minScore 0.35 |
-| Gate D — corpus-isolatie (contract + integration) | ✅ PASS | — |
-
-> ⚠️ Dit is de **vastgelegde** run van 2026-07-18; een verse `pnpm turbo run test` is nodig om de huidige branch-status te bevestigen (requires test run).
+> De baseline (`baseline.json`, corpus v4) is gezond: alle answer-metrics boven de G2-floors. Dit
+> weerspreekt de oudere `fix/citation-pipeline`-snapshot (§7 #4), waar de baseline onder de lat lag.
 
 ### 4.3 UI (Fase 13.1–13.3 / "UI-fluency"; de labels "UI-0 – UI-6" bestaan niet)
 
@@ -112,7 +122,7 @@ Bekende UI-gaten (uit `UI-AUDIT-v1.md`, nog open): `citationVerificationFailed` 
 
 ### 4.4 Productie & go-live (PLAN-v3 / "Fase 13–16" — bestaat niet als plan)
 
-Er is **geen `PLAN-v3`** en geen document dat Fase 13–16 (productie-hardening / OOMT go-live / multi-tenancy / procurement pack) definieert (glob `**/PLAN*.md` → alleen PLAN, PLAN-v2, PLAN-eval-gates, PLAN-ui-fluency). De onderstaande productie-relevante items zijn daarom beoordeeld op wat de code + regels zeggen: `feit`.
+**Achterhaald (2026-07-21):** `PLAN-v3.md` bestaat inmiddels (toegevoegd in `a9299a1`) en definieert Fase 13–17 (productie-hardening / OOMT go-live / multi-tenancy / procurement pack). De onderstaande items blijven beoordeeld op wat de **code + regels** waarmaken (een plan is nog geen implementatie): `feit`. Procurement is nu ook gedekt door de claim↔gate-kruistabel in `docs/eval/GATE-ARCHITECTURE.md` (Bijlage B).
 
 | Onderdeel | Status | Bewijs / zoekpoging |
 |---|---|---|
@@ -150,9 +160,9 @@ Fixture-integriteit bewaakt via `GOLDEN_FIXTURE_HASH` (sha256 over beide base-be
 2. **`docs/audit/eval-hardening-audit.md` markeert E13 als NOT IMPLEMENTED**, maar E13 (hard-fact-guard, shared regex, `derived`-category, cases) is nu **wel** aanwezig. `feit`. (Audit is verouderd t.o.v. deze branch.)
 3. **Audit markeert E7 answer-baseline als absent**, maar `baseline.json` heeft nu een `answer`-sectie. `feit`.
 4. **Recorded answer-baseline ligt deels onder de Gate C-drempels** (bv. faithfulness 0.784 < 0.80; citationVerification 0.903 < 0.98; hardHallucination 0.968 < 0.98; underRefusalRate 0.333 > 0.10). Een baseline die onder de harde gate-lat ligt betekent dat Gate C niet groen kan zijn op deze corpus/branch. `feit`.
-5. **Audit-opdracht verwacht labels `E0–E13`, `UI-0–UI-6`, `PLAN-v3 Fase 13–16`**; de repo gebruikt `P1–P8`, `Fase 13.1–13.3`, en heeft **geen** PLAN-v3. `feit`.
+5. **Audit-opdracht verwacht labels `E0–E13`, `UI-0–UI-6`, `PLAN-v3 Fase 13–16`**; de repo gebruikt `P1–P8`, `Fase 13.1–13.3`. `PLAN-v3.md` bestaat inmiddels wél (sinds `a9299a1`). `feit`.
 6. **E10 corpusversie is "4" (plan zei bump naar "2").** Bewuste deviatie, gedocumenteerd in `golden-set.ts`. `feit`.
-7. **`sourceRef`-formaat-divergentie** tussen eval-fixture-adapter (`"Artikel 5.2"`) en prod-ingest `buildSourceRef` (`"Artikel 5, lid 2"`). `feit` (uit audit §E4; blijft in code).
+7. **`sourceRef`-formaat-divergentie** tussen eval-fixture-adapter (`"Artikel 5.2"`) en prod-ingest `buildSourceRef` (`"Artikel 5, lid 2"`). **Geaccepteerd (Fase 6, 2026-07-21):** geen citatie-matching-impact — `sourceRef` is nergens matching-sleutel; het echte formaat draait nachtelijk in G3. Zie `docs/eval/GATE-ARCHITECTURE.md` §4.5. `feit`.
 
 ## 8. Externe checks (buiten repo, handmatig te controleren)
 > Nooit als done/not-done gemarkeerd — alleen handmatig te controleren.
