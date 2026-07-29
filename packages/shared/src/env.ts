@@ -88,6 +88,12 @@ const envSchema = z.object({
   // attempt that reaches the expensive path; resets at UTC midnight. Unset or 0 = disabled (dev). Like
   // the other rate-limit counters this is per process (see apps/runtime/lib/rate-limit.ts).
   RUNTIME_DAILY_CAP: optional(z.coerce.number().int().nonnegative()),
+  // Chat-stream robustness (apps/runtime /api/chat). Unset = the route's built-in defaults
+  // (45s turn budget, 10s heartbeat). Lower under a reverse-proxy idle timeout; raise for slow
+  // models. REQUEST_TIMEOUT_MS in @wunderstack/ai must stay >= the turn budget so the turn budget
+  // fires first and the route can emit a clean timeout error.
+  RUNTIME_CHAT_TURN_BUDGET_MS: optional(z.coerce.number().int().positive().max(300_000)),
+  RUNTIME_CHAT_HEARTBEAT_MS: optional(z.coerce.number().int().positive().max(60_000)),
 });
 
 export type Env = z.infer<typeof envSchema>;

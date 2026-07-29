@@ -12,7 +12,7 @@ import { NextResponse, type NextRequest } from "next/server";
  *     here and attach the CSP to both the *request* headers (Next reads the nonce from there to
  *     stamp its <script> tags) and the *response* headers (the browser enforces it).
  *
- *  2. Auth seam — intentionally a **no-op** for the public demo (see PLAN.md Fase 7). This is the
+ *  2. Auth seam — intentionally a **no-op** for the public demo (see docs/plans/PLAN.md Fase 7). This is the
  *     seam where a per-customer deployment slots in real auth (Auth.js, an API-key check, an
  *     allowlist, ...) without changing routes or components. Keep it pass-through until a real
  *     usecase forces auth — do not build an auth system here now.

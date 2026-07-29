@@ -21,7 +21,7 @@ export default async function WidgetPage({
 
   return (
     <main className="h-dvh bg-page" data-fund={fund}>
-      <Chat embedded fund={fund} starters={theme.starters} tagline={theme.tagline} />
+      <Chat embedded fund={fund} starterCategories={theme.starterCategories} />
     </main>
   );
 }

@@ -73,6 +73,8 @@ export const caoAnswerSchema = z.object({
   usage: caoUsageSchema,
   /** True when one or more model citations failed verbatim verification. */
   citationVerificationFailed: z.boolean().default(false),
+  /** Grounded follow-up question chips (empty when not found / clarify / suggestion failed). */
+  followUpQuestions: z.array(z.string().min(1).max(200)).max(3).default([]),
 });
 
 export type CaoAnswer = z.infer<typeof caoAnswerSchema>;
@@ -89,8 +91,8 @@ export type CaoStreamPhase = "searching" | "retrieved" | "generating";
 /**
  * Streaming counterpart of `CaoAnswer`, as a sequence of events the API layer can forward to the
  * browser (see apps/demo). Order on the normal path: zero or more `status` events, zero or more
- * `text` deltas, exactly one `citations` (verified), then exactly one `done`. Clarify and not-found
- * paths emit `text` → `done` directly (no citations).
+ * `text` deltas, exactly one `citations` (verified), optionally one `followups`, then exactly one
+ * `done`. Clarify and not-found paths emit `text` → `citations` → `done` (no followups).
  */
 export type CaoStreamEvent =
   | { type: "status"; phase: CaoStreamPhase; count?: number }
@@ -104,6 +106,11 @@ export type CaoStreamEvent =
       /** Final answer text (sentinel/citation block stripped, failed markers removed). The client
        * replaces its accumulated streamed text with this to reconcile stripped citations. */
       answer: string;
+    }
+  | {
+      type: "followups";
+      /** 2–3 grounded Dutch follow-up questions; omitted from the stream when empty. */
+      questions: string[];
     }
   | { type: "done"; usage: CaoUsage; traceId: string | null };
 

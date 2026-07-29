@@ -40,7 +40,7 @@
  */
 
 import { DEFAULT_LLM_MODEL, embed, generateText } from "@wunderstack/ai";
-import { closeDb, listFunds, rerank, retrieveContext, type RetrievedChunk } from "@wunderstack/rag";
+import { closeDb, listFunds, rerank, retrieveContext, assemble, type RetrievedChunk } from "@wunderstack/rag";
 import {
   env,
   EVAL_FIXTURE_FUND,
@@ -50,9 +50,10 @@ import {
 } from "@wunderstack/shared";
 
 import { detectClarification } from "../cao/clarify.js";
-import { condenseQuery, isElliptical } from "../cao/condense.js";
+import { condenseQuery, isElliptical, retrievalQueriesForFollowUp } from "../cao/condense.js";
 import { generateAnswerWithRepair } from "../cao/generate-answer.js";
-import { retrievalInputSchema } from "../cao/tools.js";
+import { verifyAndBuild } from "../cao/agent.js";
+import { retrievalInputSchema, type RetrievalOutput } from "../cao/tools.js";
 import { caoQuestionSchema } from "../types.js";
 import { CAO_SYSTEM_INSTRUCTIONS, NOT_FOUND_MESSAGE, buildAnswerPrompt } from "../cao/prompt.js";
 import {
@@ -68,6 +69,7 @@ import {
   type GoldenCase,
   type GoldenFundCase,
   type GoldenFundSet,
+  type GoldenPassage,
   goldenCases,
   goldenFundSets,
   goldenPassages,
@@ -75,7 +77,7 @@ import {
   passageToHit,
   passagesForCase,
 } from "./golden-set.js";
-import { ANSWER_THRESHOLDS, answerFloorFailures } from "./answer-floors.js";
+import { ANSWER_THRESHOLDS, MULTI_TURN_SERVE_THRESHOLDS, answerFloorFailures } from "./answer-floors.js";
 import { acquireEvalLock, EvalAlreadyRunningError } from "./eval-lock.js";
 import { GATE_SPECS, type GateId, type GateRequirement, type GateSpec } from "./gates.js";
 import {
@@ -323,6 +325,86 @@ async function evalQuestion(testCase: GoldenCase): Promise<string> {
     return testCase.question;
   }
   return condenseWithRetry(testCase.history, testCase.question);
+}
+
+const EVAL_RETRIEVAL_TIMINGS = {
+  rewriteMs: 0,
+  embedMs: 0,
+  searchMs: 0,
+  rerankMs: 0,
+  totalMs: 0,
+};
+
+function retrievalOutputFromPassages(passages: GoldenPassage[]): RetrievalOutput {
+  const chunks = passages.map((passage) => passageToHit(passage));
+  const assembled = assemble(chunks, EVAL_RETRIEVAL_TIMINGS);
+  return {
+    context: assembled.context,
+    citations: assembled.citations,
+    hits: chunks.map((chunk) => ({
+      chunkId: chunk.chunkId,
+      ordinal: chunk.ordinal,
+      score: chunk.score,
+      title: chunk.source.title,
+    })),
+    timings: EVAL_RETRIEVAL_TIMINGS,
+    chunks,
+    fullChunkContent: passages.map((passage) => [passage.id, passage.content]),
+  };
+}
+
+async function rankPassageIdsForQueries(
+  queries: string[],
+  embeddingConfig: ReturnType<typeof requireEmbeddingConfig>,
+  rerankConfig: ReturnType<typeof requireRerankConfig>,
+): Promise<{ rankedIds: string[]; rerankFailed: boolean; rerankReason?: string }> {
+  const passageResult = await embed({
+    texts: goldenPassages.map((passage) => passage.content),
+    model: embeddingConfig.model,
+    version: embeddingConfig.version,
+  });
+  const passageVectors = normalize(passageResult.embeddings);
+  const candidateById = new Map<string, { passage: GoldenPassage; score: number }>();
+  const primaryQuery = queries[0] ?? "";
+
+  for (const query of queries) {
+    const queryResult = await embed({
+      texts: [query],
+      model: embeddingConfig.model,
+      version: embeddingConfig.version,
+    });
+    const [queryVector] = normalize(queryResult.embeddings);
+    const cosineRanked = goldenPassages
+      .map((passage, passageIndex) => ({
+        passage,
+        score: dot(queryVector as number[], passageVectors[passageIndex] as number[]),
+      }))
+      .sort((left, right) => right.score - left.score);
+    for (const entry of cosineRanked.slice(0, rerankConfig.candidateK)) {
+      const existing = candidateById.get(entry.passage.id);
+      if (existing === undefined || entry.score > existing.score) {
+        candidateById.set(entry.passage.id, entry);
+      }
+    }
+  }
+
+  const mergedCandidates = [...candidateById.values()]
+    .sort((left, right) => right.score - left.score)
+    .slice(0, rerankConfig.candidateK);
+  const candidateHits = mergedCandidates.map((entry) => ({
+    ...passageToHit(entry.passage),
+    score: entry.score,
+  }));
+  const result = await rerank({
+    query: primaryQuery,
+    chunks: candidateHits,
+    topK: rerankConfig.topK,
+  });
+  return {
+    rankedIds: result.chunks.map((chunk) => chunk.chunkId),
+    rerankFailed: result.status === "failed",
+    ...(result.status === "failed" ? { rerankReason: result.reason } : {}),
+  };
 }
 
 interface RecallMetrics {
@@ -804,12 +886,6 @@ async function condensationChecks(): Promise<Check[]> {
     return [{ name: "condensation: at least one multi-turn golden case exists", ok: false }];
   }
 
-  const passageResult = await embed({
-    texts: goldenPassages.map((passage) => passage.content),
-    model: embeddingConfig.model,
-    version: embeddingConfig.version,
-  });
-  const passageVectors = normalize(passageResult.embeddings);
   const checks: Check[] = [];
 
   for (const testCase of followUps) {
@@ -824,46 +900,126 @@ async function condensationChecks(): Promise<Check[]> {
     }
 
     const condensed = await condenseWithRetry(history, testCase.question);
-    const queryResult = await embed({
-      texts: [condensed],
-      model: embeddingConfig.model,
-      version: embeddingConfig.version,
-    });
-    const [queryVector] = normalize(queryResult.embeddings);
-    const cosineRanked = goldenPassages
-      .map((passage, passageIndex) => ({
-        passage,
-        score: dot(queryVector as number[], passageVectors[passageIndex] as number[]),
-      }))
-      .sort((a, b) => b.score - a.score);
-    const candidates = cosineRanked.slice(0, rerankConfig.candidateK);
-    const candidateHits = candidates.map((entry) => ({
-      ...passageToHit(entry.passage),
-      score: entry.score,
-    }));
-    const result = await rerank({
-      query: condensed,
-      chunks: candidateHits,
-      topK: rerankConfig.topK,
-    });
-    const rankedIds = result.chunks.map((chunk) => chunk.chunkId);
+    const retrievalQueries = retrievalQueriesForFollowUp(history, testCase.question, condensed);
+    const ranked = await rankPassageIdsForQueries(retrievalQueries, embeddingConfig, rerankConfig);
 
-    if (result.status === "failed") {
+    if (ranked.rerankFailed) {
       checks.push({
         name: `condensation: "${testCase.id}" rerank did not fail`,
         ok: false,
-        detail: result.reason,
+        detail: ranked.rerankReason,
       });
     }
 
     checks.push({
       name: `condensation: "${testCase.id}" retrieves the expected article after rewrite`,
-      ok: rankedIds.some((id) => passageMatchesCase(id, testCase)),
-      detail: `condensed="${condensed}" top=${rankedIds.join(", ")}`,
+      ok: ranked.rankedIds.some((id) => passageMatchesCase(id, testCase)),
+      detail: `condensed="${condensed}" queries=${retrievalQueries.join(" | ")} top=${ranked.rankedIds.join(", ")}`,
     });
   }
 
   return checks;
+}
+
+async function multiTurnServeChecks(): Promise<Check[]> {
+  const embeddingConfig = requireEmbeddingConfig();
+  const rerankConfig = requireRerankConfig();
+  const followUps = goldenCases.filter(
+    (testCase) =>
+      Array.isArray(testCase.history) &&
+      testCase.history.length > 0 &&
+      testCase.category !== "refusal" &&
+      isElliptical(testCase.question, testCase.history),
+  );
+  if (followUps.length === 0) {
+    return [{ name: "multi-turn serve: at least one answerable elliptical case exists", ok: false }];
+  }
+
+  const checks: Check[] = [];
+  let unverifiableCount = 0;
+  let servedWithCitationCount = 0;
+
+  console.log(`\nMulti-turn serve-path (${String(followUps.length)} answerable elliptical cases):`);
+
+  for (const testCase of followUps) {
+    const history = testCase.history ?? [];
+    const condensed = await condenseWithRetry(history, testCase.question);
+    const retrievalQueries = retrievalQueriesForFollowUp(history, testCase.question, condensed);
+    const ranked = await rankPassageIdsForQueries(retrievalQueries, embeddingConfig, rerankConfig);
+    const passages = ranked.rankedIds
+      .map((id) => passageById(id))
+      .filter((passage): passage is GoldenPassage => passage !== undefined);
+    const retrieval = retrievalOutputFromPassages(passages);
+    const userSupplied = [testCase.question, ...history.map((message) => message.content)].join(" ");
+
+    const generated = await generateAnswerWithRepair({
+      chunkContentById: new Map(passages.map((passage) => [passage.id, passage.content])),
+      userSupplied,
+      maxAttempts: env.EVAL_GENERATION_SAMPLES ?? 2,
+      generate: (extraMessages) =>
+        retryWithBackoff(
+          () =>
+            generateText({
+              model: EVAL_LLM_MODEL,
+              messages: [
+                { role: "system", content: CAO_SYSTEM_INSTRUCTIONS },
+                { role: "user", content: buildAnswerPrompt(retrieval.context, condensed) },
+                ...extraMessages,
+              ],
+              temperature: GENERATION_CONFIG.temperature,
+              maxTokens: GENERATION_CONFIG.maxTokens,
+            }),
+          { baseDelayMs: 5000, maxAttempts: 8 },
+        ).then((result) => ({
+          text: result.text,
+          usage: result.usage,
+          finishReason: result.finishReason,
+        })),
+    });
+
+    const served = verifyAndBuild(generated.text, retrieval, userSupplied);
+    if (served.unverifiable) {
+      unverifiableCount += 1;
+    }
+    if (served.found && served.citations.length > 0) {
+      servedWithCitationCount += 1;
+    }
+
+    console.log(
+      `  ${testCase.id}: found=${String(served.found)} citations=${String(served.citations.length)} ` +
+        `unverifiable=${String(served.unverifiable)} hardFact=${String(served.hardFactGuardTriggered)}`,
+    );
+
+    checks.push({
+      name: `multi-turn serve: "${testCase.id}" survives verifyAndBuild with a verified citation`,
+      ok: served.found && served.citations.length > 0,
+      detail:
+        `queries=${retrievalQueries.join(" | ")} citations=${String(served.citations.length)} ` +
+        `unverifiable=${String(served.unverifiable)}`,
+    });
+
+    await sleep(2000);
+  }
+
+  console.log(
+    `  served-with-citation ${String(servedWithCitationCount)}/${String(followUps.length)}  ` +
+      `unverifiable ${String(unverifiableCount)}/${String(followUps.length)}  ` +
+      `(gate <= ${String(MULTI_TURN_SERVE_THRESHOLDS.maxUnverifiableCount)} unverifiable)\n`,
+  );
+
+  checks.push({
+    name: `multi-turn serve: unverifiable count <= ${String(MULTI_TURN_SERVE_THRESHOLDS.maxUnverifiableCount)}`,
+    ok: unverifiableCount <= MULTI_TURN_SERVE_THRESHOLDS.maxUnverifiableCount,
+    detail: `${String(unverifiableCount)} of ${String(followUps.length)} unverifiable after verifyAndBuild`,
+  });
+
+  return checks;
+}
+
+async function multiTurnChecks(): Promise<Check[]> {
+  const condensation = await condensationChecks();
+  const serve = await multiTurnServeChecks();
+  return [...condensation, ...serve];
 }
 
 function answerLevelChecks(aggregate: AggregateScores): Check[] {
@@ -1273,7 +1429,7 @@ const GATE_RUNS: Record<GateId, () => GateRunResult | Promise<GateRunResult>> = 
     ...corpusIsolationContractChecks(),
   ],
   "G2-retrieval": retrievalAndRerankChecks,
-  "G2-multi-turn": condensationChecks,
+  "G2-multi-turn": multiTurnChecks,
   "G2-answer": answerQualityChecks,
   "G3-pipeline": retrievalIntegrationChecks,
   "G3-fund": fundLayerGroups,

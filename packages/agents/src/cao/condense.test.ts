@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { isElliptical } from "./condense.js";
+import { isElliptical, buildFallbackRetrievalQuery, isDegenerateCondensation, retrievalQueriesForFollowUp } from "./condense.js";
 
 const history = [
   { role: "user" as const, content: "Krijgen oudere werknemers extra vakantiedagen?" },
@@ -35,4 +35,25 @@ test("long follow-up with a strong standalone term and no connective is not elli
     isElliptical("Hoeveel vakantiedagen krijgt een fulltime werknemer per kalenderjaar precies toegewezen?", history),
     false,
   );
+});
+
+test("buildFallbackRetrievalQuery keeps the last user turn with the follow-up", () => {
+  assert.equal(
+    buildFallbackRetrievalQuery(history, "En hoeveel extra dagen krijg ik als ik 58 ben?"),
+    "Krijgen oudere werknemers extra vakantiedagen? En hoeveel extra dagen krijg ik als ik 58 ben?",
+  );
+});
+
+test("retrievalQueriesForFollowUp always includes a history-aware fallback", () => {
+  const queries = retrievalQueriesForFollowUp(history, "En hoeveel extra dagen krijg ik als ik 58 ben?", "Hoeveel extra vakantiedagen bij 58 jaar?");
+  assert.equal(queries.length, 2);
+  assert.ok(queries.some((query) => query.includes("Krijgen oudere werknemers")));
+});
+
+test("isDegenerateCondensation flags an echo of the original question", () => {
+  assert.equal(
+    isDegenerateCondensation("En hoeveel extra dagen krijg ik als ik 58 ben?", "En hoeveel extra dagen krijg ik als ik 58 ben?"),
+    true,
+  );
+  assert.equal(isDegenerateCondensation("Hoeveel extra vakantiedagen bij 58 jaar?", "En hoeveel extra dagen krijg ik als ik 58 ben?"), false);
 });

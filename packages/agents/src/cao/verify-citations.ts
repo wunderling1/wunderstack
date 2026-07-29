@@ -141,6 +141,8 @@ export interface VerifiedCitation extends ModelCitation {
 export interface CitationVerificationResult {
   verified: VerifiedCitation[];
   strippedMarkers: number[];
+  /** The citations that failed verification, kept whole so a repair turn can echo the exact quotes. */
+  strippedCitations: ModelCitation[];
   allVerified: boolean;
 }
 
@@ -154,11 +156,13 @@ export function verifyCitations(
 ): CitationVerificationResult {
   const verified: VerifiedCitation[] = [];
   const strippedMarkers: number[] = [];
+  const strippedCitations: ModelCitation[] = [];
 
   for (const citation of modelCitations) {
     const resolved = resolveChunkContent(citation.chunkId, chunkContentById);
     if (!resolved) {
       strippedMarkers.push(citation.marker);
+      strippedCitations.push(citation);
       continue;
     }
     // Case-folded verbatim comparison (golden-set.REVIEW.md §20, etd-002): the model naturally
@@ -171,6 +175,7 @@ export function verifyCitations(
     const contentNorm = normalizeWhitespace(resolved.content).toLowerCase();
     if (!quoteIsGrounded(quoteNorm, contentNorm)) {
       strippedMarkers.push(citation.marker);
+      strippedCitations.push(citation);
       continue;
     }
     verified.push({ ...citation, chunkId: resolved.resolvedId, verified: true });
@@ -179,6 +184,7 @@ export function verifyCitations(
   return {
     verified,
     strippedMarkers,
+    strippedCitations,
     allVerified: strippedMarkers.length === 0 && modelCitations.length > 0,
   };
 }

@@ -56,6 +56,11 @@ export const chatEventSchema = z.discriminatedUnion("type", [
     answer: z.string(),
   }),
   z.object({
+    type: z.literal("followups"),
+    /** Grounded Dutch follow-up question chips (2–3); omitted from the stream when empty. */
+    questions: z.array(z.string().min(1).max(200)).max(3),
+  }),
+  z.object({
     type: z.literal("done"),
     usage: z.object({
       promptTokens: z.number().int().nonnegative(),

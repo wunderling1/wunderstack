@@ -27,6 +27,7 @@
   --color-state-refusal-fg: var(--state-refusal-fg);
   --color-state-danger-bg: var(--state-danger-bg);
   --color-state-danger-fg: var(--state-danger-fg);
+  --radius-input: var(--radius-input);
   --radius-control: var(--radius-control);
   --radius-card: var(--radius-card);
   --radius-pill: var(--radius-pill);

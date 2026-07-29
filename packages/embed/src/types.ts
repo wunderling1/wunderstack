@@ -37,6 +37,10 @@ export const chatEventSchema = z.discriminatedUnion("type", [
     answer: z.string(),
     citationVerificationFailed: z.boolean(),
   }),
+  z.object({
+    type: z.literal("followups"),
+    questions: z.array(z.string().min(1).max(200)).max(3),
+  }),
   z.object({ type: z.literal("done"), traceId: z.string().nullable() }),
   z.object({ type: z.literal("error"), message: z.string() }),
 ]);

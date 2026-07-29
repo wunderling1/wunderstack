@@ -59,6 +59,11 @@ export const ANSWER_THRESHOLDS = {
   maxUnderRefusalCount: 1,
 } as const;
 
+/** G2-multi-turn serve-path: answerable follow-ups must survive verifyAndBuild with a verified citation. */
+export const MULTI_TURN_SERVE_THRESHOLDS = {
+  maxUnverifiableCount: 0,
+} as const;
+
 /**
  * G2 baseline-write guard: which ABSOLUTE Gate C floors a run misses. A baseline may only capture a
  * run that itself clears every absolute floor — otherwise `EVAL_WRITE_BASELINE` could quietly record a

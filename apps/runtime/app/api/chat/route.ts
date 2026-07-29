@@ -4,6 +4,12 @@ import { getTenantConfig } from "@wunderstack/db";
 import { getTenantId } from "@wunderstack/tenant";
 import { env } from "@wunderstack/shared";
 import { getCaoAgent } from "@/lib/agent";
+import {
+  createChatWorkSignal,
+  DEFAULT_CHAT_HEARTBEAT_MS,
+  DEFAULT_CHAT_TURN_BUDGET_MS,
+  pipeChatNdjsonStream,
+} from "@/lib/chat-stream";
 import { corsHeaders, preflight } from "@/lib/cors";
 import { resolveEmbedAuth } from "@/lib/embed-auth";
 import { resolveFundScope } from "@/lib/fund-scope";
@@ -24,6 +30,9 @@ import { chatEventSchema, chatRequestSchema, type ChatEvent } from "./contract";
  * Fase 1: after the turn, one interaction event is written to the fund database (via
  * @wunderstack/analytics) with the tenant/fund/session/outcome dimensions. Best-effort — a failed
  * or unconfigured event-log must never break an answer that was already streamed.
+ *
+ * Stream robustness: a turn budget + NDJSON heartbeats + a terminal-event guarantee so a slow
+ * buffer-to-verify generation never leaves the client spinning forever (see lib/chat-stream.ts).
  */
 
 // The agent uses the Node runtime (postgres driver, Mastra); not the edge runtime.
@@ -35,6 +44,8 @@ const RATE_LIMIT = { windowMs: 60_000, max: 20 };
 const KEY_RATE_LIMIT = { windowMs: 60_000, max: 120 };
 /** Global daily chat ceiling for the whole process (tenant-zero denial-of-wallet backstop). 0 = off. */
 const DAILY_CAP = env.RUNTIME_DAILY_CAP ?? 0;
+const TURN_BUDGET_MS = env.RUNTIME_CHAT_TURN_BUDGET_MS ?? DEFAULT_CHAT_TURN_BUDGET_MS;
+const HEARTBEAT_MS = env.RUNTIME_CHAT_HEARTBEAT_MS ?? DEFAULT_CHAT_HEARTBEAT_MS;
 
 const encoder = new TextEncoder();
 
@@ -123,10 +134,15 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  // Abort in-flight work (retrieval + Mistral generation) when the client disconnects, instead of
-  // generating tokens no one will read.
-  const abort = new AbortController();
-  request.signal.addEventListener("abort", () => abort.abort());
+  // Cancel in-flight work on: client disconnect, stream cancel, OR turn-budget expiry. Terminal
+  // handling keys off `request.signal` (client still connected?) so a turn-budget abort still yields
+  // an error event instead of a silent hang.
+  const cancel = new AbortController();
+  const { workSignal, turnDeadline } = createChatWorkSignal({
+    clientSignal: request.signal,
+    cancelSignal: cancel.signal,
+    turnBudgetMs: TURN_BUDGET_MS,
+  });
 
   let slotReleased = false;
   const releaseOnce = (): void => {
@@ -143,14 +159,19 @@ export async function POST(request: Request): Promise<Response> {
       let needsClarification = false;
       let citationCount = 0;
       let traceId: string | null = null;
-      let sawError = false;
 
-      try {
-        for await (const event of agent.answerStream(
+      const { sawError } = await pipeChatNdjsonStream({
+        events: agent.answerStream(
           { question, fund, history },
-          { signal: abort.signal, sessionId, ...(userId === undefined ? {} : { userId }) },
-        )) {
-          if (abort.signal.aborted) break;
+          { signal: workSignal, sessionId, ...(userId === undefined ? {} : { userId }) },
+        ),
+        enqueue: (chunk) => controller.enqueue(chunk),
+        encodeEvent: line,
+        isClientDisconnected: () => request.signal.aborted,
+        isTurnTimedOut: () => turnDeadline.aborted,
+        workSignal,
+        heartbeatMs: HEARTBEAT_MS,
+        onEvent: (event) => {
           if (event.type === "citations") {
             found = event.found;
             needsClarification = event.needsClarification;
@@ -158,52 +179,44 @@ export async function POST(request: Request): Promise<Response> {
           } else if (event.type === "done") {
             traceId = event.traceId;
           }
-          controller.enqueue(line(event));
-        }
-      } catch (error) {
-        sawError = true;
-        if (!abort.signal.aborted) {
-          console.error("[api/chat] agent stream failed:", error);
-          controller.enqueue(
-            line({ type: "error", message: "Er ging iets mis bij het beantwoorden van je vraag." }),
-          );
-        }
-      } finally {
-        releaseOnce();
-        // Fase 1 event-log. Skip on client abort (an incomplete turn is not a product signal).
-        if (!abort.signal.aborted) {
-          const outcome: InteractionOutcome = sawError
-            ? "error"
-            : needsClarification
-              ? "clarified"
-              : found
-                ? "answered"
-                : "refused";
-          try {
-            await recordInteractionEvent({
-              tenantId,
-              agentId: AGENT_ID,
-              fund,
-              sessionId,
-              ...(userId === undefined ? {} : { userId }),
-              ...(traceId === null ? {} : { traceId }),
-              outcome,
-              citationCount,
-              question,
-            });
-          } catch (error) {
-            console.error("[api/chat] failed to record interaction event:", error);
-          }
-        }
+        },
+      });
+
+      releaseOnce();
+      // Fase 1 event-log. Skip on client disconnect (an incomplete turn is not a product signal).
+      // A turn-budget timeout still logs as error — the client was connected and got a terminal event.
+      if (!request.signal.aborted) {
+        const outcome: InteractionOutcome = sawError
+          ? "error"
+          : needsClarification
+            ? "clarified"
+            : found
+              ? "answered"
+              : "refused";
         try {
-          controller.close();
-        } catch {
-          /* already closed (client cancelled the stream) */
+          await recordInteractionEvent({
+            tenantId,
+            agentId: AGENT_ID,
+            fund,
+            sessionId,
+            ...(userId === undefined ? {} : { userId }),
+            ...(traceId === null ? {} : { traceId }),
+            outcome,
+            citationCount,
+            question,
+          });
+        } catch (error) {
+          console.error("[api/chat] failed to record interaction event:", error);
         }
+      }
+      try {
+        controller.close();
+      } catch {
+        /* already closed (client cancelled the stream) */
       }
     },
     cancel() {
-      abort.abort();
+      cancel.abort();
       releaseOnce();
     },
   });

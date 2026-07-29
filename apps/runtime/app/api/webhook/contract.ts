@@ -3,7 +3,7 @@ import { z } from "zod";
 /**
  * Inbound webhook contract for LMS / O&O-fund systems. v1 accepts a minimal, well-typed envelope
  * and acknowledges it; it deliberately does not trigger ingestion or any side effect yet (that
- * arrives when a real fund integration forces it — see PLAN.md "Buiten v1"). The point now is a
+ * arrives when a real fund integration forces it — see docs/plans/PLAN.md "Buiten v1"). The point now is a
  * validated, documented seam.
  */
 export const webhookEventSchema = z.object({

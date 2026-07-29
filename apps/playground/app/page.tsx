@@ -26,17 +26,14 @@ export default async function DemoPage({
           <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-on-primary">
             <span className="text-sm font-semibold">{theme.logoText}</span>
           </div>
-          <div>
-            <h1 className="text-sm font-semibold leading-tight">{theme.label}</h1>
-            <p className="text-xs text-text-muted">{theme.tagline}</p>
-          </div>
+          <h1 className="text-sm font-semibold leading-tight">{theme.label}</h1>
           <div className="ml-auto">
             <FundSelector funds={funds} active={fund} />
           </div>
         </div>
       </header>
       <div className="flex-1 overflow-hidden">
-        <Chat fund={fund} starters={theme.starters} tagline={theme.tagline} />
+        <Chat fund={fund} starterCategories={theme.starterCategories} />
       </div>
     </main>
   );

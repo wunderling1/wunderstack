@@ -60,9 +60,41 @@ export interface ContractAssessment {
   penalty: number;
   /** Dutch, model-facing reason used to steer the repair turn (empty when penalty is 0). */
   reason: string;
+  /**
+   * The exact quotes that failed verbatim verification, echoed back in the repair turn so the model
+   * fixes the specific spans instead of guessing. Empty when nothing was stripped.
+   */
+  strippedQuotes: string[];
 }
 
 const ZERO_USAGE: TokenUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+
+/**
+ * Raised when a full generation budget produced no usable answer — every attempt was aborted or
+ * came back empty (typically the client disconnected mid-generation, or the provider request timed
+ * out). It is a deliberate throw so the caller stops the turn cleanly instead of serving an empty
+ * `found=true` bubble. See {@link isUnusableAttempt}.
+ */
+export class GenerationAbortedError extends Error {
+  constructor(attempts: number) {
+    super(`Generation produced no usable answer after ${String(attempts)} attempt(s) (aborted or empty).`);
+    this.name = "GenerationAbortedError";
+  }
+}
+
+/**
+ * An attempt that must never be served or win the repair loop.
+ *
+ * Mastra surfaces an aborted (client disconnect) or guardrail-tripped generation as an EMPTY
+ * completion with `finishReason: "tripwire"` — it does not throw. Left unchecked, that empty string
+ * parses as a "clean refusal" (no sentinel, no markers, no hard fact → penalty 0 in
+ * `assessCitationContract`), so it silently beats a real answer in the `<=` tie-break and is emitted
+ * as a blank, sourceless bubble marked `found=true`. Treat any empty/tripwire attempt as unusable:
+ * a real refusal is the non-empty `NOT_FOUND_MESSAGE`, never "".
+ */
+function isUnusableAttempt(attempt: AnswerAttempt): boolean {
+  return attempt.finishReason === "tripwire" || attempt.text.trim().length === 0;
+}
 
 /** A missing/unparseable block or an ungrounded fact is a hard fail; one bad marker is a soft fail. */
 const PENALTY_PARSE_FAILED = 100;
@@ -95,11 +127,12 @@ export function assessCitationContract(
   if (parsed.citationParseFailed) {
     if (!asserts) {
       // No claim to back and no citation block: a clean refusal / no-source answer. Nothing to repair.
-      return { penalty: 0, reason: "" };
+      return { penalty: 0, reason: "", strippedQuotes: [] };
     }
     return {
       penalty: PENALTY_PARSE_FAILED,
       reason: "het citatieblok na de sentinel ontbrak of was geen geldige JSON-array",
+      strippedQuotes: [],
     };
   }
 
@@ -126,16 +159,34 @@ export function assessCitationContract(
     );
   }
 
-  return { penalty, reason: reasons.join("; ") };
+  return {
+    penalty,
+    reason: reasons.join("; "),
+    strippedQuotes: verification.strippedCitations.map((citation) => citation.quote),
+  };
 }
 
-function buildRepairMessages(previous: string, reason: string): ChatMessage[] {
+function buildRepairMessages(previous: string, reason: string, strippedQuotes: string[] = []): ChatMessage[] {
+  // Echo the exact quotes that failed verbatim verification so the repair turn fixes those specific
+  // spans instead of re-guessing. The most common recoverable failure is a quote that stitched two
+  // spans or paraphrased the head; the fix is to split into contiguous quotes under one marker.
+  const strippedQuoteLines =
+    strippedQuotes.length === 0
+      ? []
+      : [
+          "Deze citaten waren NIET letterlijk in de context terug te vinden:",
+          ...strippedQuotes.map((quote) => `  - "${quote}"`),
+          "Voor elk daarvan: splits het op in MEERDERE citatie-objecten met HETZELFDE marker-nummer,",
+          "elk met een eigen aaneengesloten quote die begint bij een woord dat letterlijk in de passage",
+          "staat. Plak nooit twee stukken aan elkaar met \"…\" of \"...\".",
+        ];
   return [
     { role: "assistant", content: previous },
     {
       role: "user",
       content: [
         `Je vorige antwoord voldeed niet aan het citatie-contract: ${reason}.`,
+        ...strippedQuoteLines,
         "Herschrijf je volledige antwoord op basis van UITSLUITEND de eerder gegeven context.",
         "Onderbouw elke feitelijke bewering met een [n]-verwijzing én een woordelijk (verbatim) citaat in",
         "het citatieblok na de sentinel. Voeg geen [n]-verwijzing toe zonder bijbehorend geverifieerd citaat.",
@@ -171,6 +222,23 @@ function addUsage(a: TokenUsage | undefined, b: TokenUsage | undefined): TokenUs
 }
 
 /**
+ * The exact state the serve-time coupling guard (verifyAndBuild, agent.ts) refuses: a SUBSTANTIVE
+ * answer — it carries a `[n]` marker or a load-bearing hard fact — for which not a single citation
+ * verifies verbatim. "Asserts" is read off the ORIGINAL prose so an answer whose markers would be
+ * stripped still counts as substantive. This is the trigger for the one bounded extra repair attempt
+ * (option b): it fires ONLY here, so latency/cost rise by at most one call and only on the case that
+ * would otherwise be served sourceless.
+ */
+function isUnverifiableContentAnswer(raw: string, chunkContentById: Map<string, string>): boolean {
+  const parsed = parseGenerationOutput(raw);
+  const asserts = extractCitationMarkers(parsed.answerMarkdown).length > 0 || containsHardFact(parsed.answerMarkdown);
+  if (!asserts) {
+    return false;
+  }
+  return verifyCitations(parsed.modelCitations, chunkContentById).verified.length === 0;
+}
+
+/**
  * Generate a cited answer as a bounded best-of-N over the citation contract. The first attempt is a
  * plain generation; every subsequent attempt is a repair turn fed the best-so-far violation, so the
  * model keeps getting a concrete "your quote X was not verbatim / fact Y is ungrounded" nudge. The loop
@@ -184,6 +252,11 @@ function addUsage(a: TokenUsage | undefined, b: TokenUsage | undefined): TokenUs
  * couple of attempts and keeping a clean one collapses that variance WITHOUT weakening any threshold —
  * a genuinely ungrounded assertion still fails every attempt and is served as the not-found refusal.
  * Defaults to 2 (one generation + one repair), so production latency is unchanged; the eval raises it.
+ *
+ * Beyond `maxAttempts`, ONE additional repair attempt (option b) fires only when the chosen attempt is
+ * a substantive answer with zero verified citations ({@link isUnverifiableContentAnswer}) — the exact
+ * state the serve-time coupling guard refuses. This targets the sourceless-answer failure the penalty
+ * does not single out, at a bounded +1 call on the worst case.
  */
 export async function generateAnswerWithRepair(args: {
   chunkContentById: Map<string, string>;
@@ -207,9 +280,19 @@ export async function generateAnswerWithRepair(args: {
     // the serve-time guard (agent.ts) turns a violation into a hard NOT_FOUND. The guard is the safety
     // net, not the first line.
     const extraMessages =
-      best === undefined ? [] : buildRepairMessages(best.attempt.text, best.assessment.reason);
+      best === undefined
+        ? []
+        : buildRepairMessages(best.attempt.text, best.assessment.reason, best.assessment.strippedQuotes);
     const attempt = await args.generate(extraMessages);
     usage = addUsage(usage, attempt.usage);
+
+    // An aborted/tripwire (empty) attempt is not an answer: never let it become `best`, trigger the
+    // penalty-0 clean-stop, or overwrite a real earlier attempt. Skip it and, if budget remains, try
+    // again; a run that yields ONLY unusable attempts throws below instead of returning "".
+    if (isUnusableAttempt(attempt)) {
+      continue;
+    }
+
     const assessment = assessCitationContract(attempt.text, args.chunkContentById, userSupplied);
 
     // `<=` so a later attempt wins ties (it acted on the feedback); strict improvements always win.
@@ -221,7 +304,33 @@ export async function generateAnswerWithRepair(args: {
     }
   }
 
-  const chosen = best as { attempt: AnswerAttempt; assessment: ContractAssessment; index: number };
+  if (best === undefined) {
+    // Every attempt was aborted/empty — surface it as an aborted turn, not a silent empty answer.
+    throw new GenerationAbortedError(attemptsRun);
+  }
+
+  // Option b — one bounded extra repair attempt, targeted at the exact state the serve-time coupling
+  // guard would otherwise refuse: a substantive answer with zero verified citations. The normal budget
+  // optimises the penalty; this rescue optimises the specific "sourceless answer" failure that the
+  // penalty alone does not distinguish (a single stripped marker and an all-stripped answer can carry
+  // the same penalty). Fires at most once, only on this state, so cost is +1 call on the worst case.
+  if (best.assessment.penalty > 0 && isUnverifiableContentAnswer(best.attempt.text, args.chunkContentById)) {
+    attemptsRun += 1;
+    const rescue = await args.generate(
+      buildRepairMessages(best.attempt.text, best.assessment.reason, best.assessment.strippedQuotes),
+    );
+    usage = addUsage(usage, rescue.usage);
+    if (!isUnusableAttempt(rescue)) {
+      const assessment = assessCitationContract(rescue.text, args.chunkContentById, userSupplied);
+      // `<=` keeps the rescue on a tie: it acted on the feedback and, at equal penalty, is more likely
+      // to have split the offending quote into a verifiable span.
+      if (assessment.penalty <= best.assessment.penalty) {
+        best = { attempt: rescue, assessment, index: budget };
+      }
+    }
+  }
+
+  const chosen = best;
   return {
     text: chosen.attempt.text,
     attempts: attemptsRun,
