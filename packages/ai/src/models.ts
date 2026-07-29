@@ -132,6 +132,30 @@ export const DEFAULT_LLM_MODEL = "mistral-large-2512";
  */
 export const DEFAULT_MAX_OUTPUT_TOKENS = 1024;
 
+/**
+ * Hard ceiling on a single provider request. Node's `fetch` has NO default timeout, so a stalled
+ * upstream (socket accepted but no bytes, or a half-open connection) would hang the caller forever.
+ * In the chat route that hang is fatal: the NDJSON stream never closes, the composer stays disabled
+ * ("stuck" chatbot), and the in-flight concurrency slot is never released — after a few of those,
+ * every new question hits `server_busy`. The deadline is merged with the caller's abort signal, so a
+ * genuine client disconnect still cancels earlier.
+ *
+ * Must stay >= the chat turn budget (`RUNTIME_CHAT_TURN_BUDGET_MS`, default 45s) so the turn budget
+ * fires first and the route can emit a clean timeout `error` event. This per-call net is the
+ * backstop for a single stalled provider fetch inside that budget.
+ */
+export const REQUEST_TIMEOUT_MS = 60_000;
+
+/**
+ * Combine the caller's abort signal (client disconnect) with a hard request deadline. Always returns
+ * a signal, so no provider request is ever unbounded. `AbortSignal.timeout` uses an unref'd timer, so
+ * a fast-completing request does not keep the event loop alive waiting for the deadline.
+ */
+function requestSignal(caller?: AbortSignal): AbortSignal {
+  const deadline = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+  return caller ? AbortSignal.any([caller, deadline]) : deadline;
+}
+
 const MISTRAL_CHAT_URL = "https://api.mistral.ai/v1/chat/completions";
 
 const mistralUsageSchema = z.object({
@@ -223,7 +247,7 @@ export async function generateText(input: GenerateTextInput): Promise<GenerateTe
       Authorization: `Bearer ${env.MISTRAL_API_KEY}`,
     },
     body: JSON.stringify(buildMistralRequestBody(input, false)),
-    ...(input.abortSignal === undefined ? {} : { signal: input.abortSignal }),
+    signal: requestSignal(input.abortSignal),
   });
 
   if (!response.ok) {
@@ -335,7 +359,7 @@ export async function* streamText(input: StreamTextInput): AsyncGenerator<Stream
       Accept: "text/event-stream",
     },
     body: JSON.stringify(buildMistralRequestBody(input, true)),
-    ...(input.abortSignal === undefined ? {} : { signal: input.abortSignal }),
+    signal: requestSignal(input.abortSignal),
   });
 
   if (!response.ok) {

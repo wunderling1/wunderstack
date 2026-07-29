@@ -30,3 +30,27 @@ describe("envSchema ingest chunker vars", () => {
     );
   });
 });
+
+describe("envSchema chat-stream robustness vars", () => {
+  it("coerces turn-budget and heartbeat ms", () => {
+    const parsed = envSchema.parse({
+      RUNTIME_CHAT_TURN_BUDGET_MS: "45000",
+      RUNTIME_CHAT_HEARTBEAT_MS: "10000",
+    });
+    assert.equal(parsed.RUNTIME_CHAT_TURN_BUDGET_MS, 45_000);
+    assert.equal(parsed.RUNTIME_CHAT_HEARTBEAT_MS, 10_000);
+  });
+
+  it("treats unset values as undefined (route falls back to defaults)", () => {
+    const parsed = envSchema.parse({});
+    assert.equal(parsed.RUNTIME_CHAT_TURN_BUDGET_MS, undefined);
+    assert.equal(parsed.RUNTIME_CHAT_HEARTBEAT_MS, undefined);
+  });
+
+  it("rejects a non-positive turn budget", () => {
+    assert.throws(
+      () => envSchema.parse({ RUNTIME_CHAT_TURN_BUDGET_MS: "0" }),
+      (error: unknown) => error instanceof Error && error.name === "ZodError",
+    );
+  });
+});

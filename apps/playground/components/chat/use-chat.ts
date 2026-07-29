@@ -6,6 +6,7 @@ import {
   type ChatCitation,
   type ChatStatusPhase,
 } from "@/app/api/chat/contract";
+import { runtimeApiHeaders } from "@/lib/runtime-api";
 
 /**
  * Client-side chat state + the NDJSON stream reader. Talks only to `/api/chat`; it never touches the
@@ -31,6 +32,8 @@ export interface ChatMessage {
   traceId: string | null;
   /** The rating the user gave this answer, once submitted. */
   feedback: FeedbackRating | null;
+  /** Grounded follow-up question chips (empty until a `followups` event arrives). */
+  followUpQuestions: string[];
   streaming: boolean;
   /** Current progress phase while waiting for the answer; drives the status line + skeleton. */
   phase: ChatStatusPhase | null;
@@ -39,7 +42,25 @@ export interface ChatMessage {
 }
 
 const GENERIC_ERROR = "Er ging iets mis bij het beantwoorden van je vraag. Probeer het opnieuw.";
+const INACTIVITY_ERROR =
+  "Het duurde te lang om je vraag te beantwoorden. Probeer het opnieuw.";
 const SESSION_STORAGE_KEY = "wunderstack-session-id";
+
+/**
+ * Client-side backstop: if no NDJSON bytes arrive (including empty heartbeat lines) for this long,
+ * abort and show a retryable error so the generating spinner never hangs forever. Server heartbeats
+ * are every ~10s by default, so 20s means we missed ~2 beats. Override via NEXT_PUBLIC_CHAT_INACTIVITY_MS.
+ */
+const DEFAULT_CHAT_INACTIVITY_MS = 20_000;
+
+function readInactivityMs(): number {
+  const raw = process.env.NEXT_PUBLIC_CHAT_INACTIVITY_MS?.trim();
+  if (!raw) {
+    return DEFAULT_CHAT_INACTIVITY_MS;
+  }
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_CHAT_INACTIVITY_MS;
+}
 
 function newId(): string {
   return globalThis.crypto?.randomUUID?.() ?? String(Date.now() + Math.random());
@@ -154,6 +175,7 @@ export function useChat(fund?: string) {
           needsClarification: false,
           traceId: null,
           feedback: null,
+          followUpQuestions: [],
           streaming: false,
           phase: null,
           retrievedCount: null,
@@ -168,6 +190,7 @@ export function useChat(fund?: string) {
           needsClarification: false,
           traceId: null,
           feedback: null,
+          followUpQuestions: [],
           streaming: true,
           // Optimistic first phase so a named status shows <100ms after send, before any server event.
           phase: "searching",
@@ -175,10 +198,13 @@ export function useChat(fund?: string) {
         },
       ]);
 
+      // Declared outside try so the catch can distinguish inactivity abort from unmount abort.
+      let abortedForInactivity = false;
+
       try {
         const response = await fetch("/api/chat", {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: runtimeApiHeaders(),
           body: JSON.stringify({ question: trimmed, history, sessionId, ...(fund ? { fund } : {}) }),
           signal: controller.signal,
         });
@@ -190,6 +216,26 @@ export function useChat(fund?: string) {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
+
+        // Inactivity watchdog: reset on every byte (status, heartbeats, text, …). If the stream goes
+        // fully silent (server crash mid-buffer, dropped connection without abort), abort and surface
+        // a retryable error instead of spinning forever on "Bronvermelding controleren…".
+        const inactivityMs = readInactivityMs();
+        let inactivityTimer: ReturnType<typeof setTimeout> | null = null;
+        const clearInactivity = () => {
+          if (inactivityTimer !== null) {
+            clearTimeout(inactivityTimer);
+            inactivityTimer = null;
+          }
+        };
+        const armInactivity = () => {
+          clearInactivity();
+          inactivityTimer = setTimeout(() => {
+            abortedForInactivity = true;
+            controller.abort();
+          }, inactivityMs);
+        };
+        armInactivity();
 
         const handleLine = (raw: string) => {
           const trimmedLine = raw.trim();
@@ -227,6 +273,8 @@ export function useChat(fund?: string) {
           } else if (event.type === "text") {
             pendingText += event.delta;
             scheduleFlush();
+          } else if (event.type === "followups") {
+            patchAssistant(assistantId, (m) => ({ ...m, followUpQuestions: event.questions }));
           } else if (event.type === "done") {
             patchAssistant(assistantId, (m) => ({ ...m, traceId: event.traceId }));
           } else if (event.type === "error") {
@@ -239,25 +287,37 @@ export function useChat(fund?: string) {
           }
         };
 
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) {
-            break;
+        try {
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) {
+              break;
+            }
+            armInactivity();
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() ?? "";
+            for (const l of lines) {
+              handleLine(l);
+            }
           }
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() ?? "";
-          for (const l of lines) {
-            handleLine(l);
+          if (buffer.length > 0) {
+            handleLine(buffer);
           }
+          flushNow();
+        } finally {
+          clearInactivity();
         }
-        if (buffer.length > 0) {
-          handleLine(buffer);
-        }
-        flushNow();
       } catch {
-        // A deliberate abort (unmount) is not an error; leave the partial answer as-is.
-        if (!controller.signal.aborted) {
+        // Inactivity watchdog: show a retryable error. Unmount abort: leave partial answer as-is.
+        // Any other failure: generic error when the bubble is still empty.
+        if (abortedForInactivity) {
+          flushNow();
+          patchAssistant(assistantId, (m) => ({
+            ...m,
+            text: m.text.length > 0 ? m.text : INACTIVITY_ERROR,
+          }));
+        } else if (!controller.signal.aborted) {
           flushNow();
           patchAssistant(assistantId, (m) => ({
             ...m,
