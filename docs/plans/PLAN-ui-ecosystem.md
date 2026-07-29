@@ -262,6 +262,8 @@ DoD:
 - [ ] Geen persona-elementen (check tegen paritaire framing)
 - [ ] CitationBlock rendert bron + verificatiestatus vanuit het bestaande citation-datamodel
 
+**Scope-afwijking (2026-07-29):** naast Table/Dialog zijn Accordion, Tabs, Breadcrumbs, Checkbox, Radio, Pill, Select en Textarea al toegevoegd aan `packages/ui` en staan op de `/ui`-previewroute. Select (fund-selector) en Textarea (dashboard embed) hebben een echte consument; de overige wachten op een scherm. Table en Dialog blijven de formele DoD-gaten.
+
 ### Fase 3 — Dashboard (fund + admin)
 
 **Doel:** één app, twee gezichten: fonds ziet eigen agents en KPI's; Wunderling ziet alles plus

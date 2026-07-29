@@ -1,5 +1,6 @@
 "use client";
 
+import { Select } from "@wunderstack/ui";
 import { useRouter } from "next/navigation";
 
 /**
@@ -17,19 +18,18 @@ export function FundSelector({ funds, active }: { funds: string[]; active: strin
   }
 
   return (
-    <label className="flex items-center gap-1.5 text-xs text-text-muted">
-      <span className="sr-only">Kies CAO</span>
-      <select
+    <div className="w-56">
+      <Select
+        aria-label="Kies CAO"
         value={active}
         onChange={(e) => router.push(`/?fund=${encodeURIComponent(e.target.value)}`)}
-        className="rounded-md border border-border bg-page px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-primary"
       >
         {funds.map((fund) => (
           <option key={fund} value={fund}>
             {fund}
           </option>
         ))}
-      </select>
-    </label>
+      </Select>
+    </div>
   );
 }

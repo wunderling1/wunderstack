@@ -29,6 +29,7 @@
   --state-danger-fg: var(--danger-fg);
 
   /* Shape */
+  --radius-input: 6px;
   --radius-control: 10px;
   --radius-card: 16px;
   --radius-pill: 999px;

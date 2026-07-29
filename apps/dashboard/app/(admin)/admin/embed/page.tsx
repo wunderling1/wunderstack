@@ -1,5 +1,5 @@
 import { listTenantConfigs, type TenantConfig } from "@wunderstack/db";
-import { Button, Card, Field } from "@wunderstack/ui";
+import { Button, Card, Field, Textarea } from "@wunderstack/ui";
 import Link from "next/link";
 import { env } from "@/lib/env";
 import { createTenantConfig, rotateKey, updateCors, updateTheme } from "./actions";
@@ -89,12 +89,11 @@ function TenantCard({ config, base }: { config: TenantConfig; base: string }) {
           <input type="hidden" name="tenantId" value={config.tenantId} />
           <label className="flex flex-col gap-1 text-sm">
             <span className="font-medium">CORS-allowlist</span>
-            <textarea
+            <Textarea
               name="corsAllowlist"
               rows={3}
               defaultValue={config.corsAllowlist.join("\n")}
               placeholder="https://www.fonds.nl"
-              className="rounded-[var(--radius-control)] border border-border bg-surface px-3 py-2 text-sm"
             />
           </label>
           <p className="text-xs text-text-subtle">Eén origin per regel. Alleen deze mogen cross-origin.</p>

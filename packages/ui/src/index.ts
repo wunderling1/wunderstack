@@ -4,10 +4,42 @@ export { cn } from "./lib/cn.js";
 export { Button, buttonVariants, type ButtonProps } from "./primitives/button.js";
 export { IconButton, type IconButtonProps } from "./primitives/icon-button.js";
 export { Field, type FieldProps } from "./primitives/field.js";
+export { Textarea, type TextareaProps } from "./primitives/textarea.js";
 export { Card, type CardProps } from "./primitives/card.js";
 export { Chip, chipVariants, type ChipProps } from "./primitives/chip.js";
+export { Pill, pillVariants, type PillProps } from "./primitives/pill.js";
 export { Avatar, type AvatarProps } from "./primitives/avatar.js";
 export { Icon, type IconProps } from "./primitives/icon.js";
+export { Select, type SelectProps } from "./primitives/select.js";
+export { Checkbox, type CheckboxProps } from "./primitives/checkbox.js";
+export {
+  RadioGroup,
+  Radio,
+  type RadioGroupProps,
+  type RadioProps,
+} from "./primitives/radio-group.js";
+export {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from "./primitives/accordion.js";
+export {
+  Breadcrumbs,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "./primitives/breadcrumbs.js";
+export {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+  type TabsProps,
+  type TabsTriggerProps,
+  type TabsContentProps,
+} from "./primitives/tabs.js";
 export {
   Table,
   TableHeader,

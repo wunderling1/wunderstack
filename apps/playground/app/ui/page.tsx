@@ -1,10 +1,20 @@
 "use client";
 
 import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
   AgentStatusBadge,
   AnswerCard,
+  Breadcrumbs,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
   Button,
   Card,
+  Checkbox,
   Chip,
   CitationBadge,
   CitationBlock,
@@ -18,22 +28,33 @@ import {
   Field,
   IconButton,
   KpiTile,
+  Pill,
+  Radio,
+  RadioGroup,
   RefusalNotice,
+  Select,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+  Textarea,
 } from "@wunderstack/ui";
 import { ArrowRight } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 /**
  * Lightweight design-system preview (D16 / Fase 2). Not Storybook — a single route that renders every
  * primitive and trust-pattern so the shared `@wunderstack/ui` surface can be eyeballed in one place.
  */
 export default function UiPreviewPage() {
+  const [contract, setContract] = useState("fulltime");
+
   return (
     <main className="mx-auto w-full max-w-4xl px-6 py-12">
       <header className="mb-10">
@@ -69,6 +90,102 @@ export default function UiPreviewPage() {
 
       <Section title="Field">
         <Field placeholder="Stel je vraag…" className="max-w-sm" />
+      </Section>
+
+      <Section title="Textarea">
+        <Textarea placeholder="Eén origin per regel…" rows={3} className="max-w-sm" />
+      </Section>
+
+      <Section title="Select (dropdown)">
+        <div className="max-w-sm">
+          <Select defaultValue="cao" aria-label="Kies een agent">
+            <option value="cao">CAO-agent</option>
+            <option value="verzuim">Verzuim-agent</option>
+            <option value="subsidie">Subsidie-agent</option>
+          </Select>
+        </div>
+      </Section>
+
+      <Section title="Checkbox">
+        <div className="flex flex-col gap-2">
+          <Checkbox label="Toon alleen geverifieerde citaties" defaultChecked />
+          <Checkbox label="Voeg bronvermelding toe" />
+          <Checkbox label="Uitgeschakelde optie" disabled />
+        </div>
+      </Section>
+
+      <Section title="Radio">
+        <RadioGroup name="contract" value={contract} onValueChange={setContract}>
+          <Radio value="fulltime" label="Voltijd" />
+          <Radio value="parttime" label="Deeltijd" />
+          <Radio value="oproep" label="Oproepkracht" />
+        </RadioGroup>
+      </Section>
+
+      <Section title="Pills">
+        <div className="flex flex-wrap items-center gap-2">
+          <Pill>Neutraal</Pill>
+          <Pill variant="primary">Vakantie</Pill>
+          <Pill variant="outline">Artikel 12.3</Pill>
+        </div>
+      </Section>
+
+      <Section title="Breadcrumbs">
+        <Breadcrumbs>
+          <BreadcrumbItem>
+            <BreadcrumbLink href="#">Agents</BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbLink href="#">CAO-agent</BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbPage>Instellingen</BreadcrumbPage>
+          </BreadcrumbItem>
+        </Breadcrumbs>
+      </Section>
+
+      <Section title="Tabs">
+        <Tabs defaultValue="antwoord">
+          <TabsList>
+            <TabsTrigger value="antwoord">Antwoord</TabsTrigger>
+            <TabsTrigger value="bronnen">Bronnen</TabsTrigger>
+            <TabsTrigger value="details">Details</TabsTrigger>
+          </TabsList>
+          <TabsContent value="antwoord">
+            Het gestreamde antwoord van de agent verschijnt hier, met inline citaties.
+          </TabsContent>
+          <TabsContent value="bronnen">
+            De opgehaalde CAO-artikelen met verificatiestatus.
+          </TabsContent>
+          <TabsContent value="details">
+            Tracegegevens: model, latency en tokengebruik.
+          </TabsContent>
+        </Tabs>
+      </Section>
+
+      <Section title="Accordion">
+        <Accordion className="max-w-xl">
+          <AccordionItem name="faq">
+            <AccordionTrigger>Hoeveel vakantiedagen heb ik?</AccordionTrigger>
+            <AccordionContent>
+              Bij een voltijds dienstverband heb je volgens de CAO recht op 25 vakantiedagen per jaar.
+            </AccordionContent>
+          </AccordionItem>
+          <AccordionItem name="faq">
+            <AccordionTrigger>Wat is mijn opzegtermijn?</AccordionTrigger>
+            <AccordionContent>
+              De opzegtermijn hangt af van je dienstjaren; de CAO beschrijft de staffel per situatie.
+            </AccordionContent>
+          </AccordionItem>
+          <AccordionItem name="faq">
+            <AccordionTrigger>Heb ik recht op reiskostenvergoeding?</AccordionTrigger>
+            <AccordionContent>
+              Dit is geregeld per fonds; raadpleeg het relevante artikel voor de exacte voorwaarden.
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </Section>
 
       <Section title="KPI tiles">

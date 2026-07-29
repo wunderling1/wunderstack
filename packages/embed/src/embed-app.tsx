@@ -20,6 +20,8 @@ interface Turn {
   text: string;
   citations?: EmbedCitation[];
   refused?: boolean;
+  /** Grounded follow-up chips from the `followups` stream event. */
+  followUpQuestions?: string[];
 }
 
 interface Props {
@@ -106,15 +108,17 @@ export function EmbedApp({ endpoint, agentKey, agentId }: Props) {
         citations: event.citations,
         refused: !event.found && !event.needsClarification,
       }));
+    } else if (event.type === "followups") {
+      updateLast((turn) => ({ ...turn, followUpQuestions: event.questions }));
     } else if (event.type === "error") {
       updateLast((turn) => ({ ...turn, text: event.message }));
     }
   }
 
-  async function send(): Promise<void> {
-    const question = input.trim();
+  async function send(questionOverride?: string): Promise<void> {
+    const question = (questionOverride ?? input).trim();
     if (!question || busy) return;
-    setInput("");
+    if (!questionOverride) setInput("");
     const history = turns
       .slice(-6)
       .map((turn) => ({ role: turn.role === "agent" ? "assistant" : "user", content: turn.text }))
@@ -208,6 +212,27 @@ export function EmbedApp({ endpoint, agentKey, agentId }: Props) {
                         quote={citation.snippet || citation.quote}
                       />
                     ))}
+                  </div>
+                ) : null}
+                {turn.role === "agent" &&
+                !turn.refused &&
+                turn.followUpQuestions &&
+                turn.followUpQuestions.length > 0 ? (
+                  <div className="flex flex-col gap-1.5">
+                    <p className="text-[11px] font-medium text-text-muted">Handige vervolgvragen</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {turn.followUpQuestions.map((question) => (
+                        <button
+                          key={question}
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void send(question)}
+                          className="rounded-pill border border-primary/30 bg-primary-tint px-2.5 py-1 text-left text-xs text-primary disabled:opacity-50"
+                        >
+                          {question}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 ) : null}
               </div>
