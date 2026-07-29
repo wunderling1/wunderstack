@@ -35,6 +35,56 @@ function formatHistory(history: HistoryMessage[]): string {
     .join("\n");
 }
 
+/** History-aware fallback when condensation is empty, an echo, or too generic for retrieval. */
+export function buildFallbackRetrievalQuery(history: HistoryMessage[], question: string): string {
+  const normalizedQuestion = normalizeWhitespace(question);
+  const lastUser = [...history].reverse().find((message) => message.role === "user");
+  if (lastUser === undefined) {
+    return normalizedQuestion;
+  }
+  return normalizeWhitespace(`${normalizeWhitespace(lastUser.content)} ${normalizedQuestion}`);
+}
+
+/** True when the condensed query cannot stand alone as a retrieval query. */
+export function isDegenerateCondensation(condensed: string, original: string): boolean {
+  const normalizedCondensed = normalizeWhitespace(condensed);
+  const normalizedOriginal = normalizeWhitespace(original);
+  if (normalizedCondensed.length === 0) {
+    return true;
+  }
+  return normalizedCondensed.toLowerCase() === normalizedOriginal.toLowerCase();
+}
+
+function uniqueQueries(queries: string[]): string[] {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const query of queries) {
+    const normalized = normalizeWhitespace(query);
+    const key = normalized.toLowerCase();
+    if (normalized.length === 0 || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    unique.push(normalized);
+  }
+  return unique;
+}
+
+/**
+ * Primary + fallback retrieval queries for a follow-up turn. The fallback keeps the last user turn in
+ * the query so retrieval still sees the topic when condensation drifts.
+ */
+export function retrievalQueriesForFollowUp(
+  history: HistoryMessage[],
+  question: string,
+  condensedQuestion: string,
+): string[] {
+  const primary = condensedQuestion.length > 0 ? condensedQuestion : question;
+  const fallback = buildFallbackRetrievalQuery(history, question);
+  const queries = isDegenerateCondensation(primary, question) ? [fallback, primary] : [primary, fallback];
+  return uniqueQueries(queries);
+}
+
 export function isElliptical(question: string, history: HistoryMessage[]): boolean {
   if (history.length === 0) {
     return false;

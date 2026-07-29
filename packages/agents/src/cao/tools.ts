@@ -14,6 +14,8 @@ import { z } from "zod";
 
 export const retrievalInputSchema = z.object({
   query: z.string().min(1, "query must not be empty"),
+  /** Extra queries whose candidate pools are unioned before reranking (follow-up fallback). */
+  additionalQueries: z.array(z.string().min(1)).max(2).optional(),
   /** O&O fund key — required for corpus isolation on the agent path. */
   fund: z.string().min(1),
   /** How many chunks to keep after reranking (fed to the agent). Defaults to RERANK_CONFIG.topK (5). */
@@ -67,6 +69,7 @@ export async function runRetrieval(input: RetrievalInput): Promise<RetrievalOutp
   const parsed = retrievalInputSchema.parse(input);
   const result = await retrieveContext({
     query: parsed.query,
+    ...(parsed.additionalQueries === undefined ? {} : { additionalQueries: parsed.additionalQueries }),
     fund: parsed.fund,
     topK: parsed.topK,
     minScore: parsed.minScore,

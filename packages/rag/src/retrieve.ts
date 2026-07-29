@@ -16,6 +16,12 @@ import { z } from "zod";
 export const retrieveInputSchema = z.object({
   query: z.string().min(1, "query must not be empty"),
   /**
+   * Extra retrieval queries whose candidate pools are unioned with `query` before reranking.
+   * Follow-up turns pass a history-aware fallback here so a single bad condensation cannot miss the
+   * relevant chunk.
+   */
+  additionalQueries: z.array(z.string().min(1)).max(2).optional(),
+  /**
    * How many chunks to fetch from pgvector as rerank candidates. Defaults to the pinned
    * RERANK_CONFIG.candidateK (15). The rerank step trims to `topK`.
    */
