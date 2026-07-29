@@ -65,6 +65,15 @@ export interface RetrievalTraceSpan {
   end(evidence: RetrievalEvidence): void;
 }
 
+/** Handle for a lightweight MODEL_GENERATION child span (e.g. follow-up suggestions). */
+export interface ModelCallTraceSpan {
+  end(output: {
+    model: string;
+    questionCount: number;
+    usage: { promptTokens: number; completionTokens: number; totalTokens: number };
+  }): void;
+}
+
 /** Outcome recorded on the root span so clarify-turns, refusals and citation counts are traceable. */
 export interface CaoTraceOutcome {
   found: boolean;
@@ -76,6 +85,8 @@ export interface CaoTraceOutcome {
   citationCount?: number;
   /** Time-to-first-token in ms (first streamed text delta after request start). */
   ttftMs?: number;
+  /** Number of grounded follow-up chips emitted (0 when skipped / failed). */
+  followUpCount?: number;
 }
 
 export interface CaoTrace {
@@ -86,6 +97,8 @@ export interface CaoTrace {
     retrievalQuery?: string;
     condensed: boolean;
   }): RetrievalTraceSpan;
+  /** Best-effort child span for a non-Mastra model call (follow-up suggestions). */
+  startModelCall(name: string, input?: Record<string, unknown>): ModelCallTraceSpan;
   link(): TraceLink;
   end(output: CaoTraceOutcome): void;
   fail(error: unknown): void;
@@ -94,8 +107,10 @@ export interface CaoTrace {
 }
 
 const NOOP_RETRIEVAL: RetrievalTraceSpan = { end() {} };
+const NOOP_MODEL_CALL: ModelCallTraceSpan = { end() {} };
 const NOOP_TRACE: CaoTrace = {
   startRetrieval: () => NOOP_RETRIEVAL,
+  startModelCall: () => NOOP_MODEL_CALL,
   link: () => ({}),
   end() {},
   fail() {},
@@ -220,6 +235,45 @@ export function startCaoTrace(mastra: Mastra, input: CaoTraceInput): CaoTrace {
       };
     },
 
+    startModelCall(name, input) {
+      let span: Span<SpanType.MODEL_GENERATION> | undefined;
+      try {
+        span = rootSpan.createChildSpan({
+          type: SpanType.MODEL_GENERATION,
+          name,
+          ...(input === undefined ? {} : { input }),
+        });
+      } catch {
+        span = undefined;
+      }
+
+      if (!span || !span.isValid) {
+        return NOOP_MODEL_CALL;
+      }
+
+      const modelSpan = span;
+      return {
+        end(output) {
+          try {
+            modelSpan.end({
+              output: { questionCount: output.questionCount },
+              attributes: {
+                model: output.model,
+                provider: "mistral",
+                usage: {
+                  inputTokens: output.usage.promptTokens,
+                  outputTokens: output.usage.completionTokens,
+                },
+              },
+              metadata: { questionCount: output.questionCount },
+            });
+          } catch {
+            /* tracing must never break the answer path */
+          }
+        },
+      };
+    },
+
     link() {
       try {
         if (rootSpan.isValid) {
@@ -248,6 +302,7 @@ export function startCaoTrace(mastra: Mastra, input: CaoTraceInput): CaoTrace {
             needsClarification: output.needsClarification ?? false,
             refused: output.refused ?? false,
             citationCount: output.citationCount ?? 0,
+            followUpCount: output.followUpCount ?? 0,
             ttftMs: output.ttftMs ?? ttftMs ?? null,
           },
         });

@@ -16,13 +16,14 @@ import {
   type CaoStreamEvent,
   type CaoUsage,
 } from "../types.js";
-import { buildVerifiedCitations } from "./build-citations.js";
+import { buildVerifiedCitations, extractCitationMarkers } from "./build-citations.js";
 import { detectClarification } from "./clarify.js";
-import { condenseQuery, isElliptical } from "./condense.js";
+import { condenseQuery, isElliptical, retrievalQueriesForFollowUp } from "./condense.js";
 import { generateAnswerWithRepair } from "./generate-answer.js";
-import { hasUngroundedHardFact } from "./hard-facts.js";
+import { containsHardFact, hasUngroundedHardFact } from "./hard-facts.js";
 import { parseGenerationOutput } from "./parse-generation.js";
-import { CAO_SYSTEM_INSTRUCTIONS, NOT_FOUND_MESSAGE, buildAnswerPrompt } from "./prompt.js";
+import { CAO_SYSTEM_INSTRUCTIONS, NOT_FOUND_MESSAGE, UNVERIFIABLE_MESSAGE, buildAnswerPrompt } from "./prompt.js";
+import { addUsage, FOLLOW_UP_MODEL, suggestFollowUps } from "./suggest-follow-ups.js";
 import { runRetrieval, type RetrievalOutput } from "./tools.js";
 import { stripFailedMarkers, stripUnverifiedMarkers, verifyCitations } from "./verify-citations.js";
 
@@ -46,6 +47,7 @@ const CITATION_SCORE_NAME = "citation-verification-rate";
 async function retrieveTraced(
   trace: CaoTrace,
   args: {
+    retrievalQueries: string[];
     retrievalQuery: string;
     condensed: boolean;
     fund: string;
@@ -61,8 +63,13 @@ async function retrieveTraced(
     condensed: args.condensed,
   });
   try {
+    const [primary, ...additionalQueries] = args.retrievalQueries;
+    if (primary === undefined) {
+      throw new Error("retrievalQueries must include at least one query.");
+    }
     const retrieval = await runRetrieval({
-      query: args.retrievalQuery,
+      query: primary,
+      ...(additionalQueries.length === 0 ? {} : { additionalQueries }),
       fund: args.fund,
       topK: args.topK,
       minScore: args.minScore,
@@ -122,12 +129,30 @@ function tracingOptionsFor(
  * history) is grounding, so echoing a number the user provided is not treated as a fabrication.
  * On a trip we refuse: the answer is replaced with the not-found message and the turn is marked
  * unfound. A grounded answer is unaffected — the number appears in the context.
+ *
+ * G4 citation-coupling guard (the invariant this file upholds): a SUBSTANTIVE answer must carry at
+ * least one verified citation, or it is refused. "Substantive" is read off the ORIGINAL model prose —
+ * a `[n]` marker or a load-bearing hard fact — so an answer whose every marker was stripped by
+ * verification still counts (that stripped-to-markerless case is exactly the sourceless-answer bug we
+ * are closing). This upgrades the promise from "never serve an ungrounded hard fact" to "every served
+ * answer is source-checkable": `found=true` + zero citations becomes a forbidden state, converted to
+ * an over-refusal — recoverable — rather than a confident, unverifiable claim. The honest
+ * {@link UNVERIFIABLE_MESSAGE} is used (not NOT_FOUND): retrieval DID find context, so "niet
+ * terugvinden" would be untrue. Clarify and not-found turns never reach here, so their legitimate
+ * empty-citation states are untouched.
  */
 export function verifyAndBuild(
   raw: string,
   retrieval: RetrievalOutput,
   userSupplied: string,
-): { answer: string; citations: CaoCitation[]; verificationFailed: boolean; hardFactGuardTriggered: boolean } {
+): {
+  answer: string;
+  citations: CaoCitation[];
+  found: boolean;
+  verificationFailed: boolean;
+  hardFactGuardTriggered: boolean;
+  unverifiable: boolean;
+} {
   const parsed = parseGenerationOutput(raw);
   const fullContentById = new Map(retrieval.fullChunkContent);
   const verification = verifyCitations(parsed.modelCitations, fullContentById);
@@ -141,14 +166,47 @@ export function verifyAndBuild(
 
   const grounding = [...fullContentById.values()].join(" ");
   if (hasUngroundedHardFact(answer, grounding, userSupplied)) {
-    return { answer: NOT_FOUND_MESSAGE, citations: [], verificationFailed: true, hardFactGuardTriggered: true };
+    return {
+      answer: NOT_FOUND_MESSAGE,
+      citations: [],
+      found: false,
+      verificationFailed: true,
+      hardFactGuardTriggered: true,
+      unverifiable: false,
+    };
   }
 
-  return { answer, citations, verificationFailed, hardFactGuardTriggered: false };
+  const asserts =
+    extractCitationMarkers(parsed.answerMarkdown).length > 0 || containsHardFact(parsed.answerMarkdown);
+  if (asserts && citations.length === 0) {
+    return {
+      answer: UNVERIFIABLE_MESSAGE,
+      citations: [],
+      found: false,
+      verificationFailed: true,
+      hardFactGuardTriggered: false,
+      unverifiable: true,
+    };
+  }
+
+  return { answer, citations, found: true, verificationFailed, hardFactGuardTriggered: false, unverifiable: false };
 }
 
+type SettledAnswer = {
+  answer: string;
+  citations: CaoCitation[];
+  /** Settled by verifyAndBuild: false on any refusal (hard-fact guard, no verified citation). */
+  found: boolean;
+  verificationFailed: boolean;
+  hardFactGuardTriggered: boolean;
+  /** True when the answer was refused solely because no citation survived verification (G4 coupling). */
+  unverifiable: boolean;
+  usage: CaoUsage;
+};
+
 /**
- * G4 buffer-to-verify emit seam: turn an ALREADY-verified answer into the ordered stream events.
+ * G4 buffer-to-verify emit seam (text + citations only): turn an ALREADY-verified answer into the
+ * safe stream prefix. Follow-ups and `done` are emitted by the caller after optional async work.
  *
  * This is the structural guarantee that the streaming path can never leak an ungrounded hard fact:
  * it accepts a settled `verifyAndBuild` result (guard already applied — `answer` is either the clean
@@ -156,11 +214,8 @@ export function verifyAndBuild(
  * no token stream to retract. Streaming tokens as they arrive from the model would require abandoning
  * this seam — a deliberate change, not an accident. Locked by agent.test.ts.
  */
-export function* settledAnswerEvents(
-  result: { answer: string; citations: CaoCitation[]; verificationFailed: boolean; hardFactGuardTriggered: boolean; usage: CaoUsage },
-  traceId: string | null,
-): Generator<CaoStreamEvent> {
-  const found = !result.hardFactGuardTriggered;
+export function* settledAnswerBody(result: SettledAnswer): Generator<CaoStreamEvent> {
+  const found = result.found;
   if (result.answer.length > 0) {
     yield { type: "text", delta: result.answer };
   }
@@ -172,6 +227,17 @@ export function* settledAnswerEvents(
     citationVerificationFailed: result.verificationFailed,
     answer: result.answer,
   };
+}
+
+/**
+ * Full settled emit (text → citations → done). Used by tests that lock the G4 order without follow-ups.
+ * The live `answerStream` path uses {@link settledAnswerBody} so it can insert `followups` before `done`.
+ */
+export function* settledAnswerEvents(
+  result: SettledAnswer,
+  traceId: string | null,
+): Generator<CaoStreamEvent> {
+  yield* settledAnswerBody(result);
   yield { type: "done", usage: result.usage, traceId };
 }
 
@@ -184,16 +250,23 @@ function userSuppliedText(input: CaoQuestion): string {
 async function resolveRetrievalQuestion(input: CaoQuestion, signal?: AbortSignal): Promise<{
   answerQuestion: string;
   retrievalQuery: string;
+  retrievalQueries: string[];
   condensed: boolean;
 }> {
   const history = input.history ?? [];
   if (!isElliptical(input.question, history)) {
-    return { answerQuestion: input.question, retrievalQuery: input.question, condensed: false };
+    return {
+      answerQuestion: input.question,
+      retrievalQuery: input.question,
+      retrievalQueries: [input.question],
+      condensed: false,
+    };
   }
 
   const condensedQuestion = await condenseQuery(history, input.question, signal);
-  const retrievalQuery = condensedQuestion.length > 0 ? condensedQuestion : input.question;
-  return { answerQuestion: retrievalQuery, retrievalQuery, condensed: true };
+  const primary = condensedQuestion.length > 0 ? condensedQuestion : input.question;
+  const retrievalQueries = retrievalQueriesForFollowUp(history, input.question, primary);
+  return { answerQuestion: primary, retrievalQuery: primary, retrievalQueries, condensed: true };
 }
 
 /** Fire-and-forget: record the citation verification outcome as a numeric Langfuse score. */
@@ -208,6 +281,39 @@ function recordCitationScore(traceId: string | null, verificationFailed: boolean
   }).catch(() => {
     /* best-effort */
   });
+}
+
+/**
+ * Grounded follow-up chips when we have a real found answer with verified citations. Best-effort:
+ * failures yield empty questions and never break the answer path.
+ */
+async function maybeSuggestFollowUps(args: {
+  result: SettledAnswer;
+  question: string;
+  context: string;
+  trace: CaoTrace;
+  signal?: AbortSignal;
+}): Promise<{ questions: string[]; usage: CaoUsage }> {
+  if (args.result.hardFactGuardTriggered || args.result.citations.length === 0) {
+    return { questions: [], usage: ZERO_USAGE };
+  }
+
+  const span = args.trace.startModelCall("cao-follow-ups", {
+    question: args.question,
+    citationCount: args.result.citations.length,
+  });
+  const suggested = await suggestFollowUps({
+    answer: args.result.answer,
+    context: args.context,
+    question: args.question,
+    ...(args.signal === undefined ? {} : { abortSignal: args.signal }),
+  });
+  span.end({
+    model: FOLLOW_UP_MODEL,
+    questionCount: suggested.questions.length,
+    usage: suggested.usage,
+  });
+  return suggested;
 }
 
 export function createCaoAgent(): CaoAgent {
@@ -247,8 +353,10 @@ export function createCaoAgent(): CaoAgent {
   }): Promise<{
     answer: string;
     citations: CaoCitation[];
+    found: boolean;
     verificationFailed: boolean;
     hardFactGuardTriggered: boolean;
+    unverifiable: boolean;
     usage: CaoUsage;
   }> {
     const generated = await generateAnswerWithRepair({
@@ -337,7 +445,7 @@ export function createCaoAgent(): CaoAgent {
         // One citation-contract repair retry (generate-answer.ts): the same seam the eval uses to
         // collapse Gate C's generator variance. A first attempt that leaves an unverifiable quote, an
         // ungrounded number, or a dropped citation block is re-asked once; the cleaner attempt is kept.
-        const { answer, citations, verificationFailed, hardFactGuardTriggered, usage } =
+        const { answer, citations, found, verificationFailed, hardFactGuardTriggered, unverifiable, usage } =
           await generateVerifiedAnswer({
             retrieval,
             answerQuestion: query.answerQuestion,
@@ -347,16 +455,29 @@ export function createCaoAgent(): CaoAgent {
           });
         recordCitationScore(traceId, verificationFailed);
 
-        const found = !hardFactGuardTriggered;
-        trace.end({ found, citationCount: citations.length, ...(hardFactGuardTriggered ? { refused: true } : {}) });
+        const followUps = await maybeSuggestFollowUps({
+          result: { answer, citations, found, verificationFailed, hardFactGuardTriggered, unverifiable, usage },
+          question,
+          context: retrieval.context,
+          trace,
+          ...(options.signal === undefined ? {} : { signal: options.signal }),
+        });
+
+        trace.end({
+          found,
+          citationCount: citations.length,
+          followUpCount: followUps.questions.length,
+          ...(found ? {} : { refused: true }),
+        });
         return caoAnswerSchema.parse({
           answer,
           found,
           needsClarification: false,
           citations,
           traceId,
-          usage,
+          usage: addUsage(usage, followUps.usage),
           citationVerificationFailed: verificationFailed,
+          followUpQuestions: followUps.questions,
         });
       } catch (error) {
         trace.fail(error);
@@ -449,13 +570,32 @@ export function createCaoAgent(): CaoAgent {
         const ttftMs = performance.now() - requestStart;
         trace.recordTtft(ttftMs);
 
-        // Emit the settled (verified, guard-checked) answer via the single buffer-to-verify seam. No
-        // ungrounded hard fact can reach the client because `result.answer` is already the safe text.
-        yield* settledAnswerEvents(result, traceId);
+        // Emit the settled (verified, guard-checked) answer via the buffer-to-verify body seam, then
+        // optionally suggest grounded follow-ups before `done`. No ungrounded hard fact can reach the
+        // client because `result.answer` is already the safe text.
+        yield* settledAnswerBody(result);
+
+        const followUps = await maybeSuggestFollowUps({
+          result,
+          question,
+          context: retrieval.context,
+          trace,
+          ...(options.signal === undefined ? {} : { signal: options.signal }),
+        });
+        if (followUps.questions.length > 0) {
+          yield { type: "followups", questions: followUps.questions };
+        }
+
+        yield {
+          type: "done",
+          usage: addUsage(result.usage, followUps.usage),
+          traceId,
+        };
         trace.end({
-          found: !result.hardFactGuardTriggered,
+          found: result.found,
           citationCount: result.citations.length,
-          ...(result.hardFactGuardTriggered ? { refused: true } : {}),
+          followUpCount: followUps.questions.length,
+          ...(result.found ? {} : { refused: true }),
           ttftMs,
         });
       } catch (error) {

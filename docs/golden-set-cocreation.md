@@ -14,11 +14,11 @@ tastbaar maakt in de menukaart.
 De golden set is fysiek gesplitst in twee lagen (zie `packages/agents/src/evals/golden-set.ts`):
 
 - **base-laag** — `golden-set.base.jsonl` (+ `golden-passages.jsonl`). Corpus-agnostisch, gedrags-
-  gericht: draait op fixtures zonder database (Gate A/B/B2/C). Bewijst *gedrag* (grounding, weigeren,
+  gericht: draait op fixtures zonder database (G1 + G2). Bewijst *gedrag* (grounding, weigeren,
   citeren, multi-turn). Verandert niet per fonds.
 - **fonds-laag** — `golden-set.<fonds>.jsonl` (bv. `golden-set.etd.jsonl`). Fonds-specifieke
   **correctheid**: draait tegen de échte, ingeladen corpus van dat fonds via het integratie-pad
-  (Gate F, `retrieveContext` → match op artikel/lid). Elk fonds-setje heeft een eigen `corpusVersion`
+  (`G3-fund`, `retrieveContext` → match op artikel/lid). Elk fonds-setje heeft een eigen `corpusVersion`
   en wordt **apart** gerapporteerd in `eval-report.json` (`funds[]`).
 
 De co-creatiesessie levert de **fonds-laag** op. De base-laag groeit langzamer en is niet fonds-eigendom.
@@ -60,7 +60,7 @@ Per kandidaatvraag, samen met de expert:
 1. **Referentie-antwoord vaststellen.** Kort, feitelijk, en gedekt door de CAO-tekst. Leg de nuance
    vast (uitzonderingen, voorwaarden, "hangt af van…").
 2. **Verwacht artikel/lid bepalen.** Welk artikel (en eventueel lid) is de bron? Dit wordt
-   `expectedArticle` / `expectedLid` — waar Gate F op matcht.
+   `expectedArticle` / `expectedLid` — waar `G3-fund` op matcht.
 3. **Categorie kiezen.** `in_scope`, `table` (loonschaal/tabel), of `refusal` (staat niet in de CAO →
    het model hoort netjes door te verwijzen).
 4. **Twijfel = weglaten.** Een case waarover de experts twijfelen, gaat niet in de set. De golden set
@@ -84,7 +84,7 @@ experts aan het eind expliciet akkoord geven ("dit is onze standaard"). Dat akko
 4. **Review-log bijwerken.** Documenteer de validatie per case in
    `fixtures/golden-set.REVIEW.md` (verdict + bron-artikel). Dit is het bewijs dat de set is
    nagelopen, niet gegenereerd.
-5. **Meten.** Gate F draait nachtelijks (heeft een DB nodig; slaat over op PR's). De recall/MRR per
+5. **Meten.** `G3-fund` draait nachtelijks (heeft een DB nodig; slaat over op PR's). De recall/MRR per
    fonds en de weiger-guard landen apart in `eval-report.json` onder `funds[]`. De drempels zijn eerst
    **provisioneel** (zie `RETRIEVAL_INTEGRATION_THRESHOLDS`): meet ~2 weken nachtelijke runs en trek
    ze dan aan.
@@ -97,7 +97,7 @@ Voor een volgend fonds verandert alleen de **inhoud**, niet het proces of de cod
 2. Co-creatiesessie → gevalideerde cases.
 3. `golden-set.<fonds2>.jsonl` + een `FUND_SET_META`-regel + de corpus ingeladen onder het nieuwe
    `fund`-id.
-4. Gate F pikt het nieuwe set-bestand automatisch op (glob `golden-set.*.jsonl`) en rapporteert het
+4. `G3-fund` pikt het nieuwe set-bestand automatisch op (glob `golden-set.*.jsonl`) en rapporteert het
    als een aparte laag.
 
 Geen nieuwe code per fonds: één keer bouwen (de fonds-laag), per fonds configureren via data — precies

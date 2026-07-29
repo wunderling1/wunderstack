@@ -13,6 +13,17 @@ export const NOT_FOUND_MESSAGE =
   "Ik kan dit niet terugvinden in de CAO-documenten waar ik toegang toe heb. " +
   "Neem voor zekerheid contact op met je fonds.";
 
+/**
+ * Served (G4 runtime guard) when retrieval DID surface relevant context and the model produced a
+ * substantive answer, but not a single citation survived verbatim verification. `NOT_FOUND_MESSAGE`
+ * would be literally untrue here — the system did find the information — so honesty (a core product
+ * claim) requires a distinct message. Re-asking usually succeeds because the failure is generator
+ * sampling variance, which is why "stel je vraag opnieuw" is a genuine recovery path.
+ */
+export const UNVERIFIABLE_MESSAGE =
+  "Ik heb hier wel informatie over gevonden, maar kan mijn antwoord nu niet met een letterlijke " +
+  "bronvermelding onderbouwen. Stel je vraag opnieuw, of neem contact op met je fonds.";
+
 export const CAO_SYSTEM_INSTRUCTIONS = [
   "Je bent een assistent die vragen beantwoordt over Nederlandse CAO's (collectieve arbeidsovereenkomsten).",
   "Je geeft informatieve uitleg over wat er in de CAO staat — geen persoonlijk, financieel of juridisch advies.",

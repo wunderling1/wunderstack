@@ -5,7 +5,11 @@ import type { ChatMessage } from "@wunderstack/ai";
 
 import { CITATIONS_SENTINEL } from "./generation-schema.js";
 import { NOT_FOUND_MESSAGE } from "./prompt.js";
-import { assessCitationContract, generateAnswerWithRepair } from "./generate-answer.js";
+import {
+  assessCitationContract,
+  GenerationAbortedError,
+  generateAnswerWithRepair,
+} from "./generate-answer.js";
 
 const chunks = new Map<string, string>([
   ["adv", "De werknemer heeft recht op 104 roostervrije uren per jaar."],
@@ -155,7 +159,9 @@ describe("generateAnswerWithRepair", () => {
 
     const result = await generateAnswerWithRepair({ chunkContentById: chunks, generate });
 
-    assert.equal(result.attempts, 2);
+    // Option b fires the bounded extra attempt (brokenA is a substantive answer with zero verified
+    // citations); the extra attempt (brokenBworse) is worse, so brokenA is still kept.
+    assert.equal(result.attempts, 3);
     assert.equal(result.repaired, false);
     assert.equal(result.text, brokenA);
   });
@@ -209,5 +215,108 @@ describe("generateAnswerWithRepair", () => {
     assert.equal(result.usage.promptTokens, 20);
     assert.equal(result.usage.completionTokens, 10);
     assert.equal(result.usage.totalTokens, 30);
+  });
+
+  // Regression: an aborted generation comes back from Mastra as an EMPTY completion with
+  // finishReason "tripwire" (not a throw). Such an attempt must never be served as an empty answer
+  // nor overwrite a real one — the "abort → blank bubble / stuck" bug reproduced from the traces.
+  it("keeps a real earlier attempt when a later (repair) attempt is aborted (empty + tripwire)", async () => {
+    // Attempt 1 trips the contract (penalty > 0) so a repair turn is triggered.
+    const flagged = raw("Je hebt recht op 104 roostervrije uren [1].", [
+      { marker: 1, chunk_id: "adv", quote: "honderdvier roostervrije uren" },
+    ]);
+    let call = 0;
+    const generate = (): Promise<{ text: string; finishReason: string }> => {
+      call += 1;
+      return call === 1
+        ? Promise.resolve({ text: flagged, finishReason: "stop" })
+        : Promise.resolve({ text: "", finishReason: "tripwire" });
+    };
+
+    const result = await generateAnswerWithRepair({ chunkContentById: chunks, generate });
+
+    // Attempt 2 (repair) aborts; option b then fires one more (also aborted) — the real flagged answer
+    // survives all of it and is never overwritten by an empty attempt.
+    assert.equal(result.attempts, 3);
+    assert.equal(result.text, flagged, "the aborted empty attempt must not overwrite the real one");
+    assert.notEqual(result.text, "");
+  });
+
+  it("throws GenerationAbortedError when every attempt is aborted/empty (tripwire)", async () => {
+    const generate = (): Promise<{ text: string; finishReason: string }> =>
+      Promise.resolve({ text: "", finishReason: "tripwire" });
+
+    await assert.rejects(
+      () => generateAnswerWithRepair({ chunkContentById: chunks, generate, maxAttempts: 2 }),
+      (error: unknown) => error instanceof GenerationAbortedError,
+    );
+  });
+
+  it("throws GenerationAbortedError when a lone attempt is blank (empty text, no finishReason)", async () => {
+    const { generate } = scriptedGenerate(["   "]);
+
+    await assert.rejects(
+      () => generateAnswerWithRepair({ chunkContentById: chunks, generate, maxAttempts: 1 }),
+      (error: unknown) => error instanceof GenerationAbortedError,
+    );
+  });
+
+  it("option b: fires one bounded extra attempt that rescues a sourceless answer past the budget", async () => {
+    // Both budgeted attempts leave a substantive answer with zero verified citations; the extra
+    // targeted attempt (beyond maxAttempts=2) finally lands a verbatim quote.
+    const broken = raw("Recht op 104 roostervrije uren [1].", [{ marker: 1, chunk_id: "adv", quote: "fout" }]);
+    const clean = raw("Recht op 104 roostervrije uren [1].", [
+      { marker: 1, chunk_id: "adv", quote: "104 roostervrije uren" },
+    ]);
+    const { generate, calls } = scriptedGenerate([broken, broken, clean]);
+
+    const result = await generateAnswerWithRepair({ chunkContentById: chunks, generate });
+
+    assert.equal(result.attempts, 3, "budget 2 + one rescue attempt");
+    assert.equal(result.repaired, true);
+    assert.equal(result.text, clean);
+    assert.equal(calls.length, 3);
+  });
+
+  it("option b: does not fire when the chosen answer already has a verified citation", async () => {
+    // A dangling extra marker keeps penalty > 0, but marker 1 verifies — so there IS a citation and the
+    // sourceless-answer rescue must NOT run (attempts stays at the budget).
+    const dangling = raw("Recht op 104 roostervrije uren [1] en meer [2].", [
+      { marker: 1, chunk_id: "adv", quote: "104 roostervrije uren" },
+    ]);
+    const { generate } = scriptedGenerate([dangling, dangling]);
+
+    const result = await generateAnswerWithRepair({ chunkContentById: chunks, generate });
+
+    assert.equal(result.attempts, 2);
+  });
+
+  it("repair turn echoes the exact stripped quote so the model fixes that specific span", async () => {
+    const broken = raw("Recht op 104 roostervrije uren [1].", [
+      { marker: 1, chunk_id: "adv", quote: "een niet-letterlijke quote" },
+    ]);
+    const clean = raw("Recht op 104 roostervrije uren [1].", [
+      { marker: 1, chunk_id: "adv", quote: "104 roostervrije uren" },
+    ]);
+    const { generate, calls } = scriptedGenerate([broken, clean]);
+
+    await generateAnswerWithRepair({ chunkContentById: chunks, generate });
+
+    const repairPrompt = calls[1]?.[1]?.content ?? "";
+    assert.ok(repairPrompt.includes("NIET letterlijk"), "names the verbatim failure");
+    assert.ok(repairPrompt.includes("een niet-letterlijke quote"), "echoes the exact stripped quote");
+  });
+
+  it("does not let an empty attempt win the penalty tie over a real (flagged) attempt", async () => {
+    // Both attempts are non-clean, but the second is EMPTY. Without the guard the empty string would
+    // score penalty 0 and win the `<=` tie; with the guard the flagged real answer is kept.
+    const flagged = raw("Je hebt recht op 104 roostervrije uren [1].", [
+      { marker: 1, chunk_id: "adv", quote: "honderdvier roostervrije uren" },
+    ]);
+    const { generate } = scriptedGenerate([flagged, ""]);
+
+    const result = await generateAnswerWithRepair({ chunkContentById: chunks, generate });
+
+    assert.equal(result.text, flagged);
   });
 });

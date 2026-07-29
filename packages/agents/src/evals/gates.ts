@@ -59,7 +59,7 @@ export const GATE_SPECS = [
     id: "G2-multi-turn",
     layer: "G2",
     requires: "scaleway+mistral",
-    title: "multi-turn condensation retrieval (G2-retrieval case-category)",
+    title: "multi-turn condensation retrieval + serve-path citation coupling (G2-retrieval case-category)",
   },
   {
     id: "G2-answer",
