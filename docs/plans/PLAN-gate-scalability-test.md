@@ -76,10 +76,15 @@ baselines kunnen dus allebei `corpusVersion: "4"` dragen — en dat is niet hypo
 staat (herijkt op 2026-07-21). Het diagnosedocument is daarmee stil verouderd.
 
 Gevolg voor P0.2: de metadata die de baseline reproduceerbaar maakt moet **extern** in het
-`BASELINE-…md`-artefact staan, en er is een gemeten run nodig voor kosten en duur (die staan nergens
-vast). Zolang de working tree wijzigingen bevat op de naden die de eval scoort (nu:
-`cao/agent.ts`, `types.ts`, `observability/trace.ts`, `shared/env.ts`), is "vaste commit" bovendien
-niet waar te maken. **P0.2 is dus geblokkeerd op: schone tree + één gemeten run.**
+artefact-document staan, en er is een gemeten run nodig voor kosten en duur (die staan nergens vast).
+
+**Run gedaan op 2026-07-30 — uitkomst: nog geen baseline** [gemeten]. Volledige suite op een schone
+tree op commit `70e7404`, CI-nightly-profiel, 40 min 4 s. G1, G2 (contract, retrieval, multi-turn,
+answer), G3-pipeline, G3-fund `etd` en G3-isolation zijn **groen** en reproduceren de nulmetingen van
+2026-07-21 tot op de decimaal. Maar **`G3-fund [demo]` is rood**: hit@1, recall@3, recall@5 en MRR
+staan alle vier op 0 over 11 vragen. Een rode run mag de lat niet worden (§4.4) en de drempel
+verlagen mag niet (C4), dus **P0.2 blijft open**. Meting, diagnose en de resterende stappen:
+`docs/eval/baseline-run-2026-07-30.md` (+ ruw logboek `…-2026-07-30.log`).
 | P0.3 | **Beslisregels R1–R6 vastgelegd vóór run 1** (pre-registratie) | Anders praat je jezelf achteraf groen — het spiegelbeeld van "drempels verlagen voor groen" | Dit document gecommit vóór de eerste koude doorloop |
 | P0.4 | **Relatie met de embedding-keuze besloten** — de bake-off is **al beslist** (`qwen3-embedding-8b` @ 4096, gepind); wat openstaat is de *dataset-caveat* van `scripts/bake-off/results.md`: de winnaar is gemeten op een seed-corpus van 18 passages, niet op een echte fonds-CAO | Drempels bevriezen vóór een eventuele re-bake-off op echte corpora is weggegooid werk; een re-bake-off vóór dit protocol vertraagt alles en herhaalt een keuze die al gepind is | Besluit hieronder |
 
