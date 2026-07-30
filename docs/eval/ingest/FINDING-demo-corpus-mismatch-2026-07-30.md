@@ -109,6 +109,22 @@ de twee corpora samen.
 commando uit `demo-corpus/README.md:10` maakt daar 2 doorzoekbare chunks van, in het corpus van de
 publieke demo. Zichtbaar in de dry-run hierboven.
 
+### 5.3 De gedocumenteerde opdracht faalt — dit is vermoedelijk de oorzaak [feit]
+
+Het commando uit `demo-corpus/README.md:10` gebruikt een repo-root-relatief pad, terwijl
+`pnpm --filter` het script in de **packagemap** draait. Letterlijk uitgevoerd:
+
+```
+$ pnpm --filter @wunderstack/ingest ingest scripts/ingest/demo-corpus --fund demo --version 1 --dry-run
+ENOENT: no such file or directory, stat 'scripts/ingest/demo-corpus'
+Exit status 1
+```
+
+Daarmee is de causale keten compleet: wie de README volgde kreeg een foutmelding, het corpus werd
+nooit geladen, het fonds hield het smoke-test-document van 3 juli, de golden set toetste tegen een
+corpus dat er niet was, en de nachtelijke rode gate was visibility zonder blokkade (B4) — dus niets
+en niemand hield dit tegen. Vier op zichzelf onschuldige dingen die samen maanden ongezien bleven.
+
 ## 6. Waarom hier gestopt is
 
 Fase 2 schrijft voor: *"Valt de verwachting anders uit: stoppen, rapporteren."* De verwachting zelf

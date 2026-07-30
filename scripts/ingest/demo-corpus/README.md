@@ -7,13 +7,21 @@ structured like a real CAO (hoofdstukken / artikelen / leden + a salary table) s
 ## Ingest it (you run this — needs `SCALEWAY_API_KEY` + `DATABASE_URL`)
 
 ```sh
-pnpm --filter @wunderstack/ingest ingest scripts/ingest/demo-corpus --fund demo --version 1
+pnpm --filter @wunderstack/ingest ingest demo-corpus --fund demo --version 1 --prune
 ```
 
+- The path is relative to `scripts/ingest/`, because `pnpm --filter` runs the script in the package
+  directory. A repo-root-relative path fails with ENOENT — that is how this corpus went uningested
+  until 2026-07-30 (see `docs/eval/ingest/FINDING-demo-corpus-mismatch-2026-07-30.md`).
 - `--fund demo` matches the tenant-zero fund (`CAO_FUNDS` must include `demo`; the runtime's dev
   default tenant `demo` maps to fund `demo`).
+- `--prune` states that this directory IS the fund's whole corpus, so anything else the fund still
+  holds is retracted. Leave it off to add to a corpus instead of replacing it.
+- This README is skipped automatically: documentation next to a corpus is not corpus.
 - Dry-run first to inspect chunking without touching the DB/embeddings:
-  `pnpm --filter @wunderstack/ingest ingest scripts/ingest/demo-corpus --fund demo --version 1 --dry-run`
+  `pnpm --filter @wunderstack/ingest ingest demo-corpus --fund demo --version 1 --dry-run`
+- Every run ends with a structure report (`docs/eval/ingest/INGEST-demo-<date>.md`) showing how many
+  chunks carry an `article` / `source_ref` anchor. Visibility, not a gate.
 
 ## Its goldenset
 
