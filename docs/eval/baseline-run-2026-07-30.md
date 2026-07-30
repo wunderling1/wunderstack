@@ -63,16 +63,16 @@ op 11 vragen vrijwel zeker íets raken.
 `expectedArticle: "2"` in `golden-set.demo.jsonl`. Op basis van de repo-code zou dit dus moeten
 werken.
 
-**Nog niet vastgesteld (aanname):** de meest waarschijnlijke verklaring is dat de `demo`-rijen in de
-gate-database uit een **oudere ingest** komen, van vóór de artikel-parsing, zodat `chunks.article`
-leeg is. Dat is met één join-query op `documents`/`chunks` te bevestigen — bewust niet gedaan zonder
-expliciet akkoord voor database-inzage.
+**Bevestigd [gemeten]:** `chunks.article` en `chunks.source_ref` zijn **null voor alle 10**
+`demo`-chunks, terwijl 6 van die 10 nog wél een regel-leidende `Artikel N` in hun tekst hebben. De
+structuur zit dus in de bron; alleen de metadata-kolommen zijn leeg — het beeld van een ingest van
+vóór de feature.
 
-**Classificatie volgens Fase 4 stap 2:** nog niet definitief. De twee kandidaten zijn *echt-rood*
-(de pipeline levert geen artikel-anker op een markdown-bron) of *vals-rood* (stale ingest in de
-gate-DB, meetartefact). **Dit verschil is belangrijk:** in het eerste geval raakt het elk toekomstig
-fonds met een markdown-/tekstbron; in het tweede geval is het een DB-hygiëne-kwestie. Wat het
-in geen geval mag worden, is een drempelverlaging (C4).
+**Classificatie volgens Fase 4 stap 2 — vastgesteld:** `demo` is **vals-rood** (ingeladen 2026-07-03,
+twee dagen vóór de CAO-bewuste chunking landde), maar de diagnose legde daaronder een **echt-rood**
+bloot dat geen gate bewaakt: de productie-ingest haalt uit een echte CAO-PDF geen enkel
+structuuranker. Volledige uitwerking, bewijs en opties:
+`docs/eval/diagnosis-fund-article-metadata-2026-07-30.md`.
 
 **Waarom dit los staat van de nulmeting van 21 juli:** de `demo`-fondslaag is later toegevoegd
 (Fase 5, tenant zero). De claim "integraal groen" in `GATE-ARCHITECTURE.md` dekt `etd`, niet `demo`.
