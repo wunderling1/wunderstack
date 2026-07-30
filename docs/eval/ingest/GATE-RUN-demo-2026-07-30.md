@@ -61,14 +61,22 @@ Er zijn twee lezingen en ik kies er geen van:
    heeft over kinderopvang en pensioen niets te zeggen, maar wel over reiskosten, bijzonder verlof
    en salaris — begrippen die dicht genoeg liggen om boven de drempel te komen.
 
-## 4. Waarom ik dit niet heb "opgelost"
+## 4. Open besluit — de rode blijft staan
+
+**Besloten op 2026-07-30:** de refusal-guard op `demo` blijft rood en wordt vastgelegd als open
+besluit, niet weggenomen. Threshold-calibratie staat buiten scope van dit plan. **Gevolg voor Fase 4:**
+de promotiekoppeling geeft voor fonds `demo` een **NO-GO** zolang dit besluit niet gevallen is — wat
+precies de bedoeling is van die koppeling: een openstaande rode blokkeert promotie naar dát fonds,
+zonder `main` te blokkeren (D5). Op te nemen in `GATE-ARCHITECTURE.md` bij de open besluiten (Fase 6).
+
+## 5. Waarom ik dit niet heb "opgelost"
 
 `minScore` verlagen of de guard versoepelen zou de rode wegnemen. Dat is categorie **C4** uit het
 interventielog: *"Rode vlag — mag niet. Een rode score op nieuw corpus repareer je in de pipeline,
 nooit in de drempel."* Threshold-calibratie staat expliciet buiten scope van dit plan. De rode blijft
 dus staan tot er een besluit over is.
 
-## 5. Gevolg voor P0.2
+## 6. Gevolg voor P0.2
 
 **P0.2 kan niet dicht.** De eis is één groene volledige run als bevroren baseline; deze run eindigt
 op `EVAL_EXIT=1`. Wat wél gesloten is: de oorzaak van het rode `G3-fund [demo]` uit de baseline is

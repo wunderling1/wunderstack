@@ -112,9 +112,59 @@ verlagen: dat zou C4 zijn. Analyse: `docs/eval/ingest/GATE-RUN-demo-2026-07-30.m
 
 ---
 
+## 2026-07-30 · C1 · De PDF-parse gooide alle regelstructuur weg
+
+**Fase:** ingest-herstelplan Fase 3 · **Duur:** ±3 uur
+
+**Wat.** `extractText({ mergePages: true })` leverde paginatekst met de opmaak platgeslagen. Élk
+structuurpatroon verderop kijkt naar het begin van een regel, dus vond niets iets: 0 van 107 chunks
+met een anker, 0 table-chunks, 86% van de chunks begon midden in een zin.
+
+**Ingreep.** Regelreconstructie uit de fragmentgeometrie van `extractTextItems` (fragmenten met
+dezelfde `y` zijn één regel; horizontale afstand scheidt buurwoorden van tabelkolommen, met
+**gemeten** drempels: proza ≤ 1,03em, kolommen ≥ 1,1em met mediaan 2,27em). Kopteksten eruit op
+herhaling, paginanummers op vorm aan de paginarand.
+
+**Tweede, niet-voorziene wijziging: `chunk.ts` (bevroren bestand).** Kerndiscipline 3 nam aan dat de
+chunker deugde op regel-leidende patronen. Gemeten bleek dat onjuist: met perfect gereconstrueerde
+regels leverde de chunker **één** chunk op, alleen geankerd op "Hoofdstuk 1". `isHeading` stond na een
+nummer maximaal één woord toe, dus `1.1. Van toepassing` was geen kop en deze CAO — die nergens
+"Artikel N" schrijft maar N.M nummert — viel volledig buiten de structuurherkenning. Eén extra geval
+toegevoegd, met de N.M-vorm als eis en een kolomrun als uitsluiting, zodat lidnummers en
+salarisregels ongemoeid blijven. Verantwoord onder de uitzondering van kerndiscipline 3
+(gedocumenteerde reden + hernieuwde G1-run).
+
+**Resultaat [gemeten].** `article` 0/107 (0,0%) → **221/245 (90,2%)**; `source_ref` 0,0% → **99,6%**;
+table-chunks 0 → **12**; mid-zin-starts 86,0% → **0,4%**. Vijf vooraf gekozen spot-checks slagen op
+alle criteria, inclusief de loontabel als één table-chunk met 11 regels bijeen.
+
+**Kosten.** 245 chunk-embeddings bij Scaleway. Vooraf gemeld en goedgekeurd.
+
+**Regressie.** De markdown-route is bewezen onaangeraakt: sha256 over de geordende demo-chunks uit de
+nieuwe code is identiek aan de opgeslagen chunks uit de oude
+(`22a8f009746f1e1b906db4f8611dcb50c03c43ea8f244d46ee8352a2d7dd2b05`).
+
+**Restpunten, niet gerepareerd.** Drie pagina's van 62 leveren geen tekst op (pdf.js-fout, was al zo,
+nu hard gemeld tijdens elke ingest). De inhoudsopgave is doorzoekbare inhoud geworden (14 chunks).
+Drie vals-positieve koppen uit afgebroken kruisverwijzingen (`artikel 8.2.`) leveren
+fragment-chunks met een verkeerd anker — een **nieuw** neveneffect van deze fix.
+
+**Bewijs.** `docs/eval/ingest/PARSE-FIX-2026-07-30.md`, met voor- en na-rapport. Commit `8de57a9` plus
+de vervolgcommit met tests en paginawaarschuwing. Gates: 40/40 turbo-taken groen, depcruise 313
+modules zonder violations, 36 unit-tests in het ingest-pakket.
+
+**Wat dit zegt over schaalbaarheid.** Dit was geen corpus-eigenaardigheid maar een gat in de pipeline:
+elke CAO die zijn artikelen N.M nummert in plaats van "Artikel N" viel volledig buiten de
+structuurherkenning, en geen gate zag het. Dat is precies wat de schaalbaarheidstoets moet vinden,
+gevonden op corpus nummer één.
+
+---
+
 ## Openstaand
 
-- **C1 · parse-fix PDF-regelstructuur** — Fase 3 van het ingest-herstelplan, nog niet uitgevoerd.
-  Grond: `docs/eval/diagnosis-fund-article-metadata-2026-07-30.md` §3 en de baseline
-  `docs/eval/ingest/INGEST-elektronische-detailhandel-2026-07-30.md` (0/107 ankers, 0 table-chunks,
-  86% mid-zin-starts).
+- **Refusal-guard `demo`** — rood en bewust rood gelaten (besluit 2026-07-30). Threshold-calibratie
+  buiten scope. Zie `docs/eval/ingest/GATE-RUN-demo-2026-07-30.md` §4.
+- **Twee reparatievoorstellen uit Fase 3**, nog niet uitgevoerd: inhoudsopgave/titelpagina buiten het
+  corpus houden, en een kop met kleine letter afwijzen tegen vals-positieve koppen.
+- **Drie onleesbare PDF-pagina's** — vraagt een andere extractieroute (OCR of andere engine); eigen
+  besluit.

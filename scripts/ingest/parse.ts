@@ -224,14 +224,16 @@ export function dropRunningLines(pages: readonly string[][]): string[][] {
       .map(([line]) => line),
   );
 
-  return pages.map((lines) =>
-    lines.filter((line, index) => {
+  return pages.map((lines) => {
+    // The band scales with the page so a short page does not count as edge from end to end.
+    const band = Math.min(PAGE_EDGE_LINES, Math.max(1, Math.floor(lines.length / 3)));
+    return lines.filter((line, index) => {
       if (running.has(line)) return false;
-      const atEdge = index < PAGE_EDGE_LINES || index >= lines.length - PAGE_EDGE_LINES;
+      const atEdge = index < band || index >= lines.length - band;
       if (atEdge && (BARE_PAGE_NUMBER.test(line) || LABELLED_PAGE_NUMBER.test(line))) return false;
       return true;
-    }),
-  );
+    });
+  });
 }
 
 /** Reconstructed page text, joined with a blank line so paragraph splitting sees a page break. */
@@ -243,6 +245,19 @@ export function pdfItemsToText(pages: readonly StructuredTextItem[][]): string {
     .join("\n\n");
 }
 
+/**
+ * Pages a PDF holds but yields no text for. pdf.js swallows per-page extraction errors, so such a
+ * page contributes nothing and the corpus is quietly incomplete. Measured on
+ * cao_elektronische_detailhandel.pdf: 3 of 62 pages. Reported rather than repaired — recovering the
+ * text needs a different extraction route (OCR or another engine) and that is a separate decision.
+ */
+export function findEmptyPages(pages: readonly StructuredTextItem[][]): number[] {
+  return pages
+    .map((pageItems, index) => ({ page: index + 1, hasText: pageItems.some((item) => item.str.trim().length > 0) }))
+    .filter((page) => !page.hasText)
+    .map((page) => page.page);
+}
+
 export async function parseFile(filePath: string): Promise<string> {
   const extension = extname(filePath).toLowerCase();
 
@@ -250,6 +265,13 @@ export async function parseFile(filePath: string): Promise<string> {
     const buffer = await readFile(filePath);
     const pdf = await getDocumentProxy(new Uint8Array(buffer));
     const { items } = await extractTextItems(pdf);
+    const empty = findEmptyPages(items);
+    if (empty.length > 0) {
+      console.warn(
+        `  warning: ${String(empty.length)} of ${String(items.length)} pages yielded no extractable text ` +
+          `(pages ${empty.join(", ")}). That content is NOT in the corpus.`,
+      );
+    }
     return normalizeText(pdfItemsToText(items));
   }
 
