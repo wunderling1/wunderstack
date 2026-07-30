@@ -39,9 +39,9 @@
 | Include administrators (no bypass) | yes | **yes** (`bypass_actors: []`) | ruleset `main` |
 | Allow force pushes | no | **no** (`non_fast_forward`) | ruleset `main` |
 | Allow deletions | no | **no** (`deletion`) | ruleset `main` |
-| Require pull request before merging | yes | **NO — gap** | — |
-| Required approving reviews | see caveat | **NO — gap** | — |
-| Merge queue | optional | **NO — gap** | — |
+| Require pull request before merging | yes | **yes** (added 2026-07-30) | ruleset `main` |
+| Required approving reviews | 0 — see caveat | **0** (`dismiss_stale_reviews_on_push: true`) | ruleset `main` |
+| Merge queue | optional | **NO — deliberate gap** | — |
 
 ### Caveat — a required approving review deadlocks a solo repo
 
@@ -53,20 +53,13 @@ the merge ref and the history stays reviewable) without inventing a second revie
 exist. Raise the count when there is a second maintainer, not before. This is why the earlier
 snippet in this file — which requested 1 approving review — was never safe to apply as written.
 
-## Apply the remaining gap (pull-request rule, added to the existing ruleset)
+## Applied 2026-07-30 — pull-request rule on the existing ruleset
 
 Do **not** re-apply classic branch protection: two overlapping mechanisms is how the confusion
-above started. Add the rule to ruleset `18689890` instead, keeping the existing rules intact.
-
-```bash
-REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
-RULESET=18689890
-
-# Read current rules, append a pull_request rule, PUT the merged result.
-gh api "repos/${REPO}/rulesets/${RULESET}" --jq '.rules' > /tmp/rules.json
-```
-
-Then PUT the ruleset with `/tmp/rules.json` extended by:
+above started. The rule was added to ruleset `18689890`, keeping `deletion`,
+`non_fast_forward` and `required_status_checks` byte-identical and `bypass_actors` empty. Method:
+read the ruleset, append the rule, PUT the merged object (a bare PUT **replaces** the rule list, so
+never PUT only the new rule).
 
 ```json
 {
@@ -76,10 +69,16 @@ Then PUT the ruleset with `/tmp/rules.json` extended by:
     "dismiss_stale_reviews_on_push": true,
     "require_code_owner_review": false,
     "require_last_push_approval": false,
-    "required_review_thread_resolution": false
+    "required_review_thread_resolution": false,
+    "allowed_merge_methods": ["merge", "squash", "rebase"]
   }
 }
 ```
+
+**Still open — the enforcement demonstration.** The settings now say `main` is protected; that is not
+the same as having *seen* it block. Next real PR: confirm that a failing `verify` blocks the merge
+button, and record the run URL here. Until then this file documents configuration, not proof of
+behaviour — exactly the distinction the caveat above is about.
 
 ## Verify + archive proof
 
