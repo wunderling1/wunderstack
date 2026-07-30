@@ -162,9 +162,19 @@ gevonden op corpus nummer één.
 
 ## Openstaand
 
-- **Refusal-guard `demo`** — rood en bewust rood gelaten (besluit 2026-07-30). Threshold-calibratie
-  buiten scope. Zie `docs/eval/ingest/GATE-RUN-demo-2026-07-30.md` §4.
+- **Refusal-guard `demo` én `etd-full`** — rood en bewust rood gelaten (besluit 2026-07-30).
+  Threshold-calibratie buiten scope. Na de nulmeting van Fase 5 staat de guard op twee
+  onafhankelijke echte corpora rood (`demo` 0/2 leeg, `etd-full` 0/1 leeg) en alleen op de
+  handgecureerde fixtureset groen (3/3). Het ETD-corpus is bijna acht keer zo groot als `demo`, dus
+  "corpus te klein" verklaart het niet meer; de waarschijnlijke oorzaak is dat `minScore = 0.48` op
+  de fixtureset is gekalibreerd. Zie `docs/eval/ingest/GATE-RUN-demo-2026-07-30.md` §4 en
+  `docs/eval/golden-sets/NULMETING-etd-full-2026-07-30.md` §2.
 - **Twee reparatievoorstellen uit Fase 3**, nog niet uitgevoerd: inhoudsopgave/titelpagina buiten het
   corpus houden, en een kop met kleine letter afwijzen tegen vals-positieve koppen.
 - **Drie onleesbare PDF-pagina's** — vraagt een andere extractieroute (OCR of andere engine); eigen
   besluit.
+- **Eén van de 14 `etd-full`-vragen vindt zijn anker niet** (buiten de top-5; alle andere staan op
+  plek 1). Welke case dat is, is niet gemeten — het artefact bewaart geen uitkomst per case.
+- **Voorstel startersjabloon: drie refusal-cases in plaats van één** (drempel ≥ 2 leeg), zodat de
+  guard voor een nieuw fonds een maat is en geen munt. Niet doorgevoerd; verandert een gate-drempel
+  en vraagt een besluit. Zie `docs/eval/golden-sets/NULMETING-etd-full-2026-07-30.md` §5.
