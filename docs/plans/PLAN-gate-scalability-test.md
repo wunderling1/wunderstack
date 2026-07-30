@@ -38,7 +38,7 @@ huidige repo. Hieronder wat gecorrigeerd is, met bewijs. Niets is stil aangepast
 | V1 | `GATE-ARCHITECTUUR.md` | Het canonieke document heet `docs/eval/GATE-ARCHITECTURE.md` (Engelse bestandsnaam, conform `000-core.mdc`) | Referentie gecorrigeerd |
 | V2 | Bewijs in `docs/evals/…` | De map is **enkelvoud**: `docs/eval/` (bevat nu alleen `GATE-ARCHITECTURE.md`) | Alle bewijspaden → `docs/eval/…`, met Engelse bestandsnamen |
 | V3 | `BESLISNOTITIE-platform-vs-eigen-agent.md`, beslisregel "B2/B4" | Het document bestaat **niet** in de repo (0 grep-treffers). Erger: `GATE-ARCHITECTURE.md` §5 gebruikt **B1–B6 al** voor de open gate-besluiten — waarvan B2 en B4 bestaande, andere besluiten zijn (B2 = regressiechecks nightly-only, **besloten** 2026-07-21; B4 = wordt een G3-fail een deploy-gate) | Beslisnotitie-labels genamespaced als **BN-B2 / BN-B4**. Het document zelf blijft een openstaande dependency |
-| V4 | P0.1 "branch protection activeren" als openstaand punt | **Gedeeltelijk al actief** [anker]: `docs/audit/branch-protection-check.md` — required check `verify` (`strict: true`), `enforce_admins: true`, geen force-push/deletes. **Gaten:** geen `required_pull_request_reviews`, geen merge-queue, en de proof-JSON is nooit gecommit | P0.1 herschreven naar "de twee resterende gaten + proof committen" |
+| V4 | P0.1 "branch protection activeren" als openstaand punt | **Grotendeels al actief, maar via een ander mechanisme dan gedocumenteerd** [anker, gemeten 2026-07-30]: de afdwinging zit in **repository-ruleset** `main` (id `18689890`, `enforcement: active`, `bypass_actors: []`) met required check `verify` + strict-policy + geen force-push/deletes. De klassieke protection op dezelfde branch is zo goed als leeg. **Gaten:** geen pull-request-regel, geen merge-queue | P0.1 herschreven; proof gecommit als `docs/audit/branch-protection-proof.json`, auditnotitie gecorrigeerd |
 | V5 | P0.4 "bake-off-koppeling besloten" (bake-off staat nog te gebeuren) | De embedding-bake-off is **al gedraaid en besloten** [anker]: `scripts/bake-off/results.md` (2026-07-03) → `qwen3-embedding-8b` @ 4096 dim, gepind in `packages/shared/src/config/embedding.ts`. Drempelkalibratie hangt dus **niet** meer op een modelkeuze | P0.4 herschreven en **besloten** (2026-07-30): niet blokkeren |
 | V6 | "OOMT-baseline bevriezen" | "OOMT" bestaat niet in code [anker]: de fonds-laag kent `etd` en `demo` (`FUND_SET_META`, `packages/agents/src/evals/golden-set.ts`). `PLAN-v3.md` Fase 14 stap 4 heeft nog als open punt of `etd` de geanonimiseerde OOMT ís | P0.2 benoemt de concrete artefacten (`fixtures/baseline.json` + de nulmetingen van 2026-07-21) i.p.v. een fondsnaam die geen code-anker heeft |
 | V7 | I4 "verbatim-gate (binair)" | Niet alle citatie-gates zijn binair [anker] `GATE-ARCHITECTURE.md` §3: `citationVerification` is een **count**-gate (≤ 1 case unverified, rate = trend-only); `orphanRate ≤ 0` is wél binair | Criterium van I4 gepreciseerd |
@@ -49,14 +49,37 @@ De inhoudelijke ankers die de ingediende versie wél correct legt: `findUnground
 (`packages/agents/src/cao/hard-facts.ts:159`) bestaat en is de juiste gate voor I3, en de
 decoratieve-citatie-case `etd-026` bestaat als refusal-probe in de base-set.
 
+**Bevinding #0 (uit P0.1 zelf, 2026-07-30).** De verificatie-opdracht in
+`docs/audit/branch-protection-check.md` las het verkeerde object: `gh api …/branches/main/protection`
+rapporteert geen required checks en `enforce_admins: false`, terwijl `verify` in werkelijkheid wél
+verplicht is via een ruleset. Wie zo audit, concludeert het tegendeel van de waarheid. Dit is
+dezelfde klasse fout als "skip ≠ pass" (`GATE-ARCHITECTURE.md` §4.2) — niet een gate die stil
+overslaat, maar een *bewijsvraag* die stil het verkeerde meet. Genoteerd omdat het protocol hiermee
+zijn eerste vals-signaal vond nog vóór corpus 1: dezelfde waakzaamheid geldt voor elk bewijsstuk in
+Fase 2–7.
+
 ---
 
 ## 1. Voorwaarden vooraf (P0 — gate voor de toets zelf)
 
 | # | Voorwaarde | Waarom | Bewijs |
 |---|---|---|---|
-| P0.1 | **Branch protection compleet + afdwinging bewezen** — resterend: `required_pull_request_reviews` en (optioneel) merge-queue aan, plus de proof-JSON committen | Zonder afdwinging toets je adviezen, geen gates. Let op de gekoppelde faalwijze uit `GATE-ARCHITECTURE.md` §4.2: een required check is niet sterker dan wat erin draait — branch protection en de "skip ≠ pass"-invariant zijn een paar | `docs/audit/branch-protection-proof.json` (`gh api …/branches/main/protection`) + één bewust falende PR die aantoonbaar geblokkeerd wordt |
+| P0.1 | **Branch protection compleet + afdwinging bewezen** — ✅ proof gecommit, ✅ `verify` required zonder bypass; **resterend:** pull-request-regel op de ruleset (met `required_approving_review_count: 0`, zie de solo-deadlock-caveat in de auditnotitie) en één bewust falende PR als blokkade-bewijs | Zonder afdwinging toets je adviezen, geen gates. Let op de gekoppelde faalwijze uit `GATE-ARCHITECTURE.md` §4.2: een required check is niet sterker dan wat erin draait — branch protection en de "skip ≠ pass"-invariant zijn een paar | `docs/audit/branch-protection-proof.json` (ruleset **én** klassieke protection, want ze spreken elkaar tegen) + `docs/audit/branch-protection-check.md` |
 | P0.2 | **Baseline bevroren** — vaste commit, `packages/agents/src/evals/fixtures/baseline.json`, de nulmetingen per gate uit `GATE-ARCHITECTURE.md` §G1–§G3 (2026-07-21), plus corpus-snapshot (`GOLDEN_CORPUS_VERSION` + `corpusVersion` per fonds-set) | Portabiliteit is alleen meetbaar tegen een vaste referentie. De baseline-integriteitsguard (§4.4) borgt dat het geen rode run is | `docs/eval/BASELINE-<fund>-<date>.md`: gate-scores, drempels, kosten, duur, commit-SHA, corpusversies |
+
+**P0.2 — waarom dit niet met een `git`-verwijzing af is [feit, 2026-07-30].** `baseline.json` is
+**niet zelf-identificerend**: het bevat `corpusVersion` + `fixtureHash` + de scores, maar géén
+commit-SHA, generator-model, `EVAL_JUDGE_SAMPLES`, datum, kosten of duur. Twee verschillende
+baselines kunnen dus allebei `corpusVersion: "4"` dragen — en dat is niet hypothetisch:
+`fixtures/baseline-v4-DIAGNOSIS.md` beschrijft een "baseline v4" met `hardHallucination` 0.9355 en
+`citationVerification` 0.5161, terwijl het huidige bestand met dezelfde corpusVersion op 1.0 en 1.0
+staat (herijkt op 2026-07-21). Het diagnosedocument is daarmee stil verouderd.
+
+Gevolg voor P0.2: de metadata die de baseline reproduceerbaar maakt moet **extern** in het
+`BASELINE-…md`-artefact staan, en er is een gemeten run nodig voor kosten en duur (die staan nergens
+vast). Zolang de working tree wijzigingen bevat op de naden die de eval scoort (nu:
+`cao/agent.ts`, `types.ts`, `observability/trace.ts`, `shared/env.ts`), is "vaste commit" bovendien
+niet waar te maken. **P0.2 is dus geblokkeerd op: schone tree + één gemeten run.**
 | P0.3 | **Beslisregels R1–R6 vastgelegd vóór run 1** (pre-registratie) | Anders praat je jezelf achteraf groen — het spiegelbeeld van "drempels verlagen voor groen" | Dit document gecommit vóór de eerste koude doorloop |
 | P0.4 | **Relatie met de embedding-keuze besloten** — de bake-off is **al beslist** (`qwen3-embedding-8b` @ 4096, gepind); wat openstaat is de *dataset-caveat* van `scripts/bake-off/results.md`: de winnaar is gemeten op een seed-corpus van 18 passages, niet op een echte fonds-CAO | Drempels bevriezen vóór een eventuele re-bake-off op echte corpora is weggegooid werk; een re-bake-off vóór dit protocol vertraagt alles en herhaalt een keuze die al gepind is | Besluit hieronder |
 
