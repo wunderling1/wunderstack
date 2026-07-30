@@ -422,7 +422,9 @@ export async function reportAfterIngest(options: {
       );
 
   console.log(`\n${formatConsoleSummary(report)}`);
-  if (options.write !== false) {
+  // A dry-run stored nothing, so it may not leave behind a document that reads like a measurement of
+  // stored data. It reports to the console and writes no file.
+  if (options.write !== false && !options.dryRun) {
     const path = await writeReport(report);
     console.log(`  report written to ${path}`);
   }
