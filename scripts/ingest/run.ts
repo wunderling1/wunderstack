@@ -25,6 +25,7 @@ import { EMBEDDING_CONFIG, env } from "@wunderstack/shared";
 
 import { chunk, type Chunk } from "./chunk.js";
 import { parseFile, SUPPORTED_EXTENSIONS } from "./parse.js";
+import { reportAfterIngest } from "./report.js";
 
 const DEFAULT_INPUT_DIR = "input";
 const EMBED_BATCH_SIZE = 32;
@@ -36,6 +37,8 @@ interface CliOptions {
   version: string;
   dryRun: boolean;
   force: boolean;
+  /** Filename suffix for the structure report, so a before/after pair on one day stays distinguishable. */
+  label?: string;
 }
 
 function parseCli(): CliOptions {
@@ -44,6 +47,7 @@ function parseCli(): CliOptions {
     options: {
       fund: { type: "string" },
       version: { type: "string" },
+      label: { type: "string" },
       "dry-run": { type: "boolean", default: false },
       force: { type: "boolean", default: false },
     },
@@ -54,6 +58,7 @@ function parseCli(): CliOptions {
     version: values.version ?? "1",
     dryRun: values["dry-run"] ?? false,
     force: values.force ?? false,
+    ...(values.label ? { label: values.label } : {}),
   };
 }
 
@@ -113,6 +118,8 @@ interface FileOutcome {
   tableChunks: number;
   structuredChunks: number;
   sampleRefs: string[];
+  /** Kept so a dry-run can still be measured by the structure report (nothing was stored to read back). */
+  pieces: Chunk[];
 }
 
 function summarize(pieces: Chunk[]): Pick<FileOutcome, "tableChunks" | "structuredChunks" | "sampleRefs"> {
@@ -133,7 +140,7 @@ async function ingestFile(options: CliOptions, filePath: string): Promise<FileOu
   const summary = summarize(pieces);
 
   if (options.dryRun) {
-    return { sourceUri, status: "dry-run", chunkCount: pieces.length, ...summary };
+    return { sourceUri, status: "dry-run", chunkCount: pieces.length, pieces, ...summary };
   }
   if (pieces.length === 0) {
     throw new Error(`No chunks produced for ${filePath}; nothing to ingest.`);
@@ -149,7 +156,7 @@ async function ingestFile(options: CliOptions, filePath: string): Promise<FileOu
   // Idempotency is keyed on the parsed SOURCE TEXT, not the chunk output. A chunker/config change
   // (same PDF) therefore looks "unchanged" and would be skipped; --force re-chunks and re-embeds.
   if (existing[0]?.contentHash === contentHash && !options.force) {
-    return { sourceUri, status: "unchanged", chunkCount: pieces.length, ...summary };
+    return { sourceUri, status: "unchanged", chunkCount: pieces.length, pieces, ...summary };
   }
   const isUpdate = existing.length > 0;
 
@@ -207,7 +214,7 @@ async function ingestFile(options: CliOptions, filePath: string): Promise<FileOu
     }
   });
 
-  return { sourceUri, status: isUpdate ? "updated" : "created", chunkCount: pieces.length, ...summary };
+  return { sourceUri, status: isUpdate ? "updated" : "created", chunkCount: pieces.length, pieces, ...summary };
 }
 
 async function main(): Promise<void> {
@@ -225,8 +232,10 @@ async function main(): Promise<void> {
       `${options.dryRun ? "" : ` Embedding model: ${EMBEDDING_CONFIG.model} @ ${String(EMBEDDING_CONFIG.dim)}.`}\n`,
   );
 
+  const produced: Chunk[] = [];
   for (const file of files) {
     const outcome = await ingestFile(options, file);
+    produced.push(...outcome.pieces);
     console.log(
       `  ${outcome.status.padEnd(9)} ${outcome.sourceUri} (${String(outcome.chunkCount)} chunks, ` +
         `${String(outcome.tableChunks)} table, ${String(outcome.structuredChunks)} with sourceRef)`,
@@ -234,6 +243,19 @@ async function main(): Promise<void> {
     if (outcome.sampleRefs.length > 0) {
       console.log(`             refs: ${outcome.sampleRefs.join(" | ")}`);
     }
+  }
+
+  // Structure report (visibility, never a gate): a corpus that loses its anchors must not be able to
+  // pass unnoticed. A failure to write the report may not fail the ingest itself.
+  try {
+    await reportAfterIngest({
+      fund: options.fund,
+      dryRun: options.dryRun,
+      chunks: produced,
+      ...(options.label ? { label: options.label } : {}),
+    });
+  } catch (error: unknown) {
+    console.warn(`\n  warning: structure report failed (${error instanceof Error ? error.message : String(error)}).`);
   }
 
   console.log("\nDone.");
