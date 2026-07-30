@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { chunk } from "./chunk.js";
-import { computeStructureMetrics, startsMidSentence, type ReportChunk } from "./report.js";
+import {
+  computeStructureMetrics,
+  isAnchorableByChunker,
+  startsMidSentence,
+  type ReportChunk,
+} from "./report.js";
 
 /** Shape a real chunker output into what the report measures — the production path, not a stub. */
 function measure(text: string): ReturnType<typeof computeStructureMetrics> {
@@ -87,6 +92,35 @@ De volledige arbeidsduur bedraagt 38 uur per week.
     assert.equal(metrics.unanchoredSectionHeadings, 1);
     assert.equal(metrics.anchorableButUnanchored, 0);
   });
+});
+
+describe("ingest structure report — mirror agrees with the chunker line by line", () => {
+  // The invariant: isAnchorableByChunker(line) is true exactly when the real chunker turns that line
+  // into an article anchor. Asserted per line, because an aggregate assertion let a real divergence
+  // through once already — the mirror rejected multi-word N.M headings that the chunker anchors.
+  const cases = [
+    "Artikel 5 Salaris",
+    "Artikel 6a Overwerk",
+    "1.1. Van toepassing",
+    "4.3 Arbeidsduurverkorting (ADV)",
+    "6.12 Maaltijdvergoeding",
+    "Hoofdstuk 2 Beloning",
+    "Bijlage 1 Salaristabellen",
+    "1.",
+    "2)",
+    "15 jaar  580,30  609,32",
+    "1.3. Gedeeltelijk arbeidsongeschikte werknemers met een dienstverband van ten minste zes maanden",
+    "De werknemer heeft recht op vakantie.",
+  ];
+
+  for (const line of cases) {
+    it(`agrees on ${JSON.stringify(line.slice(0, 40))}`, () => {
+      const anchoredByChunker = chunk(`${line}\nDe tekst van dit onderdeel.`).some(
+        (piece) => piece.article !== null,
+      );
+      assert.equal(isAnchorableByChunker(line), anchoredByChunker);
+    });
+  }
 });
 
 describe("ingest structure report — chunk-quality signals", () => {

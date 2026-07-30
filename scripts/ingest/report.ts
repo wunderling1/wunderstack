@@ -48,15 +48,19 @@ export interface ReportChunk {
  */
 const HEADING_KEYWORD = /^(artikel|hoofdstuk|bijlage|paragraaf)\b/i;
 const NUMBERED_HEADING = /^\d+(\.\d+)*[.)]?(\s+\S+)?$/;
+const TITLED_SECTION_HEADING = /^\d+(?:\.\d+)+[.)]?\s+\p{L}/u;
 const ARTICLE_HEADING = /^artikel\s+\d+[a-z]?/i;
 const SECTION_HEADING = /^\d+\.\d+(?:\.\d+)*[.)]?(?=\s|$)/;
+/** `extractBijlage` also produces an `article` value ("Bijlage 1"), so it counts as anchorable. */
+const BIJLAGE_HEADING = /^bijlage\s+\S/i;
 
 /** Mirror of chunk.ts `isHeading`: the gate every structural extractor sits behind. */
 function isHeadingLine(line: string): boolean {
   const trimmed = line.trim();
   if (trimmed.length === 0 || trimmed.length > 120) return false;
   if (HEADING_KEYWORD.test(trimmed)) return true;
-  return NUMBERED_HEADING.test(trimmed) && trimmed.length <= 80;
+  if (NUMBERED_HEADING.test(trimmed) && trimmed.length <= 80) return true;
+  return TITLED_SECTION_HEADING.test(trimmed) && !/\s{2,}/.test(trimmed) && trimmed.length <= 80;
 }
 
 function lines(content: string): string[] {
@@ -78,11 +82,11 @@ function hasSectionHeadingText(content: string): boolean {
  * `isHeading` first. A long prose line that happens to start with "1.3. Gedeeltelijk …" reads as
  * structure to the eye but is invisible to the chunker — that gap is the point of measuring both.
  */
-function isAnchorableByChunker(content: string): boolean {
+export function isAnchorableByChunker(content: string): boolean {
   return lines(content).some((line) => {
     const trimmed = line.trim();
     if (!isHeadingLine(trimmed)) return false;
-    return ARTICLE_HEADING.test(trimmed) || SECTION_HEADING.test(trimmed);
+    return ARTICLE_HEADING.test(trimmed) || SECTION_HEADING.test(trimmed) || BIJLAGE_HEADING.test(trimmed);
   });
 }
 
