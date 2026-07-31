@@ -2,8 +2,11 @@
 
 > **Hoort bij:** P0.2 uit `docs/plans/PLAN-gate-scalability-test.md` (laatste openstaande voorwaarde
 > vóór de koude doorloop) en het slotverslag van het ingest-herstelplan.
-> **Datum:** 2026-07-31 · **Status:** **meting gedaan, geen code gewijzigd** — dit stuk vraagt één
-> besluit. **Labels:** [gemeten] · [feit] · (aanname)
+> **Datum:** 2026-07-31 · **Labels:** [gemeten] · [feit] · (aanname)
+> **Status:** **BESLOTEN EN UITGEVOERD — optie A** (commit `c795081`), en gemeten op de echte pipeline:
+> alle drie de fondsen halen 3/3 lege probes en de volledige suite eindigde integraal groen
+> (`docs/eval/RUN-verificatie-guard-2026-07-31.md`). Optie B staat als open besluit **B7** in
+> `GATE-ARCHITECTURE.md`.
 > **Ruwe data:** `scripts/eval/refusal-guard-report.md` (regenereerbaar met
 > `pnpm --filter @wunderstack/eval-scripts refusal-guard-probe`).
 
