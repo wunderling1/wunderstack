@@ -1,8 +1,9 @@
 # Bevinding — de nachtelijke DB-gate heeft nog nooit gedraaid
 
 > **Datum:** 2026-07-31 · **Labels:** [gemeten] · [feit] · (aanname)
-> **Status:** oorzaak nog niet vastgesteld; wél teruggebracht tot twee mogelijkheden die met één
-> handmatige run van elkaar te onderscheiden zijn (§5).
+> **Status:** OORZAAK GEMETEN en verholpen — zie §7. Het secret `DATABASE_URL` bevatte een lokaal
+> tunneladres; CI heeft nooit een database gezien. §4-§6 zijn de gedachtegang van vóór die meting en
+> blijven staan; §6 is achterhaald door het besluit in §7.
 
 **Kort.** De nachtelijke CI-run faalt elke nacht sinds 21 juli 2026, altijd op dezelfde stap: "Ingest
 golden fixtures (nightly integration gate)". Die stap is de enige plek in de hele pipeline die een
@@ -96,3 +97,50 @@ Gelijk ⇒ dezelfde database, dus mogelijkheid 2 (verbinding of credentials). Ve
   een gok zijn die de echte oorzaak maskeert.
 - **De nachtelijke cron niet aangeraakt.** Hij blijft rood tot de oorzaak weg is; dat is de juiste
   toestand voor een gate die niet draait.
+
+## 7. De oorzaak, gemeten — en wat er is besloten
+
+**Het secret wees naar een tunnel op de runner zelf.** De preflight (run `30640322363`, 2026-07-31
+14:51 UTC) printte:
+
+```
+database target: fingerprint 6bd4402231da · port 10000 · sslmode prefer · host suffix 0.0.1
+Error: Failed query: select "content_hash" from "documents" where "documents"."source_uri" = $1 limit $2
+caused by: Error: connect ECONNREFUSED 127.0.0.1:10000
+  code=ECONNREFUSED errno=-111 syscall=connect
+```
+
+`127.0.0.1:10000` is het adres dat `scalingo db-tunnel` op een ontwikkelmachine opent. In het secret
+`DATABASE_URL` staat dus een tunnel-URL uit een lokale `.env`, en op een runner luistert daar niets.
+Daarmee vallen beide hypothesen uit §4 af: het is niet mogelijkheid 1 (een andere, niet-gemigreerde
+database) en niet mogelijkheid 2 (dezelfde database, verbinding geweigerd) — er was **geen** database.
+Dat verklaart ook waarom lokaal alles altijd werkte: daar stond de tunnel open.
+
+**Besluit: CI zet zijn eigen gate-database op** in plaats van naar een beheerde database te wijzen
+(`ci.yml:77-116`). Overwogen alternatief was het secret vullen met de echte externe Scalingo-URL. Dat
+is per run goedkoper — ingest is idempotent, dus na de eerste keer een no-op — en het betrapt je op
+migratie-drift tegen de échte database. Het is niet gekozen om twee redenen:
+
+1. **Verborgen gedeelde toestand.** Een blijvende database draagt resten van eerdere runs en van lokaal
+   werk. Een gate kan daar groen zijn om een reden die niet in de commit zit. Dat is precies het soort
+   onzichtbare input waardoor P0.2 nu open staat (lokaal groen, CI rood, oorzaak niet aanwijsbaar). Een
+   verse database maakt van het corpus een gedeclareerde input: alles wat de gate meet, staat in de repo.
+2. **Blootstelling.** Die variant vraagt een database die verbindingen vanaf GitHub-runners accepteert,
+   dus vanaf het internet, bij een publieke repo — plus TLS-werk, want de client zet geen SSL-optie
+   (`packages/db/src/client.ts:30`).
+
+**Wat deze keuze níet dekt:** of de beheerde database nog bij onze migraties past. Dat gat blijft open
+en hoort in een losse, incidentele migratiecheck — niet in de dagelijkse gate.
+
+**Migreren in CI is hiermee wél ingevoerd**, tegen wat §6 zich voornam. De reden dat het daar werd
+uitgesteld ("welke rol, welke rechten, wat bij een gefaalde migratie") vervalt voor een wegwerp-database
+die met de runner verdwijnt: de rol is `postgres` op een lege container, en een gefaalde migratie faalt
+de stap. Voor een beheerde database zou dat besluit nog steeds nodig zijn.
+
+**`db-preflight.yml` is verwijderd.** Hij heeft zijn werk gedaan en zijn enige env was het inmiddels
+bekend-onjuiste secret. Vervangen door `workflow_dispatch`-input `run_db_gates` op de CI-workflow, die
+de DB-gates op verzoek nu draait in plaats van om 03:00 — met een eigen `verify`-job-gedrag dat de
+betaalde eval wél meeneemt, zodat een handmatige run geen halve groene check kan opleveren.
+
+**Nog te doen:** het onjuiste secret `DATABASE_URL` in de repo-settings opruimen. CI gebruikt het niet
+meer, maar een secret dat een lokaal tunneladres bevat is misleidend voor de volgende lezer.

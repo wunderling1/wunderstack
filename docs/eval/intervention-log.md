@@ -300,6 +300,35 @@ eigen besluit (aparte key, lagere gelijktijdigheid of een expliciete 429-uitkoms
 
 ---
 
+## 2026-07-31 · C2 · CI wees naar een database die daar niet bestaat
+
+**Fase:** buiten de fasen — reparatie van de bevinding dat de DB-gates nooit in CI hebben gedraaid ·
+**Categorie:** C2 — configuratiewijziging.
+
+**Wat gemeten is.** De handmatige preflight (`30640322363`) laat zien dat het secret `DATABASE_URL` een
+lokaal tunneladres bevat: `connect ECONNREFUSED 127.0.0.1:10000`, vingerafdruk `6bd4402231da`,
+`sslmode prefer`. Dat is het adres van `scalingo db-tunnel` op een ontwikkelmachine. Elf nachten falen
+komen dus niet van een niet-gemigreerde database of geweigerde credentials — er was geen database.
+
+**De wijziging.** De nachtelijke run zet nu zijn eigen wegwerp-database op (`pgvector/pgvector:0.8.2-pg17`
+via `docker run` achter een conditie, niet als `services:`, zodat PR's er niets voor betalen), migreert
+hem, en ingest de drie corpora die de gates toetsen — allemaal uit de repo. Het secret wordt niet meer
+gebruikt.
+
+**Waarom dit een gedragswijziging van de gate is, niet alleen plumbing.** De gate meet vanaf nu
+uitsluitend wat de commit declareert. Bij een blijvende database kan een G3-resultaat groen zijn door
+rijen die uit een eerdere run of van een laptop komen; dat is dezelfde klasse verborgen input als de
+variantie waar P0.2 nu op vastzit. Prijs: geen bewijs meer dat de beheerde database bij onze migraties
+past — apart te dekken, staat als open punt.
+
+**Wat het per run kost.** Een verse database betekent geen idempotente no-op meer: circa 285
+embedding-calls (31 fixture-passages, het demo-corpus van 672 woorden, 245 ETD-chunks). Ruim onder een
+cent, en alleen nachtelijk of op verzoek.
+
+**Bewijs.** Oorzaak en afweging: `docs/audit/FINDING-nightly-db-gate-never-ran-2026-07-31.md` §7.
+
+---
+
 ## Openstaand
 
 - ~~**Refusal-guard `demo` én `etd-full` rood**~~ — **afgehandeld 2026-07-31** (C4-entry hierboven).
@@ -314,10 +343,14 @@ eigen besluit (aparte key, lagere gelijktijdigheid of een expliciete 429-uitkoms
   5%-tolerantie. De nul marge die het artefact bij `underRefusal` benoemde, is bij de eerstvolgende run
   ook echt omgevallen. Eén groene run is dus geen bevroren referentie; de spreiding moet eerst gemeten
   worden (zie de vraag hieronder over N runs).
-- **De DB-gates hebben nog nooit in CI gedraaid** [gemeten]. De nachtelijke run faalt elf nachten op rij
-  op de ingest-stap, die de enige DB-aanraking in de pipeline is; de eval-stap wordt daarna geskipt. G3
-  is dus uitsluitend lokaal bewijs. Meting, uitgesloten oorzaken en de beslisregel:
-  `docs/audit/FINDING-nightly-db-gate-never-ran-2026-07-31.md`.
+- **De DB-gates hadden nog nooit in CI gedraaid** [gemeten] — oorzaak gevonden en verholpen (C2
+  hierboven): het secret bevatte een lokaal tunneladres. **Nog niet gesloten**: er is nog geen groene
+  CI-run met database. Tot die er is, blijft al het G3-bewijs van een laptop komen.
+- **Migratie-drift tegen de beheerde database is nu ongedekt.** Doordat CI een verse database opzet,
+  bewijst geen enkele run meer dat de Scalingo-database bij onze migraties past. Vraagt een losse,
+  incidentele check; niet in de dagelijkse gate.
+- **Het onjuiste secret `DATABASE_URL` staat er nog.** CI gebruikt het niet meer, maar een secret met een
+  tunneladres erin is een valstrik voor de volgende lezer.
 - **Kosten staan nergens machinaal vast.** Het eval-artefact legt profiel en modellen vast, maar geen
   tokenverbruik en geen duur. `generateAnswerWithRepair` telt usage per case al op en geeft het aan de
   eval, die het weggooit; de judge vangt usage niet op. P0.2 vraagt kosten in het baseline-artefact, dus
