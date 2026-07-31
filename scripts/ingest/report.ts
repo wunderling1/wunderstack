@@ -23,6 +23,8 @@ import { parseArgs } from "node:util";
 
 import { asc, chunks as chunksTable, closeDb, documents, eq, getDb } from "@wunderstack/db";
 
+import { describeFailure } from "./diagnostics.js";
+
 const REPORT_DIR = ["docs", "eval", "ingest"];
 
 /** Repo root, derived from this file's location (scripts/ingest/report.ts). */
@@ -475,7 +477,7 @@ const entryPoint = process.argv[1];
 if (entryPoint !== undefined && import.meta.url === pathToFileURL(entryPoint).href) {
   main()
     .catch((error: unknown) => {
-      console.error(error instanceof Error ? error.message : error);
+      console.error(describeFailure(error));
       process.exitCode = 1;
     })
     .finally(closeDb);

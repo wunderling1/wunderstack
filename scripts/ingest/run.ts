@@ -26,6 +26,7 @@ import { and, chunks as chunksTable, closeDb, documents, eq, getDb, inArray, sql
 import { EMBEDDING_CONFIG, env } from "@wunderstack/shared";
 
 import { chunk, type Chunk } from "./chunk.js";
+import { describeFailure } from "./diagnostics.js";
 import { parseFile, SUPPORTED_EXTENSIONS } from "./parse.js";
 import { reportAfterIngest } from "./report.js";
 
@@ -345,7 +346,7 @@ const entryPoint = process.argv[1];
 if (entryPoint !== undefined && import.meta.url === pathToFileURL(entryPoint).href) {
   main()
     .catch((error: unknown) => {
-      console.error(error instanceof Error ? error.message : error);
+      console.error(describeFailure(error));
       process.exitCode = 1;
     })
     // Close the pool so the process exits (postgres.js keeps sockets open otherwise) — matters in CI.

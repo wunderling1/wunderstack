@@ -86,7 +86,14 @@ staan alle vier op 0 over 11 vragen. Een rode run mag de lat niet worden (§4.4)
 verlagen mag niet (C4), dus **P0.2 blijft open**. Meting, diagnose en de resterende stappen:
 `docs/eval/baseline-run-2026-07-30.md` (+ ruw logboek `…-2026-07-30.log`).
 
-**P0.2 — GESLOTEN op 2026-07-31** [gemeten]. Volledige suite **integraal groen** op commit `4d715b9`,
+**P0.2 — WEER OPEN op 2026-07-31, zelfde dag** [gemeten]. De CI-run op `main` na de merge van PR #8
+draaide **dezelfde code onder hetzelfde profiel** en is rood op de antwoordlaag: under-refusal 2 van 3
+(gate ≤ 1) plus vier regressietoleranties. Eén groene run is dus geen vaste referentie — de baseline is
+niet reproduceerbaar zolang de spreiding onbekend is. Aanvullend: de DB-gates hebben nog nooit in CI
+gedraaid (`docs/audit/FINDING-nightly-db-gate-never-ran-2026-07-31.md`), dus G3 is lokaal bewijs. Wat
+hieronder stond blijft gelden als meting van die ene run, niet als bevroren lat.
+
+**De run zelf, voor het dossier** [gemeten]. Volledige suite **integraal groen** op commit `4d715b9`,
 nachtelijk profiel (judge 3, generatie 3), 1 h 4 min 42 s, `EVAL_EXIT=0` over negen gates. De rode
 `G3-fund [demo]` van 2026-07-30 bleek een **corpusmismatch** (het verkeerde bestand was geïngest) en
 staat nu op hit@1 1,000; `etd-full` op een echt geïngeste PDF-CAO staat op 0,929. De refusal-guard was

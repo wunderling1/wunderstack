@@ -306,11 +306,18 @@ eigen besluit (aparte key, lagere gelijktijdigheid of een expliciete 429-uitkoms
   De hypothese "`minScore = 0.48` is op de fixtureset gekalibreerd" was half juist: de drempel
   klopt, de probes niet. Rest-risico: de guard is nu groen op alle corpora maar bewaakt een smallere
   eigenschap; het weigergedrag zelf is per fonds onbewaakt (**B7**).
-- ~~**P0.2**~~ — **GESLOTEN 2026-07-31.** Integraal groene run onder het nachtelijke profiel (judge 3,
-  generatie 3) op commit `4d715b9`, 1 h 4 min 42 s, negen van negen gates. Artefact met identiteit,
-  drempels, duur, callvolume en boomstaat: `docs/eval/BASELINE-2026-07-31.md`. Twee voorbehouden staan
-  daar expliciet in: de `underRefusal`-gate heeft nul marge (1 van maximaal 1 case), en de boom bevatte
-  37 additieve regels ongecommitteerd MCP-werk buiten het eval-pad.
+- **P0.2 — WEER OPEN, dezelfde dag** [gemeten]. De integraal groene run onder het nachtelijke profiel
+  (commit `4d715b9`, 1 h 4 min 42 s, negen van negen gates) staat in
+  `docs/eval/BASELINE-2026-07-31.md`. Maar de CI-run op `main` na de merge van PR #8 — **dezelfde code,
+  hetzelfde profiel** — is rood op de antwoordlaag: under-refusal **2 van 3** (gate ≤ 1), plus
+  faithfulness 0,919, relevantie 0,913, volledigheid 0,861 en refusal-kalibratie 0,935 buiten de
+  5%-tolerantie. De nul marge die het artefact bij `underRefusal` benoemde, is bij de eerstvolgende run
+  ook echt omgevallen. Eén groene run is dus geen bevroren referentie; de spreiding moet eerst gemeten
+  worden (zie de vraag hieronder over N runs).
+- **De DB-gates hebben nog nooit in CI gedraaid** [gemeten]. De nachtelijke run faalt elf nachten op rij
+  op de ingest-stap, die de enige DB-aanraking in de pipeline is; de eval-stap wordt daarna geskipt. G3
+  is dus uitsluitend lokaal bewijs. Meting, uitgesloten oorzaken en de beslisregel:
+  `docs/audit/FINDING-nightly-db-gate-never-ran-2026-07-31.md`.
 - **Kosten staan nergens machinaal vast.** Het eval-artefact legt profiel en modellen vast, maar geen
   tokenverbruik en geen duur. `generateAnswerWithRepair` telt usage per case al op en geeft het aan de
   eval, die het weggooit; de judge vangt usage niet op. P0.2 vraagt kosten in het baseline-artefact, dus
