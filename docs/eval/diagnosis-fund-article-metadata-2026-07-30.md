@@ -2,7 +2,11 @@
 
 > **Hoort bij:** `docs/plans/PLAN-gate-scalability-test.md` (Fase 4 stap 2: echt-rood vs. vals-rood) en
 > `docs/eval/baseline-run-2026-07-30.md` (de run die dit blootlegde).
-> **Datum:** 2026-07-30 · **Status:** diagnose, **geen fix toegepast** · **Labels:** [gemeten] · [feit] · (aanname)
+> **Datum:** 2026-07-30 · **Labels:** [gemeten] · [feit] · (aanname)
+> **Status:** **AFGEROND (2026-07-31).** Alle drie de openstaande opties uit §5 zijn uitgevoerd via het
+> ingest-herstelplan (Fase 2, 3 en 5) en de blinde vlek uit §3.2 is gedicht (Fase 4 en 6). Eén
+> mechanisme in §2 bleek onjuist en is gecorrigeerd; zie §6 hieronder voor wat er van deze diagnose
+> overeind staat en wat niet.
 
 **Kort:** de rode gate is *vals-rood* (verouderde data), maar het onderzoek legde daaronder een
 *echt-rood* bloot dat geen enkele gate bewaakt: **de productie-ingest haalt uit een echte CAO-PDF geen
@@ -122,3 +126,26 @@ Geen fix, geen re-ingest, geen drempelwijziging. Openstaande keuzes, in volgorde
 | 3 | Een golden set voor `elektronische-detailhandel` | Groter | Sluit de blinde vlek uit §3.2 permanent, zodat de productie-ingest ook bewaakt wordt |
 
 Optie 1 en 2 zijn onafhankelijk: 1 sluit P0.2, 2 is nodig vóór Fase 2 zinvol is.
+
+---
+
+## 6. Afronding (2026-07-31) — wat hiervan overeind staat
+
+Uitgevoerd via `docs/plans/`-losse opdracht "ingest-herstelplan", Fase 2 t/m 6. Per onderdeel:
+
+| Uit deze diagnose | Uitkomst | Bewijs |
+|---|---|---|
+| §2 `demo` vals-rood door **verouderde chunker** | **Mechanisme onjuist.** Het label *vals-rood* klopt, de oorzaak niet: in fonds `demo` stond een ánder bestand (`sample-cao.txt`) dan de golden set toetst. De verwachte fix (re-ingest) werkte wél, om een andere reden | `ingest/FINDING-demo-corpus-mismatch-2026-07-30.md` · `intervention-log.md` (C3, 2026-07-30) |
+| §3 PDF-ingest levert **geen enkel anker** | **Bevestigd en opgelost.** `article` 0/107 (0,0%) → **221/245 (90,2%)**, `source_ref` → 99,6%, table-chunks 0 → **12**, mid-zin-starts 86,0% → 0,4% | `ingest/PARSE-FIX-2026-07-30.md` · `intervention-log.md` (C1, 2026-07-30) |
+| §3.1 citaties zonder leesbaar anker | Opgelost door §3; verificatie was en blijft `chunkId` + verbatim quote | `ingest/INGEST-elektronische-detailhandel-2026-07-30-na-parsefix.md` |
+| §3.2 blinde vlek: `G3-fund [etd]` bewijst de ingest niet | **Gedicht op twee manieren.** Een golden set op het echt geïngeste PDF-corpus (`etd-full`, 15 cases) én de regel expliciet vastgelegd als `Bewijst niet` bij G2/G3 in `GATE-ARCHITECTURE.md` | `golden-sets/NULMETING-etd-full-2026-07-30.md` · `GATE-ARCHITECTURE.md` §G3 |
+| §4 "de drie corpora zijn PDF's, dus Fase 2 meet de parse opnieuw" | Nog steeds geldig als waarschuwing, maar de aanleiding is weg: de parse haalt nu ankers uit een echte CAO-PDF | `ingest/PARSE-FIX-2026-07-30.md` |
+| §5 optie 1, 2 en 3 | **Alle drie uitgevoerd** (Fase 2, Fase 3, Fase 5) | `intervention-log.md` |
+| "nachtelijk rood houdt niemand tegen" (§2, §3.2) | **Niet meer waar.** B4 herzien: rood blokkeert `main` niet, maar wel promotie van dat fonds — `pnpm promote-check <fonds> <tag>` | `ingest/PROMOTION-GATE-2026-07-31.md` · `GATE-ARCHITECTURE.md` §7 |
+
+**Wat níet is opgelost en bewust openstaat:** de refusal-guard is rood op `demo` én `etd-full`
+(drempelcalibratie stond buiten scope), er is nog geen volledig groene run als bevroren baseline
+(P0.2), en er zijn drie kleinere residu's uit Fase 3 (inhoudsopgave als doorzoekbare inhoud,
+vals-positieve koppen uit afgebroken kruisverwijzingen, drie onleesbare PDF-pagina's). De actuele
+lijst staat onder *Openstaand* in `intervention-log.md`; de samenvatting in
+`SLOTVERSLAG-ingest-herstelplan-2026-07-31.md`.

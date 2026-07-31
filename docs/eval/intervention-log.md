@@ -160,6 +160,34 @@ gevonden op corpus nummer één.
 
 ---
 
+## 2026-07-30 · Geen interventie · Golden set op een echt geïngest corpus (Fase 5)
+
+**Fase:** ingest-herstelplan Fase 5 · **Categorie:** geen — nieuw meetmateriaal, geen wijziging aan
+pipeline, drempel of bestaande data.
+
+**Wat.** Startersjabloon voor een fonds-golden-set (`docs/eval/golden-sets/TEMPLATE-starter.md`) en de
+eerste instantiatie daarvan op het net opnieuw geïngeste PDF-corpus: `etd-full`, 15 cases (12
+`in_scope`, 1 `derived`, 1 `table`, 1 `refusal`) over fonds `elektronische-detailhandel`. Daarmee
+staat er voor het eerst een gate op een corpus dat via de productie-ingest binnenkwam.
+
+**Resultaat [gemeten].** Alle vier de retrieval-drempels in één keer gehaald, zonder één drempel of
+chunk-parameter aan te raken: hit@1 92,9%, recall@3 en @5 92,9%, MRR 0,929 (13 van 14 vragen, twaalf
+op plek 1). De refusal-guard faalde (0 van 1 lege probe).
+
+**Kosten.** Volledige eval-run onder nachtelijke condities, 54 min 12 s. Vooraf gemeld en goedgekeurd.
+
+**Wat dit zegt over schaalbaarheid.** Twee dingen. Positief: een nieuw fonds haalt de retrieval-lat
+zonder bijsturen — het sterkste zelfservice-signaal tot nu toe. Negatief: de refusal-guard staat nu op
+**twee onafhankelijke echte corpora** rood en alleen op de handgecureerde fixtureset groen. Omdat het
+ETD-corpus met 245 chunks bijna acht keer zo groot is als `demo`, valt de eerdere verklaring "corpus
+te klein om te weigeren" weg; waarschijnlijker is dat `minScore = 0.48` op de fixtureset is
+gekalibreerd. Niet gerepareerd — een drempel verlagen zou C4 zijn.
+
+**Bewijs.** `docs/eval/golden-sets/NULMETING-etd-full-2026-07-30.md` (+ runlog). Commits `28b1911`
+(sjabloon + golden set) en `faa6db2` (nulmeting).
+
+---
+
 ## 2026-07-31 · Geen interventie · Promotiepoort per fonds (Fase 4)
 
 **Fase:** ingest-herstelplan Fase 4 · **Categorie:** geen — gepland werk, geen afwijking van een
