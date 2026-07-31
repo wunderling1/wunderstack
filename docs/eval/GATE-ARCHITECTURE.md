@@ -107,7 +107,7 @@ productie (`cao/agent.ts`), niet in de eval-harness, en is daarom géén registr
 | **Faalscenario's** | (a) De echte pipeline (rewrite → pgvector → rerank → assemble) presteert slechter dan de synthetische proxy. (b) Fund-antwoorden kloppen niet op de echte corpus. (c) Cross-fund leakage. (d) Sluipende kwaliteitsdaling. (e) *Gereserveerd:* corpus-actualiteit. |
 | **Checks** | **G3-pipeline:** productie-retrieval op fund-fixtures; minScore refuse-guard op out-of-corpus probes. **G3-fund:** fund golden set (per fonds, corpus-versioned) via productie-pipeline; refusal-guard. **G3-isolation:** live 0-leakage-probe per fund. **G3-freshness *(gereserveerd, PLAN-v3 Fase 16)*:** corpus-versie vs. vigerende CAO-versie. |
 | **Isolatie-mechanisme** | Fund-isolatie wordt afgedwongen op de **applicatielaag**: de retrieval-seam (`packages/rag` → `retrieve.ts`) scoopt elke query verplicht op `fund` en een unscoped query parse-faalt (G1-contract). **Postgres RLS is (nog) niet geïmplementeerd** — `grep create policy / enable row level security` over de repo = 0 treffers. G3-isolation bewíjst 0 cross-fund leakage op app-niveau; het is geen database-niveau-garantie. RLS-vs-app-seam is open besluit B5; DB-niveau-isolatie staat gepland (PLAN-v3 Fase 16). Klant-/procurement-teksten mogen daarom géén "isolatie op databaseniveau" claimen tot RLS bestaat. |
-| **Blocking** | Nightly: fail = rode schedule-run + melding. Of nightly-fail een deploy-gate wordt: open besluit B4. |
+| **Blocking** | Nightly: fail = rode schedule-run + melding. **`main` wordt niet geblokkeerd; promotie van het betreffende fonds wél** — `pnpm promote-check <fonds> <tag>` geeft NO-GO op een rood, ontbrekend of niet-identificeerbaar `G3-fund`-resultaat (B4 herzien 2026-07-31, zie §7). |
 | **Herkomst** | Gate B-integration + Gate F + Gate D-integration. |
 | **Nulmeting 2026-07-21** | PASS (lokaal met DB). G3-pipeline hit@1 95.8%, minScore-guard 3/3 leeg @ 0.48; G3-fund [etd] hit@1 95.7%, refusal-guard 3/3 leeg; G3-isolation 0 cross-fund leakage over 3 fondsen. |
 
@@ -347,7 +347,7 @@ niet vaststaat.
 | B1 | relevance-drempel 0.84 of 0.85 | **BESLOTEN (2026-07-21): 0.84 blijft** — empirisch onderbouwd (gemeten judge-ruis 0.845–0.865 @3 samples; 0.84 net onder de spread zodat één flaky draw de gate niet flipt). Label `[E]`. |
 | B2 | regressiechecks nightly-only (na judge-variantie-meting) | **BESLOTEN (2026-07-21): under-refusal-*rate*-regressie geschrapt.** Meting: judge-metriek-spread @1 vs @3 (faithfulness Δ0.032, relevance Δ0.032, completeness Δ0.025) blijft **< tolerantie 0.05** → judge-ruis rechtvaardigt geen nightly-only; de overige regressiechecks blijven op de PR-hot-path. De @1-run faalde puur op under-refusal-rate (0.333 vs 0.000) = generatie-variantie bij N=3 fixtures; die rate-regressie is nu verwijderd (`answerRegressionChecks`), de absolute **count**-gate ≤1 blijft de bescherming. |
 | B3 | drempel-inversie G2 vs G3 opheffen | **BESLOTEN (2026-07-21): provisional laten** — G3-drempels `[C]`, herijken na ≥ 14 nightly-runs op gemeten data, daarna ≥ G2-niveau of expliciet gemotiveerd verschil. |
-| B4 | moet G3-fail iets blokkeren (deploy-gate) of blijft het visibility | visibility tot go-live; deploy-gate opnieuw beoordelen bij afronding PLAN-v3 Fase 13 |
+| B4 | moet G3-fail iets blokkeren (deploy-gate) of blijft het visibility | **HERZIEN (2026-07-31): beide, gescheiden per doel.** Nachtelijk `G3-fund`-rood blokkeert `main` **niet** — daar blijft het visibility — maar blokkeert **promotie van het betreffende fonds** wél (besluit D5 van het ingest-herstelplan). Rationale: een fonds-rood zegt iets over de corpus van dát fonds, niet over de correctheid van de code op `main`; `main` blokkeren zou al het werk stilzetten voor een probleem in één corpus, terwijl promoveren met een rood fonds precies de fout is die de gate moet voorkomen. Uitvoerbaar gemaakt als `pnpm promote-check <fonds> <tag>` (§7). Herzien zodra de gate-set stabiliseert of promotie geautomatiseerd wordt. |
 | B5 | Gate D ooit RLS-afgedwongen of app-seam voldoende | app-seam interim; klantformuleringen aanpassen tot RLS bestaat (zie §G3 isolatie-mechanisme + Bijlage B) |
 | B6 | Langfuse dataset-run push (E9 stap 2): backlog of harde eis | **BESLOTEN (2026-07-21): bewuste backlog tot go-live.** Reden: het `eval-report.json`-artefact wordt al bij elke run geschreven én in CI geüpload (ook bij failure), dus reproduceerbaarheid + regressie zijn gedekt; een Langfuse dataset-run voegt vooral gedeelde review-UI toe, geen extra correctheidsgarantie. Herzien bij go-live / eerste getekende fonds. |
 
@@ -367,6 +367,58 @@ niet vaststaat.
 | 2026-07-21 | **B2 besloten:** under-refusal-*rate*-regressiecheck verwijderd uit `answerRegressionChecks` | rate is noisy bij N=3 refusal-fixtures (@1-draw flipte de gate op 0.333); absolute count-gate ≤1 beschermt al | Cursor/Jordy |
 | 2026-07-21 | **Fase 5 (G4-streaminglek):** "bekend lek"-notitie verwijderd; §G4 herschreven naar buffer-to-verify (optie A). Emit-pad geëxtraheerd naar de pure seam `settledAnswerEvents` (agent.ts) en samen met `verifyAndBuild` geborgd door `agent.test.ts` | het lek was al gedicht door buffer-to-verify (commit `c763ea0`, 2026-07-20); de notitie was per abuis uit de pre-buffer-draft overgenomen. Bescherming was impliciet/ongetest en de client is token-stream-ready → regressietest legt het vast | Cursor/Jordy |
 | 2026-07-21 | **Fase 6 (docs-hygiëne):** §G3 isolatie-mechanisme expliciet gemaakt (app-laag, RLS niet geïmplementeerd); §4.5 toegevoegd (E4 `sourceRef`-residu **geaccepteerd**, geen matching-impact); **B6** vastgelegd (Langfuse dataset-run push = backlog); **Bijlage B** claim↔gate-kruistabel toegevoegd (gedekt vs. niet-claimen) | claims-hygiëne: geen doc-claim mag verder gaan dan een geïmplementeerde gate; RLS-formulering, Langfuse-besluit en E4-residu vastleggen | Cursor/Jordy |
+| 2026-07-31 | **B4 herzien + promotiepoort (§7):** nachtelijk `G3-fund`-rood blokkeert `main` niet maar wel promotie van dat fonds; uitvoerbaar als `pnpm promote-check <fonds> <tag>` op een append-only ledger (`docs/eval/gate-results/g3-fund.jsonl`). `eval-report.json` legt nu ook lokaal de commit vast, zodat een groen zich kan identificeren | Fase 4 ingest-herstelplan (besluit D5); een nachtelijk rood was tot nu toe een gat: het blokkeerde niets en het resultaat overleefde de volgende run niet | Cursor/Jordy |
+
+---
+
+## 7. Promotiepoort per fonds (`promote-check`)
+
+Dit is de uitvoerbare vorm van het herziene besluit B4: `main` blijft open bij een fonds-rood, maar
+dat fonds promoveren kan niet. Er is geen geautomatiseerd promotieproces in deze repo (de
+Scalingo-deploy staat buiten de repo, zie `docs/STATUS.md`), dus de poort is één commando dat als
+scriptstap én als checklistregel werkt.
+
+```
+pnpm promote-check <fonds> <tag>      # exitcode 0 = GO, 1 = NO-GO, 2 = verkeerd gebruik
+```
+
+Het fonds mag je opgeven als golden-set-sleutel (`etd-full`) of als databasefonds
+(`elektronische-detailhandel`).
+
+**GO vereist alle vijf.** Alles wat onbekend is, geldt als NO-GO — een poort die zwijgen als
+goedkeuring leest, is geen poort.
+
+| # | Voorwaarde | Waarom |
+|---|---|---|
+| 1 | Er is een `G3-fund`-resultaat voor dit fonds in de ledger | Zonder meting is er niets om op te varen |
+| 2 | Dat resultaat is `passed` (niet `failed`, niet `skipped`) | Een gate die niet kon draaien is geen groen |
+| 3 | Het resultaat noemt een commit, en die hoort bij `<tag>` | Een groen dat niet kan zeggen waarover het groen is, bewijst niets over deze release |
+| 4 | Er is een ingest-structuurrapport voor het fonds | Anders is de kwaliteit van de laatste ingest onzichtbaar (koppeling met het meetinstrument) |
+| 5 | De laatste **ingest** ligt vóór de gate-run | Is er ná de run opnieuw geïngest, dan beschrijft het groen data die er niet meer staat |
+
+Voorwaarde 5 kijkt naar de laatste *ingest* uit het rapport, niet naar de datum van het rapport zelf:
+een read-only hermeting van een onveranderd corpus is legitiem en mag niet blokkeren.
+
+**Waar het resultaat landt.** `eval-report.json` is gitignored en wordt door de volgende run
+overschreven, dus elke run schrijft per fonds ook één regel naar
+`docs/eval/gate-results/g3-fund.jsonl` (append-only, gecommit). Toevoegen is idempotent op
+(set, run, commit). Een CI-run kan niet committen; daar wordt de regel na afloop uit het geüploade
+artefact afgeleid met `pnpm --filter @wunderstack/promote record <eval-report.json>` — dezelfde
+afleidingsfunctie, dus een nagespeelde regel is identiek aan een live regel.
+
+**Grens van deze poort.** Hij leest alleen gecommit bewijs — geen database, geen netwerk — zodat hij
+nooit wordt overgeslagen wegens ontbrekende credentials. Daardoor kan hij één ding niet zien: een
+ingest die is gedaan zonder dat er een structuurrapport is geschreven. Via `scripts/ingest/run.ts`
+kan dat niet gebeuren (het rapport is daar onvoorwaardelijk), maar het is een aanname over het
+gebruikte pad, geen bewijs.
+
+### Checklist bij het promoveren van een fonds
+
+- [ ] `pnpm promote-check <fonds> <tag>` geeft **GO** (exitcode 0). Bij NO-GO: eerst de genoemde
+      blokkade oplossen, niet de drempel.
+- [ ] De genoemde `corpus`-versie is de versie die je wilt uitrollen.
+- [ ] Openstaande besluiten voor dit fonds zijn afgehandeld (zie `docs/eval/intervention-log.md`
+      → *Openstaand*).
 
 ---
 

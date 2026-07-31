@@ -1,0 +1,23 @@
+{
+  "name": "@wunderstack/promote",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsx check.ts",
+    "record": "tsx record.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test:unit": "tsx --test *.test.ts"
+  },
+  "dependencies": {
+    "@wunderstack/agents": "workspace:*",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.0",
+    "eslint": "10.6.0",
+    "tsx": "4.22.4",
+    "typescript": "6.0.3"
+  }
+}

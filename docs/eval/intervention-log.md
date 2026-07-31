@@ -160,6 +160,36 @@ gevonden op corpus nummer één.
 
 ---
 
+## 2026-07-31 · Geen interventie · Promotiepoort per fonds (Fase 4)
+
+**Fase:** ingest-herstelplan Fase 4 · **Categorie:** geen — gepland werk, geen afwijking van een
+bevroren bestand of een drempel.
+
+**Wat.** Nachtelijk `G3-fund`-rood blokkeerde niets en het bewijs overleefde de volgende run niet
+(`eval-report.json` is gitignored en wordt overschreven). Besluit **D5** herziet **B4**: `main` blijft
+open bij een fonds-rood, promotie van dat fonds niet.
+
+**Gebouwd.** Append-only ledger `docs/eval/gate-results/g3-fund.jsonl` (gecommit), gevuld door elke
+eval-run, plus `pnpm promote-check <fonds> <tag>` met vijf GO-voorwaarden en exitcode 0/1.
+
+**Resultaat [gemeten].** Op de data van 2026-07-30 komt **geen enkel fonds** door: `demo` en
+`etd-full` op hun rode refusal-guard, `etd` op een groen resultaat dat zichzelf niet aan een commit
+kan koppelen. Drie NO-GO's om drie verschillende redenen.
+
+**Twee kleine wijzigingen buiten de poort zelf.** (1) `eval-report.json` legt `commitSha` nu ook
+lokaal vast (terugval op `git rev-parse HEAD`) — dat sloot een gat dat al bij de demo-run was gemeld.
+(2) Een read-only structuurrapport voor `eval-fixtures` gegenereerd (geen re-ingest, geen kosten),
+omdat dat fonds nog geen ingest-visibility had.
+
+**Afwijking van het plan.** `scripts/promote/` (workspace-package) in plaats van
+`scripts/promote-check.ts`, zodat het meedraait in `turbo run typecheck/lint/test:unit` en in de
+dependency-cruiser. Zie `docs/eval/ingest/PROMOTION-GATE-2026-07-31.md` §6.
+
+**Bewijs.** `docs/eval/ingest/PROMOTION-GATE-2026-07-31.md`. Gates: 34/34 typecheck+lint, 9/9
+unit-testpakketten, depcruise 321 modules zonder violations.
+
+---
+
 ## Openstaand
 
 - **Refusal-guard `demo` én `etd-full`** — rood en bewust rood gelaten (besluit 2026-07-30).
@@ -178,3 +208,9 @@ gevonden op corpus nummer één.
 - **Voorstel startersjabloon: drie refusal-cases in plaats van één** (drempel ≥ 2 leeg), zodat de
   guard voor een nieuw fonds een maat is en geen munt. Niet doorgevoerd; verandert een gate-drempel
   en vraagt een besluit. Zie `docs/eval/golden-sets/NULMETING-etd-full-2026-07-30.md` §5.
+- **Geen enkel fonds is nu promoveerbaar** — `pnpm promote-check` geeft NO-GO voor `demo`, `etd-full`
+  en `etd`. Voor `etd` verdwijnt de blokkade bij de eerstvolgende run (die legt de commit vast); voor
+  de andere twee pas als het refusal-guard-besluit valt.
+- **De ledger loopt achter op een CI-run**, omdat CI niet kan committen: iemand moet
+  `pnpm --filter @wunderstack/promote record <artefact>` draaien op het geüploade artefact. Handmatige
+  stap, dus een plek waar het proces kan verwateren.

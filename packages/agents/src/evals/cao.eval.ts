@@ -79,6 +79,7 @@ import {
 } from "./golden-set.js";
 import { ANSWER_THRESHOLDS, MULTI_TURN_SERVE_THRESHOLDS, answerFloorFailures } from "./answer-floors.js";
 import { acquireEvalLock, EvalAlreadyRunningError } from "./eval-lock.js";
+import { appendFundRecords, fundRecordsFromReport, resolveCommitSha } from "./fund-ledger.js";
 import { GATE_SPECS, type GateId, type GateRequirement, type GateSpec } from "./gates.js";
 import {
   aggregateScores,
@@ -1470,7 +1471,9 @@ function writeRunArtefact(passed: boolean): void {
   const report: EvalReport = {
     schemaVersion: EVAL_REPORT_SCHEMA_VERSION,
     generatedAt: new Date().toISOString(),
-    commitSha: env.GITHUB_SHA ?? null,
+    // Falls back to local HEAD: a result that must be able to block a promotion has to be able to
+    // say which commit it is green about (Fase 4).
+    commitSha: resolveCommitSha(env.GITHUB_SHA),
     corpusVersion: GOLDEN_CORPUS_VERSION,
     passed,
     config: {
@@ -1493,6 +1496,14 @@ function writeRunArtefact(passed: boolean): void {
   };
   const path = writeEvalReport(report);
   console.log(`\nRun artefact written: ${path}`);
+
+  // The artefact is gitignored and overwritten by the next run, so each per-fund outcome also lands
+  // as a durable line that `pnpm promote-check` can read back (Fase 4).
+  const records = fundRecordsFromReport(report);
+  if (records.length > 0) {
+    const ledger = appendFundRecords(records);
+    console.log(`Promotion ledger: ${String(ledger.appended)} of ${String(records.length)} fund record(s) added to ${ledger.path}`);
+  }
 }
 
 async function main(): Promise<void> {
