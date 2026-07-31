@@ -367,6 +367,30 @@ run nog niet vast; alleen het log doet dat.
 
 ---
 
+## 2026-07-31 · C5 · Herstart van PR #10 na een rode gate met bekende, vreemde oorzaak
+
+**Fase:** buiten de fasen · **Categorie:** C5 — herstart. Telt tegen de stabiliteit, niet tegen de code
+van de PR.
+
+**Waarom een herstart en geen reparatie.** De `verify` van PR #10 (`30644173343`, 26 min) viel op één
+gate: `hard-hallucination` 96,8% bij een lat van 98%. Met 31 cases is die lat nul fouten, dus dit is één
+case: `etd-026`. Diagnose staat in `docs/audit/FINDING-generation-runaway-2026-07-31.md` — het model
+weigert die out-of-corpus-vraag niet, antwoordt uit de Wet Arbeid en Zorg met een **verzonnen**
+`chunk_id: "wet-arbeid-zorg"`, en loopt daarna door in een verzonnen voorbeelddocument tot het
+tokenplafond.
+
+**Wat de PR ermee te maken heeft: niets.** PR #10 wijzigt een workflow, een foutklasse in
+`packages/ai`, een exitcode en een env-veld. Geen prompt, geen model, geen retrieval. De regressiechecks
+tegen de baseline bleven bovendien allemaal groen (hard-hallucinatie 0,968 tegen 1,000, binnen de
+5%-tolerantie); alleen de absolute vloer sloeg aan.
+
+**Discipline bij deze herstart.** De uitloop is voor drie cases (`etd-001`, `etd-005`, `etd-010`) in
+beide vergeleken runs aanwezig en dus stabiel; of hij ook `etd-026` raakt varieert. Deze herstart is
+daarom een gok met bekende kans, geen reparatie. **Als de tweede run óók rood is op deze gate, wordt er
+niet een derde keer herstart** — dan gaat de generatie-containment eerst gerepareerd worden.
+
+---
+
 ## Openstaand
 
 - ~~**Refusal-guard `demo` én `etd-full` rood**~~ — **afgehandeld 2026-07-31** (C4-entry hierboven).
