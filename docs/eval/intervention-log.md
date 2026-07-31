@@ -306,12 +306,15 @@ eigen besluit (aparte key, lagere gelijktijdigheid of een expliciete 429-uitkoms
   De hypothese "`minScore = 0.48` is op de fixtureset gekalibreerd" was half juist: de drempel
   klopt, de probes niet. Rest-risico: de guard is nu groen op alle corpora maar bewaakt een smallere
   eigenschap; het weigergedrag zelf is per fonds onbewaakt (**B7**).
-- **P0.2 — alleen het profiel en de administratie resteren.** Er is nu een integraal groene volledige
-  run (`EVAL_EXIT=0`, 2026-07-31), maar onder het **goedkope** profiel (judge 1, generatie 2). De
-  baseline van dit project wordt onder het nachtelijke profiel geschreven (judge 3, generatie 3;
-  `write-baseline` in `ci.yml`) en `baseline.json`-toleranties zijn op mediaan-van-drie gekalibreerd.
-  Resteert: één nachtelijke run die groen eindigt, plus het artefactdocument
-  `BASELINE-<fonds>-<datum>.md` met scores, drempels, kosten, duur, commit en corpusversies.
+- ~~**P0.2**~~ — **GESLOTEN 2026-07-31.** Integraal groene run onder het nachtelijke profiel (judge 3,
+  generatie 3) op commit `4d715b9`, 1 h 4 min 42 s, negen van negen gates. Artefact met identiteit,
+  drempels, duur, callvolume en boomstaat: `docs/eval/BASELINE-2026-07-31.md`. Twee voorbehouden staan
+  daar expliciet in: de `underRefusal`-gate heeft nul marge (1 van maximaal 1 case), en de boom bevatte
+  37 additieve regels ongecommitteerd MCP-werk buiten het eval-pad.
+- **Kosten staan nergens machinaal vast.** Het eval-artefact legt profiel en modellen vast, maar geen
+  tokenverbruik en geen duur. `generateAnswerWithRepair` telt usage per case al op en geeft het aan de
+  eval, die het weggooit; de judge vangt usage niet op. P0.2 vraagt kosten in het baseline-artefact, dus
+  dit is nu een afleiding (callvolume + wandkloktijd) in plaats van een meting.
 - **Rate limit bij een volledige nachtelijke run** — zie de C5 hierboven. Vraagt een eigen besluit
   (aparte key, lagere gelijktijdigheid, of een 429 expliciet als eigen uitkomst rapporteren zodat een
   rode schedule-run te onderscheiden is van een echte regressie).
