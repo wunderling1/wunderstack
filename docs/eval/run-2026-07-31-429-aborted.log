@@ -1,0 +1,89 @@
+• turbo 2.10.2
+
+   • Packages in scope: @wunderstack/agents, @wunderstack/ai, @wunderstack/analytics, @wunderstack/bake-off, @wunderstack/db, @wunderstack/embed, @wunderstack/eval-scripts, @wunderstack/ingest, @wunderstack/promote, @wunderstack/rag, @wunderstack/shared, @wunderstack/tenant, @wunderstack/ui, dashboard, marketing, playground, runtime
+   • Running test in 17 packages
+   • Remote caching disabled
+
+@wunderstack/agents:test: cache bypass, force executing 20a9cd018ea62094
+@wunderstack/agents:test: $ tsx --env-file-if-exists=../../.env src/evals/cao.eval.ts
+@wunderstack/agents:test: 
+@wunderstack/agents:test: G1 · G1-contract — prompt, clarify & fund-scoping CONTRACT (change-detector, not a behavioral gate):
+@wunderstack/agents:test:   [PASS] prompt: answers only from supplied context
+@wunderstack/agents:test:   [PASS] prompt: instructs `[n]` source citations
+@wunderstack/agents:test:   [PASS] prompt: refuses with the "niet gevonden" message instead of inventing
+@wunderstack/agents:test:   [PASS] prompt: user turn carries both context and question
+@wunderstack/agents:test:   [PASS] prompt: direct answer first, then explanation
+@wunderstack/agents:test:   [PASS] prompt: instructs to cite article + lid
+@wunderstack/agents:test:   [PASS] prompt: forbids individual/legal advice (scope guard)
+@wunderstack/agents:test:   [PASS] prompt: citation quotes must be contiguous (no ellipsis stitching)
+@wunderstack/agents:test:   [PASS] clarify: asks a follow-up for "Hoeveel verdien ik?"
+@wunderstack/agents:test:   [PASS] clarify: asks a follow-up for "Wat is mijn salaris?"
+@wunderstack/agents:test:   [PASS] clarify: asks a follow-up for "Wat verdient een medewerker?"
+@wunderstack/agents:test:   [PASS] clarify: does not hijack answerable golden questions
+@wunderstack/agents:test:   [PASS] fixtures: golden set matches the recorded baseline (or GOLDEN_CORPUS_VERSION was bumped)
+@wunderstack/agents:test:   [PASS] corpus-isolation: retrieval seam rejects an unscoped (no-fund) query
+@wunderstack/agents:test:   [PASS] corpus-isolation: retrieval seam accepts a fund-scoped query
+@wunderstack/agents:test: 
+@wunderstack/agents:test: Retrieval recall — corpus v4, model qwen3-embedding-8b @ 4096 dim, rerank qwen3-embedding-8b, 31 passages, 24 queries:
+@wunderstack/agents:test:   before rerank (cosine top-15):
+@wunderstack/agents:test:     hit@1     95.8%  (min 85.0%)
+@wunderstack/agents:test:     recall@3  100.0%  (min 90.0%)
+@wunderstack/agents:test:     recall@5  100.0%  (min 90.0%)
+@wunderstack/agents:test:     MRR       0.979  (min 0.880)
+@wunderstack/agents:test:   after rerank (top-5):
+@wunderstack/agents:test:     hit@1     95.8%  (min 85.0%)
+@wunderstack/agents:test:     recall@3  100.0%  (min 90.0%)
+@wunderstack/agents:test:     recall@5  100.0%  (min 90.0%)
+@wunderstack/agents:test:     MRR       0.979  (min 0.880)
+@wunderstack/agents:test:   rerank run — reranked: 24, skipped: 0, failed: 0 (of 24)
+@wunderstack/agents:test:   rerank delta (reranked queries only) — hit@1: 0.0%, MRR: +0.000
+@wunderstack/agents:test: 
+@wunderstack/agents:test: 
+@wunderstack/agents:test: G2 · G2-retrieval — retrieval recall + rerank:
+@wunderstack/agents:test:   [PASS] retrieval: embedding dim matches pinned EMBEDDING_CONFIG.dim
+@wunderstack/agents:test:   [PASS] retrieval (before rerank): hit@1 >= 85.0%
+@wunderstack/agents:test:   [PASS] retrieval (before rerank): recall@3 >= 90.0%
+@wunderstack/agents:test:   [PASS] retrieval (before rerank): recall@5 >= 90.0%
+@wunderstack/agents:test:   [PASS] retrieval (before rerank): MRR >= 0.880
+@wunderstack/agents:test:   [PASS] rerank: no silent failures — 0 failed of 24
+@wunderstack/agents:test:   [PASS] rerank: MRR does not regress on reranked queries (delta >= 0) — MRR delta +0.000 over 24 reranked queries
+@wunderstack/agents:test:   [PASS] retrieval regression: hit@1 within 5.0% of baseline — 0.958 vs baseline 0.958
+@wunderstack/agents:test:   [PASS] retrieval regression: recall@3 within 5.0% of baseline — 1.000 vs baseline 1.000
+@wunderstack/agents:test:   [PASS] retrieval regression: recall@5 within 5.0% of baseline — 1.000 vs baseline 1.000
+@wunderstack/agents:test:   [PASS] retrieval regression: MRR within 5.0% of baseline — 0.979 vs baseline 0.979
+@wunderstack/agents:test: 
+@wunderstack/agents:test: Multi-turn serve-path (4 answerable elliptical cases):
+@wunderstack/agents:test:   etd-029: found=true citations=1 unverifiable=false hardFact=false
+@wunderstack/agents:test:   etd-030: found=true citations=1 unverifiable=false hardFact=false
+@wunderstack/agents:test:   etd-d02: found=true citations=1 unverifiable=false hardFact=false
+@wunderstack/agents:test:   etd-d03: found=true citations=2 unverifiable=false hardFact=false
+@wunderstack/agents:test:   served-with-citation 4/4  unverifiable 0/4  (gate <= 0 unverifiable)
+@wunderstack/agents:test: 
+@wunderstack/agents:test: 
+@wunderstack/agents:test: G2 · G2-multi-turn — multi-turn condensation retrieval + serve-path citation coupling (G2-retrieval case-category):
+@wunderstack/agents:test:   [PASS] condensation: "etd-029" is detected as elliptical
+@wunderstack/agents:test:   [PASS] condensation: "etd-029" retrieves the expected article after rewrite — condensed="Hoeveel ADV-uren gelden bij een contract van 38 uur per week?" queries=Hoeveel ADV-uren gelden bij een contract van 38 uur per week? | Op hoeveel ADV-uren heb ik recht? En als mijn werktijd al is verkort naar 38 uur? top=adv, arbeidsduur, flexinzet, overuren, koopavond
+@wunderstack/agents:test:   [PASS] condensation: "etd-030" is detected as elliptical
+@wunderstack/agents:test:   [PASS] condensation: "etd-030" retrieves the expected article after rewrite — condensed="Hoeveel extra vakantiedagen krijgen werknemers van 58 jaar volgens de CAO?" queries=Hoeveel extra vakantiedagen krijgen werknemers van 58 jaar volgens de CAO? | Krijgen oudere werknemers extra vakantiedagen? En hoeveel extra dagen krijg ik als ik 58 ben? top=vakantie-ouderen, vakantie-uren, vakantie-na-bevalling, overuren, vakkrachten
+@wunderstack/agents:test:   [PASS] condensation: "etd-d02" is detected as elliptical
+@wunderstack/agents:test:   [PASS] condensation: "etd-d02" retrieves the expected article after rewrite — condensed="Hoeveel vakantie-uren heeft een parttime werknemer met een contract van 12 uur per week recht op volgens de CAO?" queries=Hoeveel vakantie-uren heeft een parttime werknemer met een contract van 12 uur per week recht op volgens de CAO? | Op hoeveel vakantie-uren heb ik recht als fulltimer? En als ik 12 uur per week werk? top=vakantie-uren, all-in-uurloon, adv, flexinzet, deeltijd
+@wunderstack/agents:test:   [PASS] condensation: "etd-d03" is detected as elliptical
+@wunderstack/agents:test:   [PASS] condensation: "etd-d03" retrieves the expected article after rewrite — condensed="Hoeveel vakantiedagen per jaar heeft een werknemer met een contract van 12 uur per week volgens de cao?" queries=Hoeveel vakantiedagen per jaar heeft een werknemer met een contract van 12 uur per week volgens de cao? | En als ik 12 uur per week werk? Hoeveel vakantiedagen is dat per jaar? top=vakantie-uren, all-in-uurloon, adv, arbeidsduur, flexinzet
+@wunderstack/agents:test:   [PASS] multi-turn serve: "etd-029" survives verifyAndBuild with a verified citation — queries=Wat zijn de regels voor ADV-uren bij een contract van 38 uur per week? | Op hoeveel ADV-uren heb ik recht? En als mijn werktijd al is verkort naar 38 uur? citations=1 unverifiable=false
+@wunderstack/agents:test:   [PASS] multi-turn serve: "etd-030" survives verifyAndBuild with a verified citation — queries=Hoeveel extra vakantiedagen krijgen werknemers van 58 jaar volgens de CAO? | Krijgen oudere werknemers extra vakantiedagen? En hoeveel extra dagen krijg ik als ik 58 ben? citations=1 unverifiable=false
+@wunderstack/agents:test:   [PASS] multi-turn serve: "etd-d02" survives verifyAndBuild with a verified citation — queries=Hoeveel vakantie-uren heeft een werknemer met een contract van 12 uur per week recht op volgens de CAO? | Op hoeveel vakantie-uren heb ik recht als fulltimer? En als ik 12 uur per week werk? citations=1 unverifiable=false
+@wunderstack/agents:test:   [PASS] multi-turn serve: "etd-d03" survives verifyAndBuild with a verified citation — queries=Hoeveel vakantiedagen per jaar heeft een werknemer met een contract van 12 uur per week volgens de cao? | En als ik 12 uur per week werk? Hoeveel vakantiedagen is dat per jaar? citations=2 unverifiable=false
+@wunderstack/agents:test:   [PASS] multi-turn serve: unverifiable count <= 0 — 0 of 4 unverifiable after verifyAndBuild
+@wunderstack/agents:test: 
+@wunderstack/agents:test: Run artefact written: /Users/jordylissenburg/wunderstack/packages/agents/eval-report.json
+@wunderstack/agents:test: Mistral request failed (429): {"object":"error","message":"Rate limit exceeded","type":"rate_limited","param":null,"code":"1300","raw_status_code":429}
+@wunderstack/agents:test: [ELIFECYCLE] Test failed. See above for more details.
+ ERROR  @wunderstack/agents#test: command (/Users/jordylissenburg/wunderstack/packages/agents) /opt/homebrew/bin/pnpm run test exited (1)
+
+ Tasks:    0 successful, 1 total
+Cached:    0 cached, 1 total
+  Time:    22m8.194s 
+Failed:    @wunderstack/agents#test
+
+ ERROR  run failed: command  exited (1)
+EVAL_EXIT=1

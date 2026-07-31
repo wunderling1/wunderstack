@@ -85,6 +85,25 @@ answer), G3-pipeline, G3-fund `etd` en G3-isolation zijn **groen** en reproducer
 staan alle vier op 0 over 11 vragen. Een rode run mag de lat niet worden (§4.4) en de drempel
 verlagen mag niet (C4), dus **P0.2 blijft open**. Meting, diagnose en de resterende stappen:
 `docs/eval/baseline-run-2026-07-30.md` (+ ruw logboek `…-2026-07-30.log`).
+
+**P0.2 — WEER OPEN op 2026-07-31, zelfde dag** [gemeten]. De CI-run op `main` na de merge van PR #8
+draaide **dezelfde code onder hetzelfde profiel** en is rood op de antwoordlaag: under-refusal 2 van 3
+(gate ≤ 1) plus vier regressietoleranties. Eén groene run is dus geen vaste referentie — de baseline is
+niet reproduceerbaar zolang de spreiding onbekend is. Aanvullend: de DB-gates hebben nog nooit in CI
+gedraaid (`docs/audit/FINDING-nightly-db-gate-never-ran-2026-07-31.md`), dus G3 is lokaal bewijs. Wat
+hieronder stond blijft gelden als meting van die ene run, niet als bevroren lat.
+
+**De run zelf, voor het dossier** [gemeten]. Volledige suite **integraal groen** op commit `4d715b9`,
+nachtelijk profiel (judge 3, generatie 3), 1 h 4 min 42 s, `EVAL_EXIT=0` over negen gates. De rode
+`G3-fund [demo]` van 2026-07-30 bleek een **corpusmismatch** (het verkeerde bestand was geïngest) en
+staat nu op hit@1 1,000; `etd-full` op een echt geïngeste PDF-CAO staat op 0,929. De refusal-guard was
+**mis-gespecificeerd** en is herzien (C4, `docs/eval/BESLUIT-refusal-guard-2026-07-31.md`) — geen
+drempel verlaagd. Baseline-identiteit, drempels, kosten, duur en boomstaat:
+**`docs/eval/BASELINE-2026-07-31.md`**.
+
+Twee voorbehouden die het artefact expliciet maakt: de `underRefusal`-gate staat op zijn plafond (1 van
+maximaal 1 toegestane case), en de boom bevatte 37 additieve regels ongecommitteerd MCP-werk buiten het
+eval-pad. Kosten in euro's blijven niet-machinaal vastgelegd; het artefact geeft duur en callvolume.
 | P0.3 | **Beslisregels R1–R6 vastgelegd vóór run 1** (pre-registratie) | Anders praat je jezelf achteraf groen — het spiegelbeeld van "drempels verlagen voor groen" | Dit document gecommit vóór de eerste koude doorloop |
 | P0.4 | **Relatie met de embedding-keuze besloten** — de bake-off is **al beslist** (`qwen3-embedding-8b` @ 4096, gepind); wat openstaat is de *dataset-caveat* van `scripts/bake-off/results.md`: de winnaar is gemeten op een seed-corpus van 18 passages, niet op een echte fonds-CAO | Drempels bevriezen vóór een eventuele re-bake-off op echte corpora is weggegooid werk; een re-bake-off vóór dit protocol vertraagt alles en herhaalt een keuze die al gepind is | Besluit hieronder |
 

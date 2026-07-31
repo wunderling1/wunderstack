@@ -1,0 +1,199 @@
+• turbo 2.10.2
+
+   • Packages in scope: @wunderstack/agents, @wunderstack/ai, @wunderstack/analytics, @wunderstack/bake-off, @wunderstack/db, @wunderstack/embed, @wunderstack/eval-scripts, @wunderstack/ingest, @wunderstack/promote, @wunderstack/rag, @wunderstack/shared, @wunderstack/tenant, @wunderstack/ui, dashboard, marketing, playground, runtime
+   • Running test in 17 packages
+   • Remote caching disabled
+
+@wunderstack/agents:test: cache bypass, force executing 20a9cd018ea62094
+@wunderstack/agents:test: $ tsx --env-file-if-exists=../../.env src/evals/cao.eval.ts
+@wunderstack/agents:test: 
+@wunderstack/agents:test: G1 · G1-contract — prompt, clarify & fund-scoping CONTRACT (change-detector, not a behavioral gate):
+@wunderstack/agents:test:   [PASS] prompt: answers only from supplied context
+@wunderstack/agents:test:   [PASS] prompt: instructs `[n]` source citations
+@wunderstack/agents:test:   [PASS] prompt: refuses with the "niet gevonden" message instead of inventing
+@wunderstack/agents:test:   [PASS] prompt: user turn carries both context and question
+@wunderstack/agents:test:   [PASS] prompt: direct answer first, then explanation
+@wunderstack/agents:test:   [PASS] prompt: instructs to cite article + lid
+@wunderstack/agents:test:   [PASS] prompt: forbids individual/legal advice (scope guard)
+@wunderstack/agents:test:   [PASS] prompt: citation quotes must be contiguous (no ellipsis stitching)
+@wunderstack/agents:test:   [PASS] clarify: asks a follow-up for "Hoeveel verdien ik?"
+@wunderstack/agents:test:   [PASS] clarify: asks a follow-up for "Wat is mijn salaris?"
+@wunderstack/agents:test:   [PASS] clarify: asks a follow-up for "Wat verdient een medewerker?"
+@wunderstack/agents:test:   [PASS] clarify: does not hijack answerable golden questions
+@wunderstack/agents:test:   [PASS] fixtures: golden set matches the recorded baseline (or GOLDEN_CORPUS_VERSION was bumped)
+@wunderstack/agents:test:   [PASS] corpus-isolation: retrieval seam rejects an unscoped (no-fund) query
+@wunderstack/agents:test:   [PASS] corpus-isolation: retrieval seam accepts a fund-scoped query
+@wunderstack/agents:test: 
+@wunderstack/agents:test: Retrieval recall — corpus v4, model qwen3-embedding-8b @ 4096 dim, rerank qwen3-embedding-8b, 31 passages, 24 queries:
+@wunderstack/agents:test:   before rerank (cosine top-15):
+@wunderstack/agents:test:     hit@1     95.8%  (min 85.0%)
+@wunderstack/agents:test:     recall@3  100.0%  (min 90.0%)
+@wunderstack/agents:test:     recall@5  100.0%  (min 90.0%)
+@wunderstack/agents:test:     MRR       0.979  (min 0.880)
+@wunderstack/agents:test:   after rerank (top-5):
+@wunderstack/agents:test:     hit@1     95.8%  (min 85.0%)
+@wunderstack/agents:test:     recall@3  100.0%  (min 90.0%)
+@wunderstack/agents:test:     recall@5  100.0%  (min 90.0%)
+@wunderstack/agents:test:     MRR       0.979  (min 0.880)
+@wunderstack/agents:test:   rerank run — reranked: 24, skipped: 0, failed: 0 (of 24)
+@wunderstack/agents:test:   rerank delta (reranked queries only) — hit@1: 0.0%, MRR: +0.000
+@wunderstack/agents:test: 
+@wunderstack/agents:test: 
+@wunderstack/agents:test: G2 · G2-retrieval — retrieval recall + rerank:
+@wunderstack/agents:test:   [PASS] retrieval: embedding dim matches pinned EMBEDDING_CONFIG.dim
+@wunderstack/agents:test:   [PASS] retrieval (before rerank): hit@1 >= 85.0%
+@wunderstack/agents:test:   [PASS] retrieval (before rerank): recall@3 >= 90.0%
+@wunderstack/agents:test:   [PASS] retrieval (before rerank): recall@5 >= 90.0%
+@wunderstack/agents:test:   [PASS] retrieval (before rerank): MRR >= 0.880
+@wunderstack/agents:test:   [PASS] rerank: no silent failures — 0 failed of 24
+@wunderstack/agents:test:   [PASS] rerank: MRR does not regress on reranked queries (delta >= 0) — MRR delta +0.000 over 24 reranked queries
+@wunderstack/agents:test:   [PASS] retrieval regression: hit@1 within 5.0% of baseline — 0.958 vs baseline 0.958
+@wunderstack/agents:test:   [PASS] retrieval regression: recall@3 within 5.0% of baseline — 1.000 vs baseline 1.000
+@wunderstack/agents:test:   [PASS] retrieval regression: recall@5 within 5.0% of baseline — 1.000 vs baseline 1.000
+@wunderstack/agents:test:   [PASS] retrieval regression: MRR within 5.0% of baseline — 0.979 vs baseline 0.979
+@wunderstack/agents:test: 
+@wunderstack/agents:test: Multi-turn serve-path (4 answerable elliptical cases):
+@wunderstack/agents:test:   etd-029: found=true citations=1 unverifiable=false hardFact=false
+@wunderstack/agents:test:   etd-030: found=true citations=1 unverifiable=false hardFact=false
+@wunderstack/agents:test:   etd-d02: found=true citations=2 unverifiable=false hardFact=false
+@wunderstack/agents:test:   etd-d03: found=true citations=1 unverifiable=false hardFact=false
+@wunderstack/agents:test:   served-with-citation 4/4  unverifiable 0/4  (gate <= 0 unverifiable)
+@wunderstack/agents:test: 
+@wunderstack/agents:test: 
+@wunderstack/agents:test: G2 · G2-multi-turn — multi-turn condensation retrieval + serve-path citation coupling (G2-retrieval case-category):
+@wunderstack/agents:test:   [PASS] condensation: "etd-029" is detected as elliptical
+@wunderstack/agents:test:   [PASS] condensation: "etd-029" retrieves the expected article after rewrite — condensed="Hoeveel ADV-uren gelden bij een contract van 38 uur per week?" queries=Hoeveel ADV-uren gelden bij een contract van 38 uur per week? | Op hoeveel ADV-uren heb ik recht? En als mijn werktijd al is verkort naar 38 uur? top=adv, arbeidsduur, flexinzet, overuren, koopavond
+@wunderstack/agents:test:   [PASS] condensation: "etd-030" is detected as elliptical
+@wunderstack/agents:test:   [PASS] condensation: "etd-030" retrieves the expected article after rewrite — condensed="Hoeveel extra vakantiedagen krijgen werknemers van 58 jaar volgens de CAO?" queries=Hoeveel extra vakantiedagen krijgen werknemers van 58 jaar volgens de CAO? | Krijgen oudere werknemers extra vakantiedagen? En hoeveel extra dagen krijg ik als ik 58 ben? top=vakantie-ouderen, vakantie-uren, vakantie-na-bevalling, overuren, vakkrachten
+@wunderstack/agents:test:   [PASS] condensation: "etd-d02" is detected as elliptical
+@wunderstack/agents:test:   [PASS] condensation: "etd-d02" retrieves the expected article after rewrite — condensed="Hoeveel vakantie-uren heeft een parttime werknemer met een contract van 12 uur per week recht op volgens de CAO?" queries=Hoeveel vakantie-uren heeft een parttime werknemer met een contract van 12 uur per week recht op volgens de CAO? | Op hoeveel vakantie-uren heb ik recht als fulltimer? En als ik 12 uur per week werk? top=vakantie-uren, all-in-uurloon, adv, flexinzet, deeltijd
+@wunderstack/agents:test:   [PASS] condensation: "etd-d03" is detected as elliptical
+@wunderstack/agents:test:   [PASS] condensation: "etd-d03" retrieves the expected article after rewrite — condensed="Hoeveel vakantiedagen per jaar gelden bij 12 uur werken per week volgens de cao, berekend naar rato van 190 uur voor fulltimers?" queries=Hoeveel vakantiedagen per jaar gelden bij 12 uur werken per week volgens de cao, berekend naar rato van 190 uur voor fulltimers? | En als ik 12 uur per week werk? Hoeveel vakantiedagen is dat per jaar? top=vakantie-uren, arbeidsduur, adv, all-in-uurloon, koopavond
+@wunderstack/agents:test:   [PASS] multi-turn serve: "etd-029" survives verifyAndBuild with a verified citation — queries=Wat zijn de regels voor ADV-uren bij een contract van 38 uur per week? | Op hoeveel ADV-uren heb ik recht? En als mijn werktijd al is verkort naar 38 uur? citations=1 unverifiable=false
+@wunderstack/agents:test:   [PASS] multi-turn serve: "etd-030" survives verifyAndBuild with a verified citation — queries=Hoeveel extra vakantiedagen krijgen werknemers van 58 jaar volgens de CAO? | Krijgen oudere werknemers extra vakantiedagen? En hoeveel extra dagen krijg ik als ik 58 ben? citations=1 unverifiable=false
+@wunderstack/agents:test:   [PASS] multi-turn serve: "etd-d02" survives verifyAndBuild with a verified citation — queries=Hoeveel vakantie-uren heeft een parttime werknemer met een contract van 12 uur per week recht op volgens de CAO? | Op hoeveel vakantie-uren heb ik recht als fulltimer? En als ik 12 uur per week werk? citations=2 unverifiable=false
+@wunderstack/agents:test:   [PASS] multi-turn serve: "etd-d03" survives verifyAndBuild with a verified citation — queries=Hoeveel vakantiedagen per jaar heeft een werknemer met een contract van 12 uur per week volgens de cao? | En als ik 12 uur per week werk? Hoeveel vakantiedagen is dat per jaar? citations=1 unverifiable=false
+@wunderstack/agents:test:   [PASS] multi-turn serve: unverifiable count <= 0 — 0 of 4 unverifiable after verifyAndBuild
+@wunderstack/agents:test: [generation] citation-repair retries fired: 12/31
+@wunderstack/agents:test: 
+@wunderstack/agents:test: Answer-level scores (31 cases):
+@wunderstack/agents:test:   hard-hallucination    100.0%  (min 98.0%)
+@wunderstack/agents:test:   soft-faithfulness     96.8%  (min 80.0%)
+@wunderstack/agents:test:   answer-relevance      95.2%  (min 84.0%)
+@wunderstack/agents:test:   citation-correctness  100.0%  (min 75.0%; answerable cases only)
+@wunderstack/agents:test:   completeness          90.0%  (min 70.0%)
+@wunderstack/agents:test:   refusal-calibration   96.8%  (min 90.0%)
+@wunderstack/agents:test:   citation-verification 100.0%  (0 of 31 unverified; gate <= 1)
+@wunderstack/agents:test:   orphan-source-rate    0.0%  (max 0.0%)
+@wunderstack/agents:test:   dangling-marker-rate  0.0%  (0 of 31 dangling; gate <= 1)
+@wunderstack/agents:test:   over-refusal-rate     0.0%  (max 5.0%)
+@wunderstack/agents:test:   under-refusal         33.3%  (1 refusal case(s) answered; gate <= 1)
+@wunderstack/agents:test: 
+@wunderstack/agents:test: 
+@wunderstack/agents:test: G2 · G2-answer — answer-level quality:
+@wunderstack/agents:test:   [PASS] answer: hard-hallucination >= 98.0% (invented amounts/terms/articles)
+@wunderstack/agents:test:   [PASS] answer: soft-faithfulness >= 80.0%
+@wunderstack/agents:test:   [PASS] answer: relevance >= 84.0% (addresses the actual question)
+@wunderstack/agents:test:   [PASS] answer: citation-correctness >= 75.0% (answerable cases only; refusals excluded)
+@wunderstack/agents:test:   [PASS] answer: completeness >= 70.0%
+@wunderstack/agents:test:   [PASS] answer: refusal-calibration >= 90.0%
+@wunderstack/agents:test:   [PASS] answer: citation-verification — <= 1 of 31 cases with an unverified citation (raw generation slip; strip pipeline guarantees 0 reach the user) — 0 unverified; rate 100.0%
+@wunderstack/agents:test:   [PASS] answer: orphan-source-rate <= 0.0% (source without [n])
+@wunderstack/agents:test:   [PASS] answer: dangling-marker — <= 1 of 31 cases with a dangling [n] (raw generation slip; reconciled before the user) — 0 dangling; rate 0.0%
+@wunderstack/agents:test:   [PASS] answer: over-refusal-rate <= 5.0% (answerable but refused)
+@wunderstack/agents:test:   [PASS] answer: under-refusal — <= 1 refusal case(s) answered (grounded slip; hard-hallucination still absolute) — 1 of refusal cases answered; rate 33.3%
+@wunderstack/agents:test:   [PASS] answer regression: hard-hallucination within 5.0% of baseline — 1.000 vs baseline 1.000
+@wunderstack/agents:test:   [PASS] answer regression: soft-faithfulness within 5.0% of baseline — 0.968 vs baseline 1.000
+@wunderstack/agents:test:   [PASS] answer regression: relevance within 5.0% of baseline — 0.952 vs baseline 0.971
+@wunderstack/agents:test:   [PASS] answer regression: citation-correctness within 5.0% of baseline — 1.000 vs baseline 1.000
+@wunderstack/agents:test:   [PASS] answer regression: completeness within 5.0% of baseline — 0.900 vs baseline 0.919
+@wunderstack/agents:test:   [PASS] answer regression: refusal-calibration within 5.0% of baseline — 0.968 vs baseline 1.000
+@wunderstack/agents:test:   [PASS] answer regression: citation-verification within 5.0% of baseline — 1.000 vs baseline 1.000
+@wunderstack/agents:test:   [PASS] answer regression: over-refusal-rate not more than 5.0% above baseline — 0.000 vs baseline 0.000
+@wunderstack/agents:test:   [PASS] answer regression: orphan-source-rate not more than 5.0% above baseline — 0.000 vs baseline 0.000
+@wunderstack/agents:test:   [PASS] answer regression: dangling-marker-rate not more than 5.0% above baseline — 0.000 vs baseline 0.000
+@wunderstack/agents:test: 
+@wunderstack/agents:test: Gate B-integration — REAL pipeline (rewrite → pgvector → rerank → assemble), fund "eval-fixtures", topK=5, minScore=0.48, 24 queries:
+@wunderstack/agents:test:   integration (after full pipeline):
+@wunderstack/agents:test:     hit@1     95.8%  (min 70.0%)
+@wunderstack/agents:test:     recall@3  100.0%  (min 80.0%)
+@wunderstack/agents:test:     recall@5  100.0%  (min 80.0%)
+@wunderstack/agents:test:     MRR       0.979  (min 0.750)
+@wunderstack/agents:test:   minScore guard — 3/3 out-of-corpus probes returned 0 hits (need >= 2)
+@wunderstack/agents:test: 
+@wunderstack/agents:test: 
+@wunderstack/agents:test: G3 · G3-pipeline — production retrieval pipeline (nightly):
+@wunderstack/agents:test:   [PASS] integration retrieval: hit@1 >= 70.0%
+@wunderstack/agents:test:   [PASS] integration retrieval: recall@3 >= 80.0%
+@wunderstack/agents:test:   [PASS] integration retrieval: recall@5 >= 80.0%
+@wunderstack/agents:test:   [PASS] integration retrieval: MRR >= 0.750
+@wunderstack/agents:test:   [PASS] integration minScore-guard: >= 2 out-of-corpus probes return 0 hits (refuse-without-LLM) — 3/3 probes empty at minScore 0.48
+@wunderstack/agents:test: 
+@wunderstack/agents:test: Gate F — fund "demo" correctness on the REAL pipeline, fund "demo", corpus vdemo-1, topK=5, minScore=0.48, 11 queries:
+@wunderstack/agents:test:   fund "demo" (after full pipeline):
+@wunderstack/agents:test:     hit@1     100.0%  (min 70.0%)
+@wunderstack/agents:test:     recall@3  100.0%  (min 80.0%)
+@wunderstack/agents:test:     recall@5  100.0%  (min 80.0%)
+@wunderstack/agents:test:     MRR       1.000  (min 0.750)
+@wunderstack/agents:test:   refusal guard — 3/3 out-of-corpus probes returned 0 hits (need >= 2)
+@wunderstack/agents:test:   near-miss cases — 2 present, NOT scored here (needs the answer layer; see docs/eval/BESLUIT-refusal-guard-2026-07-31.md)
+@wunderstack/agents:test: 
+@wunderstack/agents:test: 
+@wunderstack/agents:test: Gate F — fund "etd-full" correctness on the REAL pipeline, fund "elektronische-detailhandel", corpus vetd-full-1, topK=5, minScore=0.48, 14 queries:
+@wunderstack/agents:test:   fund "etd-full" (after full pipeline):
+@wunderstack/agents:test:     hit@1     92.9%  (min 70.0%)
+@wunderstack/agents:test:     recall@3  92.9%  (min 80.0%)
+@wunderstack/agents:test:     recall@5  92.9%  (min 80.0%)
+@wunderstack/agents:test:     MRR       0.929  (min 0.750)
+@wunderstack/agents:test:   refusal guard — 3/3 out-of-corpus probes returned 0 hits (need >= 2)
+@wunderstack/agents:test:   near-miss cases — 1 present, NOT scored here (needs the answer layer; see docs/eval/BESLUIT-refusal-guard-2026-07-31.md)
+@wunderstack/agents:test: 
+@wunderstack/agents:test: 
+@wunderstack/agents:test: Gate F — fund "etd" correctness on the REAL pipeline, fund "eval-fixtures", corpus vetd-1, topK=5, minScore=0.48, 23 queries:
+@wunderstack/agents:test:   fund "etd" (after full pipeline):
+@wunderstack/agents:test:     hit@1     95.7%  (min 70.0%)
+@wunderstack/agents:test:     recall@3  100.0%  (min 80.0%)
+@wunderstack/agents:test:     recall@5  100.0%  (min 80.0%)
+@wunderstack/agents:test:     MRR       0.978  (min 0.750)
+@wunderstack/agents:test:   refusal guard — 3/3 out-of-corpus probes returned 0 hits (need >= 2)
+@wunderstack/agents:test:   near-miss cases — 3 present, NOT scored here (needs the answer layer; see docs/eval/BESLUIT-refusal-guard-2026-07-31.md)
+@wunderstack/agents:test: 
+@wunderstack/agents:test: 
+@wunderstack/agents:test: G3 · G3-fund [demo (corpus vdemo-1)] — fund-specific correctness (nightly):
+@wunderstack/agents:test:   [PASS] fund "demo" retrieval: hit@1 >= 70.0%
+@wunderstack/agents:test:   [PASS] fund "demo" retrieval: recall@3 >= 80.0%
+@wunderstack/agents:test:   [PASS] fund "demo" retrieval: recall@5 >= 80.0%
+@wunderstack/agents:test:   [PASS] fund "demo" retrieval: MRR >= 0.750
+@wunderstack/agents:test:   [PASS] fund "demo" refusal-guard: >= 2 out-of-corpus probes return 0 hits (refuse-without-LLM) — 3/3 probes empty at minScore 0.48
+@wunderstack/agents:test: 
+@wunderstack/agents:test: G3 · G3-fund [etd-full (corpus vetd-full-1)] — fund-specific correctness (nightly):
+@wunderstack/agents:test:   [PASS] fund "etd-full" retrieval: hit@1 >= 70.0%
+@wunderstack/agents:test:   [PASS] fund "etd-full" retrieval: recall@3 >= 80.0%
+@wunderstack/agents:test:   [PASS] fund "etd-full" retrieval: recall@5 >= 80.0%
+@wunderstack/agents:test:   [PASS] fund "etd-full" retrieval: MRR >= 0.750
+@wunderstack/agents:test:   [PASS] fund "etd-full" refusal-guard: >= 2 out-of-corpus probes return 0 hits (refuse-without-LLM) — 3/3 probes empty at minScore 0.48
+@wunderstack/agents:test: 
+@wunderstack/agents:test: G3 · G3-fund [etd (corpus vetd-1)] — fund-specific correctness (nightly):
+@wunderstack/agents:test:   [PASS] fund "etd" retrieval: hit@1 >= 70.0%
+@wunderstack/agents:test:   [PASS] fund "etd" retrieval: recall@3 >= 80.0%
+@wunderstack/agents:test:   [PASS] fund "etd" retrieval: recall@5 >= 80.0%
+@wunderstack/agents:test:   [PASS] fund "etd" retrieval: MRR >= 0.750
+@wunderstack/agents:test:   [PASS] fund "etd" refusal-guard: >= 2 out-of-corpus probes return 0 hits (refuse-without-LLM) — 3/3 probes empty at minScore 0.48
+@wunderstack/agents:test: 
+@wunderstack/agents:test: Corpus isolation — probed 3 fund(s): demo, elektronische-detailhandel, eval-fixtures with a broad query.
+@wunderstack/agents:test: 
+@wunderstack/agents:test: G3 · G3-isolation — corpus isolation (live cross-fund probe):
+@wunderstack/agents:test:   [PASS] corpus-isolation: fund "demo" returns only its own chunks — 15 chunks, 0 cross-fund
+@wunderstack/agents:test:   [PASS] corpus-isolation: fund "elektronische-detailhandel" returns only its own chunks — 15 chunks, 0 cross-fund
+@wunderstack/agents:test:   [PASS] corpus-isolation: fund "eval-fixtures" returns only its own chunks — 15 chunks, 0 cross-fund
+@wunderstack/agents:test: 
+@wunderstack/agents:test: Run artefact written: /Users/jordylissenburg/wunderstack/packages/agents/eval-report.json
+@wunderstack/agents:test: Promotion ledger: 3 of 3 fund record(s) added to docs/eval/gate-results/g3-fund.jsonl
+@wunderstack/agents:test: 
+@wunderstack/agents:test: Eval PASSED.
+
+ Tasks:    1 successful, 1 total
+Cached:    0 cached, 1 total
+  Time:    1h4m42.678s 
+
+EVAL_EXIT=0

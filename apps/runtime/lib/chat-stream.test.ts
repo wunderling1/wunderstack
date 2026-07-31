@@ -115,25 +115,36 @@ describe("pipeChatNdjsonStream", () => {
       turnBudgetMs: 30,
     });
 
-    const result = await pipeChatNdjsonStream({
-      events: hangUntilAbort(workSignal),
-      enqueue: (chunk) => chunks.push(chunk),
-      encodeEvent,
-      isClientDisconnected: () => client.signal.aborted,
-      isTurnTimedOut: () => turnDeadline.aborted,
-      workSignal,
-      heartbeatMs: 60_000,
-    });
+    // Nothing in this test would otherwise hold the event loop open for the 30 ms budget: the timer
+    // behind AbortSignal.timeout is unref'd by design (see requestSignal in packages/ai/src/models.ts)
+    // and the heartbeat interval is unref'd on purpose too. Without a ref'd handle the loop can drain
+    // before the deadline fires, and then the awaited pipe never settles: the runner reports "event loop
+    // has already resolved" and cancels the rest of the file. In production the open response stream is
+    // what keeps the loop alive.
+    const keepEventLoopAlive = setTimeout(() => undefined, 5_000);
+    try {
+      const result = await pipeChatNdjsonStream({
+        events: hangUntilAbort(workSignal),
+        enqueue: (chunk) => chunks.push(chunk),
+        encodeEvent,
+        isClientDisconnected: () => client.signal.aborted,
+        isTurnTimedOut: () => turnDeadline.aborted,
+        workSignal,
+        heartbeatMs: 60_000,
+      });
 
-    assert.equal(result.sentTerminal, true);
-    assert.equal(result.sawError, true);
-    assert.equal(turnDeadline.aborted, true);
-    assert.equal(client.signal.aborted, false);
+      assert.equal(result.sentTerminal, true);
+      assert.equal(result.sawError, true);
+      assert.equal(turnDeadline.aborted, true);
+      assert.equal(client.signal.aborted, false);
 
-    const lines = parseLines(chunks);
-    assert.equal(lines[0]?.type, "status");
-    const terminal = lines.at(-1);
-    assert.deepEqual(terminal, { type: "error", message: CHAT_TIMEOUT_MESSAGE });
+      const lines = parseLines(chunks);
+      assert.equal(lines[0]?.type, "status");
+      const terminal = lines.at(-1);
+      assert.deepEqual(terminal, { type: "error", message: CHAT_TIMEOUT_MESSAGE });
+    } finally {
+      clearTimeout(keepEventLoopAlive);
+    }
   });
 
   it("emits a generic error on unexpected failure while the client is connected", async () => {

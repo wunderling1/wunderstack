@@ -264,7 +264,39 @@ onbewaakt — de fondslaag doet geen antwoordscoring. Vastgelegd als **open besl
 
 **Bewijs.** Nota met opties en afweging: `docs/eval/BESLUIT-refusal-guard-2026-07-31.md`. Ruwe data:
 `scripts/eval/refusal-guard-report.md` (instrument + meting in commit `89c6093`). Gate-wijziging in
-deze commit. Nog te doen: een volledige run die aantoont dat P0.2 hiermee sluit.
+commit `c795081`.
+
+**Uitkomst [gemeten, 2026-07-31].** Volledige suite **integraal groen** (`EVAL_EXIT=0`, negen gates).
+De guard haalt op alle drie de fondsen **3/3 lege probes**; `demo` en `etd-full` zijn hiermee voor het
+eerst groen. Elke fonds-set rapporteert zijn niet-gescoorde bijna-treffers (2 · 1 · 3). De voorspelling
+uit de nota is daarmee gemeten in plaats van beredeneerd:
+`docs/eval/RUN-verificatie-guard-2026-07-31.md`.
+
+---
+
+## 2026-07-31 · C5 · Rerun na een rate limit van Mistral
+
+**Fase:** verificatie van de C4 hierboven · **Categorie:** C5 — herstart, licht, telt voor stabiliteit.
+
+**Wat.** De eerste run onder het nachtelijke profiel (judge 3, generatie 3) brak na **22 min 08 s** af
+op `Mistral request failed (429): Rate limit exceeded` bij de start van G2-answer.
+
+**Geen bug in de harness [feit].** Elke LLM-call-site heeft `{ baseDelayMs: 5000, maxAttempts: 8 }` —
+ruim tien minuten cumulatieve backoff — en `retry.ts:56` merkt een 429 expliciet als retryable aan. De
+throttling duurde dus langer dan het budget. De tweede run liep 35 minuten zonder één 429, dus dit was
+een venster en geen structureel gebrek.
+
+**Wat het kostte.** 22 minuten LLM-verbruik zonder gate-uitkomst voorbij G2-multi-turn. Wat er wél uit
+kwam: G1 en G2-retrieval reproduceerden de baseline tot op de decimaal.
+
+**Wat dit zegt over stabiliteit.** Een volledige lokale run onder het nachtelijke profiel zit dicht
+tegen de rate limit aan (drie judge-samples × twee tot drie generatiepogingen over 31 cases). In CI
+draait dit nachtelijk op dezelfde key; een 429 daar levert een rode schedule-run die niet van een echte
+regressie te onderscheiden is zonder het log te lezen. Genoteerd, niet gerepareerd — dat vraagt een
+eigen besluit (aparte key, lagere gelijktijdigheid of een expliciete 429-uitkomst in het rapport).
+
+**Bewijs.** `docs/eval/run-2026-07-31-429-aborted.log` (afgebroken run) en
+`docs/eval/verify-guard-run-2026-07-31.log` (geslaagde rerun).
 
 ---
 
@@ -274,9 +306,25 @@ deze commit. Nog te doen: een volledige run die aantoont dat P0.2 hiermee sluit.
   De hypothese "`minScore = 0.48` is op de fixtureset gekalibreerd" was half juist: de drempel
   klopt, de probes niet. Rest-risico: de guard is nu groen op alle corpora maar bewaakt een smallere
   eigenschap; het weigergedrag zelf is per fonds onbewaakt (**B7**).
-- **Nog geen groene volledige run na de guard-correctie** — P0.2 blijft open tot die run er is. De
-  guard-uitkomst is voorspeld (3/3 leeg op alle drie de corpora, gemeten read-only), maar voorspeld
-  is niet gemeten.
+- **P0.2 — WEER OPEN, dezelfde dag** [gemeten]. De integraal groene run onder het nachtelijke profiel
+  (commit `4d715b9`, 1 h 4 min 42 s, negen van negen gates) staat in
+  `docs/eval/BASELINE-2026-07-31.md`. Maar de CI-run op `main` na de merge van PR #8 — **dezelfde code,
+  hetzelfde profiel** — is rood op de antwoordlaag: under-refusal **2 van 3** (gate ≤ 1), plus
+  faithfulness 0,919, relevantie 0,913, volledigheid 0,861 en refusal-kalibratie 0,935 buiten de
+  5%-tolerantie. De nul marge die het artefact bij `underRefusal` benoemde, is bij de eerstvolgende run
+  ook echt omgevallen. Eén groene run is dus geen bevroren referentie; de spreiding moet eerst gemeten
+  worden (zie de vraag hieronder over N runs).
+- **De DB-gates hebben nog nooit in CI gedraaid** [gemeten]. De nachtelijke run faalt elf nachten op rij
+  op de ingest-stap, die de enige DB-aanraking in de pipeline is; de eval-stap wordt daarna geskipt. G3
+  is dus uitsluitend lokaal bewijs. Meting, uitgesloten oorzaken en de beslisregel:
+  `docs/audit/FINDING-nightly-db-gate-never-ran-2026-07-31.md`.
+- **Kosten staan nergens machinaal vast.** Het eval-artefact legt profiel en modellen vast, maar geen
+  tokenverbruik en geen duur. `generateAnswerWithRepair` telt usage per case al op en geeft het aan de
+  eval, die het weggooit; de judge vangt usage niet op. P0.2 vraagt kosten in het baseline-artefact, dus
+  dit is nu een afleiding (callvolume + wandkloktijd) in plaats van een meting.
+- **Rate limit bij een volledige nachtelijke run** — zie de C5 hierboven. Vraagt een eigen besluit
+  (aparte key, lagere gelijktijdigheid, of een 429 expliciet als eigen uitkomst rapporteren zodat een
+  rode schedule-run te onderscheiden is van een echte regressie).
 - **Twee reparatievoorstellen uit Fase 3**, nog niet uitgevoerd: inhoudsopgave/titelpagina buiten het
   corpus houden, en een kop met kleine letter afwijzen tegen vals-positieve koppen.
 - **Drie onleesbare PDF-pagina's** — vraagt een andere extractieroute (OCR of andere engine); eigen
@@ -286,10 +334,10 @@ deze commit. Nog te doen: een volledige run die aantoont dat P0.2 hiermee sluit.
 - ~~**Voorstel startersjabloon: drie refusal-cases in plaats van één**~~ — **vervallen 2026-07-31.**
   De guard gebruikt geen golden refusal-cases meer, dus het aantal ervan doet niets voor de gate. De
   ≥ 2-van-3-lat zit nu op de gedeelde onzinvragen.
-- **Geen enkel fonds is nu promoveerbaar** — `pnpm promote-check` geeft NO-GO voor `demo`, `etd-full`
-  en `etd`, want de ledger bevat alleen nog de rode runs van 2026-07-30. Eén volledige run na de
-  guard-correctie zou dat voor alle drie tegelijk kunnen oplossen; tot die run is gedraaid staat er
-  niets groen vast.
+- ~~**Geen enkel fonds is nu promoveerbaar**~~ — **opgelost 2026-07-31.** Na de groene run geeft
+  `pnpm promote-check` **GO** voor `demo`, `elektronische-detailhandel` én `eval-fixtures` op commit
+  `963de45`; alle vijf de voorwaarden gehaald. Daarmee is de promotiepoort van Fase 4 voor het eerst
+  end-to-end aantoonbaar, in beide richtingen (drie NO-GO's 's ochtends, drie GO's 's middags).
 - **De ledger loopt achter op een CI-run**, omdat CI niet kan committen: iemand moet
   `pnpm --filter @wunderstack/promote record <artefact>` draaien op het geüploade artefact. Handmatige
   stap, dus een plek waar het proces kan verwateren.

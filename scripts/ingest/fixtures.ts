@@ -24,8 +24,10 @@ import { parseArgs } from "node:util";
 
 import { embed } from "@wunderstack/ai";
 import { chunks as chunksTable, closeDb, documents, eq, getDb } from "@wunderstack/db";
-import { EMBEDDING_CONFIG, EVAL_FIXTURE_FUND } from "@wunderstack/shared";
+import { EMBEDDING_CONFIG, EVAL_FIXTURE_FUND, env } from "@wunderstack/shared";
 import { z } from "zod";
+
+import { describeDatabaseTarget, describeFailure, formatDatabaseTarget } from "./diagnostics.js";
 
 /** Distinctive source_uri so it can never collide with a real ingested document (globally unique). */
 const SOURCE_URI = `${EVAL_FIXTURE_FUND}://golden-passages.jsonl`;
@@ -100,6 +102,10 @@ async function main(): Promise<void> {
   if (passages.length === 0) {
     throw new Error(`No passages found in ${passagesPath}; nothing to ingest.`);
   }
+
+  // Printed before the first query, because that is where the nightly died for eleven nights with no
+  // clue as to which database it was even talking to.
+  console.log(formatDatabaseTarget(describeDatabaseTarget(env.DATABASE_URL)));
 
   const db = getDb();
   const existing = await db
@@ -178,7 +184,7 @@ async function main(): Promise<void> {
 
 main()
   .catch((error: unknown) => {
-    console.error(error instanceof Error ? error.message : error);
+    console.error(describeFailure(error));
     process.exitCode = 1;
   })
   // Close the pool so the process exits (postgres.js keeps sockets open otherwise) — matters in CI.
