@@ -6,6 +6,7 @@
   "scripts": {
     "harvest-feedback": "tsx --env-file-if-exists=../../.env harvest-feedback.ts",
     "rerank-ablation": "tsx --env-file-if-exists=../../.env rerank-ablation.ts",
+    "refusal-guard-probe": "tsx --env-file-if-exists=../../.env refusal-guard-probe.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
   },
