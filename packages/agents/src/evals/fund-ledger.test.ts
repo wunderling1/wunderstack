@@ -13,7 +13,8 @@ function fundLayer(key: string, fund: string, corpusVersion: string): FundLayerR
     answerableQueries: 14,
     metrics: { hitAt1: 1, recallAt3: 1, recallAt5: 1, mrr: 1 },
     thresholds: { hitAt1: 0.7, recallAt3: 0.8, recallAt5: 0.8, mrr: 0.75 },
-    refusalGuard: { probes: 1, empty: 1, required: 1 },
+    refusalGuard: { probes: 3, empty: 3, required: 2 },
+    unscoredNearMissCases: 1,
   };
 }
 

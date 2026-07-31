@@ -218,27 +218,78 @@ unit-testpakketten, depcruise 321 modules zonder violations.
 
 ---
 
+## 2026-07-31 · C4 · De fonds-refusal-guard eiste iets wat op een echt corpus niet kan
+
+**Fase:** P0.2 (laatste voorwaarde vóór de schaalbaarheidstoets) · **Categorie:** **C4 —
+testwijziging**, de categorie die het protocol als rode vlag bestempelt. Daarom staat hieronder
+expliciet waarom dit geen verboden C4 is; die verantwoording hoort bij de ingreep, niet in een
+voetnoot.
+
+**Wat.** `fundLayerChecks` gebruikte de `refusal`-cases van de fonds-golden-set als
+out-of-corpus-probes en eiste nul treffers boven `minScore = 0.48`. Die cases zijn per ontwerp (E3)
+**bijna-treffers**: inhoudelijk aangrenzende vragen die iets ophalen. Gevolg: de guard stond rood op
+elk fonds met een echt corpus en groen op de fixtureset.
+
+**Meting vooraf [gemeten, read-only].** Cosinesimilariteit vóór rerank — daar valt de beslissing,
+want rerank kan de lijst alleen inkorten.
+
+| Fonds-set | bijna-treffer max | laagste echte vraag | onzinvraag max | Guard | Scheidbaar? |
+|---|---|---|---|---|---|
+| `demo` (32 chunks) | 0,515 | 0,700 | 0,366 | 0/2 leeg → rood | ja |
+| `etd-full` (245 chunks) | 0,647 | 0,569 | 0,377 | 0/1 leeg → rood | **nee** |
+| `etd` (31 fixtures) | 0,465 | 0,520 | 0,370 | 3/3 leeg → groen | ja, marge 0,015 |
+
+**Waarom dit geen verboden C4 is.** Drie redenen, in deze volgorde. (1) De geëiste eigenschap is
+**aantoonbaar onhaalbaar**, geen mening: op `etd-full` ligt de bijna-treffer op 0,647 met twee echte
+vragen op 0,569 en 0,642 eronder, dus elke drempel die de probe buitensluit sloopt echte antwoorden.
+(2) De codebase stelde dit al vast — `cao.eval.ts:158-165` schrijft dat de golden refusal-cases hier
+niet kunnen dienen "by design (E3) … which DO clear the floor", en gebruikt in de basislaag eigen
+onzinvragen; de fondslaag deed precies wat dat commentaar verbood. (3) Er is niets verzwakt: de guard
+draait nu op probes met een marge van 0,10 in plaats van op een toevalligheid van 0,015 (≈ de
+meetruis van 0,003). Het groen op de fixtureset was dus zelf niet betrouwbaar.
+
+**Niet gedaan:** `minScore` verhogen (verandert productiegedrag om een test te repareren, kost 2–3
+echte antwoorden) en de probevragen herformuleren zodat ze lager scoren (echte gebruikers vragen het
+juist zo). Beide expliciet afgevoerd op de data.
+
+**Ingreep.** De fondslaag gebruikt nu dezelfde drie gedeelde `MIN_SCORE_PROBES` en dezelfde slack
+(≥ 2 van 3 leeg) als de basislaag: één standaard voor alle fondsen in plaats van per fonds zijn eigen
+lat. De bijna-treffers blijven in de golden set en worden expliciet als **niet gescoord**
+gerapporteerd (`unscoredNearMissCases` in het artefact, plus een regel in de console), zodat een
+onbewaakte case nooit gedekt kan lijken. Geen productieparameter aangeraakt.
+
+**Wat hiermee níét is opgelost.** "Weigert de agent op een bijna-treffer?" is per fonds nu
+onbewaakt — de fondslaag doet geen antwoordscoring. Vastgelegd als **open besluit B7** in
+`GATE-ARCHITECTURE.md`, te beslissen vóór fonds #2 live gaat.
+
+**Bewijs.** Nota met opties en afweging: `docs/eval/BESLUIT-refusal-guard-2026-07-31.md`. Ruwe data:
+`scripts/eval/refusal-guard-report.md` (instrument + meting in commit `89c6093`). Gate-wijziging in
+deze commit. Nog te doen: een volledige run die aantoont dat P0.2 hiermee sluit.
+
+---
+
 ## Openstaand
 
-- **Refusal-guard `demo` én `etd-full`** — rood en bewust rood gelaten (besluit 2026-07-30).
-  Threshold-calibratie buiten scope. Na de nulmeting van Fase 5 staat de guard op twee
-  onafhankelijke echte corpora rood (`demo` 0/2 leeg, `etd-full` 0/1 leeg) en alleen op de
-  handgecureerde fixtureset groen (3/3). Het ETD-corpus is bijna acht keer zo groot als `demo`, dus
-  "corpus te klein" verklaart het niet meer; de waarschijnlijke oorzaak is dat `minScore = 0.48` op
-  de fixtureset is gekalibreerd. Zie `docs/eval/ingest/GATE-RUN-demo-2026-07-30.md` §4 en
-  `docs/eval/golden-sets/NULMETING-etd-full-2026-07-30.md` §2.
+- ~~**Refusal-guard `demo` én `etd-full` rood**~~ — **afgehandeld 2026-07-31** (C4-entry hierboven).
+  De hypothese "`minScore = 0.48` is op de fixtureset gekalibreerd" was half juist: de drempel
+  klopt, de probes niet. Rest-risico: de guard is nu groen op alle corpora maar bewaakt een smallere
+  eigenschap; het weigergedrag zelf is per fonds onbewaakt (**B7**).
+- **Nog geen groene volledige run na de guard-correctie** — P0.2 blijft open tot die run er is. De
+  guard-uitkomst is voorspeld (3/3 leeg op alle drie de corpora, gemeten read-only), maar voorspeld
+  is niet gemeten.
 - **Twee reparatievoorstellen uit Fase 3**, nog niet uitgevoerd: inhoudsopgave/titelpagina buiten het
   corpus houden, en een kop met kleine letter afwijzen tegen vals-positieve koppen.
 - **Drie onleesbare PDF-pagina's** — vraagt een andere extractieroute (OCR of andere engine); eigen
   besluit.
 - **Eén van de 14 `etd-full`-vragen vindt zijn anker niet** (buiten de top-5; alle andere staan op
   plek 1). Welke case dat is, is niet gemeten — het artefact bewaart geen uitkomst per case.
-- **Voorstel startersjabloon: drie refusal-cases in plaats van één** (drempel ≥ 2 leeg), zodat de
-  guard voor een nieuw fonds een maat is en geen munt. Niet doorgevoerd; verandert een gate-drempel
-  en vraagt een besluit. Zie `docs/eval/golden-sets/NULMETING-etd-full-2026-07-30.md` §5.
+- ~~**Voorstel startersjabloon: drie refusal-cases in plaats van één**~~ — **vervallen 2026-07-31.**
+  De guard gebruikt geen golden refusal-cases meer, dus het aantal ervan doet niets voor de gate. De
+  ≥ 2-van-3-lat zit nu op de gedeelde onzinvragen.
 - **Geen enkel fonds is nu promoveerbaar** — `pnpm promote-check` geeft NO-GO voor `demo`, `etd-full`
-  en `etd`. Voor `etd` verdwijnt de blokkade bij de eerstvolgende run (die legt de commit vast); voor
-  de andere twee pas als het refusal-guard-besluit valt.
+  en `etd`, want de ledger bevat alleen nog de rode runs van 2026-07-30. Eén volledige run na de
+  guard-correctie zou dat voor alle drie tegelijk kunnen oplossen; tot die run is gedraaid staat er
+  niets groen vast.
 - **De ledger loopt achter op een CI-run**, omdat CI niet kan committen: iemand moet
   `pnpm --filter @wunderstack/promote record <artefact>` draaien op het geüploade artefact. Handmatige
   stap, dus een plek waar het proces kan verwateren.

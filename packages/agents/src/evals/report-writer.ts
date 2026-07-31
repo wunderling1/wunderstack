@@ -123,7 +123,11 @@ export interface RetrievalIntegrationReport {
  * fund via the integration path (retrieveContext), matched on article/lid. Reported SEPARATELY from
  * the base (corpus-agnostic) scores so a fund's correctness is a distinct, per-corpus trend. Each
  * fund set carries its own `corpusVersion` (independent of the base one). `refusalGuard` tracks the
- * minScore refuse-without-LLM check: how many out-of-corpus refusal probes returned 0 hits.
+ * minScore refuse-without-LLM check: how many out-of-corpus probes returned 0 hits.
+ *
+ * `unscoredNearMissCases` is deliberate bookkeeping, not a metric: the set's `refusal` cases describe
+ * intended refusal behaviour that this layer cannot score (it runs no answer scoring), so the count
+ * travels with the report instead of disappearing. See `docs/eval/BESLUIT-refusal-guard-2026-07-31.md`.
  */
 export interface FundLayerReport {
   key: string;
@@ -138,6 +142,7 @@ export interface FundLayerReport {
     empty: number;
     required: number;
   };
+  unscoredNearMissCases: number;
 }
 
 export interface EvalReport {

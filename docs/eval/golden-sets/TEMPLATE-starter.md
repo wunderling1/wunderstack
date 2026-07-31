@@ -78,10 +78,14 @@ Kies het onderwerp door **te controleren dat het woord echt niet in het corpus v
 gevoel. Goede kandidaten in Nederlandse CAO's: thuiswerkvergoeding, kinderopvang, fietsplan,
 telefoonvergoeding, dertiende maand.
 
-> **Let op.** In de fonds-laag is een refusal-case tegelijk een **minScore-probe**: de gate verwacht
-> dat retrieval nul treffers oplevert, zodat de agent kan weigeren zonder LLM-call. Op een rijk corpus
-> haalt zo'n vraag vaak wél iets op boven de drempel, en dan valt die guard rood. Dat is een
-> calibratiekwestie, geen reden om de vraag te schrappen of de drempel te verlagen. Rapporteer hem.
+> **Let op — gewijzigd 2026-07-31.** Een refusal-case is **geen minScore-probe meer**. Dat was hij tot
+> 2026-07-31 wél, en dat maakte de fonds-guard onvervulbaar: een bijna-treffer haalt op een rijk corpus
+> iets op boven de drempel, en op de ETD-CAO bestaat er geen drempel die hem buitenhoudt zonder echte
+> vragen mee te slopen (`docs/eval/BESLUIT-refusal-guard-2026-07-31.md`). De retrieval-guard gebruikt
+> nu vaste onzinvragen die alle fondsen delen; jouw refusal-case beschrijft **gedrag** (weigert de
+> agent?), en dat scoort de antwoordlaag. Die laag draait nog niet per fonds, dus reken erop dat deze
+> case in de nachtelijke fondsrun als *niet gescoord* wordt gerapporteerd. Schrijf hem toch: hij is de
+> specificatie waartegen dat later gemeten wordt.
 
 ### 2. Tabel-case — `category: "table"`
 
