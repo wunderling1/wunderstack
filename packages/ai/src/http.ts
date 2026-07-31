@@ -21,6 +21,30 @@ export function ensureHttpKeepAlive(): void {
   );
 }
 
+/**
+ * A provider answered with an HTTP failure after `fetchWithRetry` gave up. Carries the status,
+ * because a caller needs to tell exhausted throttling apart from a real fault and the status used to
+ * live only inside the message — which left string matching as the only way to distinguish them.
+ * The message is unchanged from the plain Errors this replaced.
+ */
+export class ProviderHttpError extends Error {
+  readonly status: number;
+
+  constructor(label: string, status: number, detail: string) {
+    super(`${label} failed (${String(status)}): ${detail}`);
+    this.name = "ProviderHttpError";
+    this.status = status;
+  }
+}
+
+/**
+ * True when the provider rate-limited us and the backoff budget in `fetchWithRetry` ran out. Such a
+ * failure says nothing about the code under test: work that never ran has no result.
+ */
+export function isRateLimited(error: unknown): error is ProviderHttpError {
+  return error instanceof ProviderHttpError && error.status === 429;
+}
+
 /** Provider statuses worth retrying: rate limiting (429) and transient upstream faults (5xx). */
 const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
 const MAX_ATTEMPTS = 5;

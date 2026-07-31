@@ -22,6 +22,18 @@ on:
         type: boolean
         default: false
 
+# The eval shares one Mistral rate limit, and two full runs at judge 3 do not fit inside it: on
+# 2026-07-31 a push run on main (41 min, all gates green so far) died on a 429 while a dispatched run
+# overlapped it for 19 minutes. The eval already refuses to run twice on one machine (eval-lock.ts);
+# this is that same property across runners. The paid paths therefore queue behind each other, while
+# each PR ref keeps its own group and cancels its own superseded runs.
+# Caveat: with three or more paid runs waiting, GitHub cancels the older pending one, so a push could
+# land without a verdict. Accepted for now — pushes to main are rare and a cancelled run is visible,
+# unlike the 429 it replaces.
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('ci-pr-{0}', github.ref) || 'ci-eval-paid' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   verify:
     # workflow_dispatch is baseline-only (see write-baseline below), except when it is explicitly asked

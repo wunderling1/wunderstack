@@ -1,7 +1,7 @@
 import { env } from "@wunderstack/shared";
 import { z } from "zod";
 
-import { ensureHttpKeepAlive, fetchWithRetry } from "./http.js";
+import { ensureHttpKeepAlive, fetchWithRetry, ProviderHttpError } from "./http.js";
 
 /**
  * The single seam for embeddings, via Scaleway Generative APIs (EU, OpenAI-compatible).
@@ -79,7 +79,7 @@ export async function embed(input: EmbedInput): Promise<EmbeddingResult> {
 
   if (!response.ok) {
     const detail = await response.text();
-    throw new Error(`Scaleway embeddings request failed (${String(response.status)}): ${detail}`);
+    throw new ProviderHttpError("Scaleway embeddings request", response.status, detail);
   }
 
   const payload: unknown = await response.json();

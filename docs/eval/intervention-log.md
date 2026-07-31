@@ -327,6 +327,44 @@ cent, en alleen nachtelijk of op verzoek.
 
 **Bewijs.** Oorzaak en afweging: `docs/audit/FINDING-nightly-db-gate-never-ran-2026-07-31.md` §7.
 
+**Uitkomst [gemeten].** Run `30641602708` (dispatch met `run_db_gates`, branch `ci/ephemeral-gate-database`,
+24 min): **`Eval PASSED`** — de eerste CI-run ooit waarin de DB-gates een uitkomst hebben. CI draaide
+PostgreSQL 17.10 met pgvector 0.8.2; geïngest werden 32 chunks (fixtures), 29 (demo) en 245 (ETD).
+Alle drie de fondslagen groen (`demo`, `etd-full`, `etd`: hit@1, recall@3/5 en MRR boven de lat,
+refusal-guard 3/3 probes leeg bij minScore 0,48) en G3-isolation groen op alle drie de fondsen: 15
+chunks per fonds, 0 cross-fund.
+
+---
+
+## 2026-07-31 · C2 + C4 · Een rate limit was niet te onderscheiden van een regressie
+
+**Fase:** buiten de fasen · **Categorie:** C2 (workflow-configuratie) + C4 (rapportage van de harness;
+geen drempel verschoven).
+
+**Wat gemeten is.** De push-run op `main` na de merge van PR #9 (`30639862139`) liep 41 minuten, had
+alles groen tot en met G2-multi-turn (hit@1 0,958 en MRR 0,979, gelijk aan de baseline; 0 van 4
+onverifieerbaar) en stierf toen op `Mistral request failed (429)`. Oorzaak van juist dát moment: een
+dispatch-run van mij liep er van 15:08 tot 15:27 UTC dwars door, dus twee volledige evals deelden
+negentien minuten lang één rate limit. Bijeffect: Scalingo brak de deploy van `main` af — niet op
+`verify`, maar op de check-run van de handmatige `db-preflight`, want een deploy wacht op álle checks.
+
+**Twee wijzigingen.**
+
+1. **Betaalde runs staan nu in één concurrency-groep** (`ci.yml`), zodat push, merge-queue, nightly en
+   dispatch achter elkaar wachten in plaats van elkaar te beconcurreren. PR's houden een eigen groep per
+   ref en annuleren hun eigen verouderde runs. Dit is dezelfde eigenschap die `eval-lock.ts` al lokaal
+   afdwingt, nu tussen runners. Rest-risico staat in het commentaar: bij drie of meer wachtende betaalde
+   runs annuleert GitHub de oudste wachtende, dus een push kan zonder uitspraak landen.
+2. **Een 429 is een eigen uitkomst.** `packages/ai` gooide de status weg in een tekst, dus de eval kon
+   throttling niet van een echte fout onderscheiden; nu draagt `ProviderHttpError` de status en meldt de
+   runner bij een uitgeputte 429 expliciet `GATE RUN INCOMPLETE`, met een GitHub-annotatie en exitcode
+   **75** (`EX_TEMPFAIL`) in plaats van 1. Nog steeds rood — een onafgemaakte gate-run mag nooit groen
+   lijken — maar wél te onderscheiden zonder 40 minuten log te lezen.
+
+**Wat dit niet oplost.** Het profiel zelf: elke push naar `main` kost 41+ minuten met judge 3 en
+generatie 3, en dat zit dicht tegen de limiet aan. En het artefact legt de reden van een onafgemaakte
+run nog niet vast; alleen het log doet dat.
+
 ---
 
 ## Openstaand
@@ -343,9 +381,11 @@ cent, en alleen nachtelijk of op verzoek.
   5%-tolerantie. De nul marge die het artefact bij `underRefusal` benoemde, is bij de eerstvolgende run
   ook echt omgevallen. Eén groene run is dus geen bevroren referentie; de spreiding moet eerst gemeten
   worden (zie de vraag hieronder over N runs).
-- **De DB-gates hadden nog nooit in CI gedraaid** [gemeten] — oorzaak gevonden en verholpen (C2
-  hierboven): het secret bevatte een lokaal tunneladres. **Nog niet gesloten**: er is nog geen groene
-  CI-run met database. Tot die er is, blijft al het G3-bewijs van een laptop komen.
+- ~~**De DB-gates hebben nog nooit in CI gedraaid**~~ — **gesloten 2026-07-31** met run `30641602708`:
+  negen gates groen inclusief alle drie de fondslagen en de isolatieprobe, op een database die CI zelf
+  opzet. G3 is daarmee niet langer uitsluitend laptop-bewijs. Let op de smalle grens: die run draaide
+  onder een dispatch-profiel (judge 1), dus het is bewijs dat de gates *draaien en groen zijn*, geen
+  bevroren baseline.
 - **Migratie-drift tegen de beheerde database is nu ongedekt.** Doordat CI een verse database opzet,
   bewijst geen enkele run meer dat de Scalingo-database bij onze migraties past. Vraagt een losse,
   incidentele check; niet in de dagelijkse gate.
@@ -355,9 +395,10 @@ cent, en alleen nachtelijk of op verzoek.
   tokenverbruik en geen duur. `generateAnswerWithRepair` telt usage per case al op en geeft het aan de
   eval, die het weggooit; de judge vangt usage niet op. P0.2 vraagt kosten in het baseline-artefact, dus
   dit is nu een afleiding (callvolume + wandkloktijd) in plaats van een meting.
-- **Rate limit bij een volledige nachtelijke run** — zie de C5 hierboven. Vraagt een eigen besluit
-  (aparte key, lagere gelijktijdigheid, of een 429 expliciet als eigen uitkomst rapporteren zodat een
-  rode schedule-run te onderscheiden is van een echte regressie).
+- **Rate limit bij een volledige run** — deels afgehandeld (C2+C4 hierboven: geen overlappende betaalde
+  runs meer, en een 429 rapporteert zichzelf als onafgemaakte run met exitcode 75). **Wat openblijft:**
+  het push-profiel van 41+ minuten bij judge 3 zit nog steeds dicht tegen de limiet, en een aparte key
+  voor CI is nog geen besluit.
 - **Twee reparatievoorstellen uit Fase 3**, nog niet uitgevoerd: inhoudsopgave/titelpagina buiten het
   corpus houden, en een kop met kleine letter afwijzen tegen vals-positieve koppen.
 - **Drie onleesbare PDF-pagina's** — vraagt een andere extractieroute (OCR of andere engine); eigen

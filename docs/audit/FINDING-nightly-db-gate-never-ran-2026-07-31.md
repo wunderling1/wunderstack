@@ -144,3 +144,20 @@ betaalde eval wél meeneemt, zodat een handmatige run geen halve groene check ka
 
 **Nog te doen:** het onjuiste secret `DATABASE_URL` in de repo-settings opruimen. CI gebruikt het niet
 meer, maar een secret dat een lokaal tunneladres bevat is misleidend voor de volgende lezer.
+
+## 8. De kern van de bevinding is gesloten [gemeten]
+
+Run `30641602708` (2026-07-31, 24 min) is de **eerste CI-run waarin de DB-gates een uitkomst hebben**:
+`Eval PASSED` met PostgreSQL 17.10 en pgvector 0.8.2, na ingest van 32 chunks (fixtures), 29 (demo) en
+245 (ETD). Groen zijn alle drie de fondslagen (`demo`, `etd-full`, `etd` — retrieval boven de lat,
+refusal-guard 3/3 probes leeg bij minScore 0,48) en G3-isolation over alle drie de fondsen (15 chunks
+per fonds, 0 cross-fund).
+
+Wat de openingsclaim van dit document betreft — "al het groene G3-bewijs komt van een laptop" — geldt
+dat niet meer. Wat nog wél geldt: die run draaide onder een dispatch-profiel met één judge-sample, dus
+hij bewijst dat de gates draaien en groen zijn, niet dat er een reproduceerbare referentie ligt (P0.2).
+
+Bijeffect dat hier hoort: mijn handmatige preflight hing een falende check-run aan de merge-commit van
+`main`, waarop Scalingo de deploy afbrak (`checkrun-91188323481`). De eigen jobnaam hield de diagnose
+buiten de merge-gate `verify`, zoals bedoeld, maar een deploy wacht op álle checks. Met het verwijderen
+van `db-preflight.yml` kan dit zich niet herhalen: de vervanger draait binnen `verify`.
