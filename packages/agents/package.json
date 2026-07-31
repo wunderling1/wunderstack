@@ -7,6 +7,10 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./evals/fund-ledger": {
+      "types": "./src/evals/fund-ledger.ts",
+      "default": "./src/evals/fund-ledger.ts"
     }
   },
   "scripts": {

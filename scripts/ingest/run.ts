@@ -9,6 +9,7 @@
  *   pnpm --filter @wunderstack/ingest ingest [path] --fund <fund> --version <v>
  *   pnpm --filter @wunderstack/ingest ingest [path] --dry-run    # parse + chunk only, no DB/API
  *   pnpm --filter @wunderstack/ingest ingest [path] --force      # re-chunk + re-embed unchanged source
+ *   pnpm --filter @wunderstack/ingest ingest [path] --prune      # input IS the fund's whole corpus
  *
  * `path` is a file or directory (default: scripts/ingest/input). DATABASE_URL + SCALEWAY_API_KEY
  * are read from the repo-root .env automatically (except in --dry-run).
@@ -17,14 +18,16 @@
 import { createHash } from "node:crypto";
 import { readdir, stat } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
 import { embed } from "@wunderstack/ai";
-import { chunks as chunksTable, closeDb, documents, eq, getDb } from "@wunderstack/db";
+import { and, chunks as chunksTable, closeDb, documents, eq, getDb, inArray, sql } from "@wunderstack/db";
 import { EMBEDDING_CONFIG, env } from "@wunderstack/shared";
 
 import { chunk, type Chunk } from "./chunk.js";
 import { parseFile, SUPPORTED_EXTENSIONS } from "./parse.js";
+import { reportAfterIngest } from "./report.js";
 
 const DEFAULT_INPUT_DIR = "input";
 const EMBED_BATCH_SIZE = 32;
@@ -36,6 +39,10 @@ interface CliOptions {
   version: string;
   dryRun: boolean;
   force: boolean;
+  /** Treat the input set as the fund's COMPLETE corpus and retract anything else it still holds. */
+  prune: boolean;
+  /** Filename suffix for the structure report, so a before/after pair on one day stays distinguishable. */
+  label?: string;
 }
 
 function parseCli(): CliOptions {
@@ -44,8 +51,10 @@ function parseCli(): CliOptions {
     options: {
       fund: { type: "string" },
       version: { type: "string" },
+      label: { type: "string" },
       "dry-run": { type: "boolean", default: false },
       force: { type: "boolean", default: false },
+      prune: { type: "boolean", default: false },
     },
   });
   return {
@@ -54,6 +63,8 @@ function parseCli(): CliOptions {
     version: values.version ?? "1",
     dryRun: values["dry-run"] ?? false,
     force: values.force ?? false,
+    prune: values.prune ?? false,
+    ...(values.label ? { label: values.label } : {}),
   };
 }
 
@@ -64,6 +75,18 @@ function chunkOptionsFromEnv(): { targetChars?: number; overlapChars?: number } 
   };
 }
 
+/**
+ * Documentation that lives next to a corpus is not corpus. A README in the input directory would
+ * otherwise become retrievable chunks the agent can cite as if they were CAO text. Only applies to a
+ * directory scan: naming a file explicitly is an explicit instruction and is honoured as given.
+ */
+const NON_CORPUS_FILE = /^readme(\.|$)/i;
+
+export function isCorpusFile(fileName: string): boolean {
+  if (!(SUPPORTED_EXTENSIONS as readonly string[]).includes(extname(fileName).toLowerCase())) return false;
+  return !NON_CORPUS_FILE.test(fileName);
+}
+
 async function listInputFiles(inputPath: string): Promise<string[]> {
   const stats = await stat(inputPath);
   const supported = (file: string): boolean =>
@@ -71,8 +94,11 @@ async function listInputFiles(inputPath: string): Promise<string[]> {
 
   if (stats.isDirectory()) {
     const entries = await readdir(inputPath);
+    for (const entry of entries.filter((file) => supported(file) && !isCorpusFile(file)).sort()) {
+      console.log(`  skipped   ${entry} (documentation, not corpus)`);
+    }
     return entries
-      .filter(supported)
+      .filter(isCorpusFile)
       .sort((a, b) => a.localeCompare(b))
       .map((entry) => join(inputPath, entry));
   }
@@ -113,6 +139,8 @@ interface FileOutcome {
   tableChunks: number;
   structuredChunks: number;
   sampleRefs: string[];
+  /** Kept so a dry-run can still be measured by the structure report (nothing was stored to read back). */
+  pieces: Chunk[];
 }
 
 function summarize(pieces: Chunk[]): Pick<FileOutcome, "tableChunks" | "structuredChunks" | "sampleRefs"> {
@@ -133,7 +161,7 @@ async function ingestFile(options: CliOptions, filePath: string): Promise<FileOu
   const summary = summarize(pieces);
 
   if (options.dryRun) {
-    return { sourceUri, status: "dry-run", chunkCount: pieces.length, ...summary };
+    return { sourceUri, status: "dry-run", chunkCount: pieces.length, pieces, ...summary };
   }
   if (pieces.length === 0) {
     throw new Error(`No chunks produced for ${filePath}; nothing to ingest.`);
@@ -149,7 +177,7 @@ async function ingestFile(options: CliOptions, filePath: string): Promise<FileOu
   // Idempotency is keyed on the parsed SOURCE TEXT, not the chunk output. A chunker/config change
   // (same PDF) therefore looks "unchanged" and would be skipped; --force re-chunks and re-embeds.
   if (existing[0]?.contentHash === contentHash && !options.force) {
-    return { sourceUri, status: "unchanged", chunkCount: pieces.length, ...summary };
+    return { sourceUri, status: "unchanged", chunkCount: pieces.length, pieces, ...summary };
   }
   const isUpdate = existing.length > 0;
 
@@ -207,7 +235,50 @@ async function ingestFile(options: CliOptions, filePath: string): Promise<FileOu
     }
   });
 
-  return { sourceUri, status: isUpdate ? "updated" : "created", chunkCount: pieces.length, ...summary };
+  return { sourceUri, status: isUpdate ? "updated" : "created", chunkCount: pieces.length, pieces, ...summary };
+}
+
+interface PrunedDocument {
+  sourceUri: string;
+  chunkCount: number;
+}
+
+/**
+ * Retract documents of this fund that the current input set does not contain.
+ *
+ * Off by default, because an ingest is normally an ADDITION to a fund's corpus. With --prune the
+ * caller states that the input IS the fund's complete corpus — which is what a corpus replacement
+ * needs. Without it, a CAO republished under a new filename leaves the previous edition silently
+ * retrievable next to the new one (found in the demo fund on 2026-07-30, see
+ * docs/eval/ingest/FINDING-demo-corpus-mismatch-2026-07-30.md).
+ *
+ * Chunks go with the document row via the schema's ON DELETE CASCADE.
+ */
+async function pruneFund(fund: string, keptSourceUris: string[]): Promise<PrunedDocument[]> {
+  const db = getDb();
+  const held = await db
+    .select({ id: documents.id, sourceUri: documents.sourceUri })
+    .from(documents)
+    .where(eq(documents.fund, fund));
+
+  const kept = new Set(keptSourceUris);
+  const stale = held.filter((doc) => !kept.has(doc.sourceUri));
+  if (stale.length === 0) return [];
+
+  const staleIds = stale.map((doc) => doc.id);
+  const counts = await db
+    .select({ documentId: chunksTable.documentId, count: sql<number>`count(*)::int` })
+    .from(chunksTable)
+    .where(inArray(chunksTable.documentId, staleIds))
+    .groupBy(chunksTable.documentId);
+  const countByDocument = new Map(counts.map((row) => [row.documentId, row.count]));
+
+  await db.delete(documents).where(and(eq(documents.fund, fund), inArray(documents.id, staleIds)));
+
+  return stale.map((doc) => ({
+    sourceUri: doc.sourceUri,
+    chunkCount: countByDocument.get(doc.id) ?? 0,
+  }));
 }
 
 async function main(): Promise<void> {
@@ -225,8 +296,12 @@ async function main(): Promise<void> {
       `${options.dryRun ? "" : ` Embedding model: ${EMBEDDING_CONFIG.model} @ ${String(EMBEDDING_CONFIG.dim)}.`}\n`,
   );
 
+  const produced: Chunk[] = [];
+  const ingestedSourceUris: string[] = [];
   for (const file of files) {
     const outcome = await ingestFile(options, file);
+    produced.push(...outcome.pieces);
+    ingestedSourceUris.push(outcome.sourceUri);
     console.log(
       `  ${outcome.status.padEnd(9)} ${outcome.sourceUri} (${String(outcome.chunkCount)} chunks, ` +
         `${String(outcome.tableChunks)} table, ${String(outcome.structuredChunks)} with sourceRef)`,
@@ -236,13 +311,43 @@ async function main(): Promise<void> {
     }
   }
 
+  if (options.prune && !options.dryRun) {
+    const pruned = await pruneFund(options.fund, ingestedSourceUris);
+    for (const doc of pruned) {
+      console.log(`  retracted ${doc.sourceUri} (${String(doc.chunkCount)} chunks removed)`);
+    }
+    if (pruned.length === 0) {
+      console.log(`  retracted nothing: fund "${options.fund}" held no documents outside this input set.`);
+    }
+  } else if (options.prune) {
+    console.log("  --prune ignored in a dry-run (nothing is stored, so nothing can be retracted).");
+  }
+
+  // Structure report (visibility, never a gate): a corpus that loses its anchors must not be able to
+  // pass unnoticed. A failure to write the report may not fail the ingest itself.
+  try {
+    await reportAfterIngest({
+      fund: options.fund,
+      dryRun: options.dryRun,
+      chunks: produced,
+      ...(options.label ? { label: options.label } : {}),
+    });
+  } catch (error: unknown) {
+    console.warn(`\n  warning: structure report failed (${error instanceof Error ? error.message : String(error)}).`);
+  }
+
   console.log("\nDone.");
 }
 
-main()
-  .catch((error: unknown) => {
-    console.error(error instanceof Error ? error.message : error);
-    process.exitCode = 1;
-  })
-  // Close the pool so the process exits (postgres.js keeps sockets open otherwise) — matters in CI.
-  .finally(closeDb);
+// Only run when invoked as the CLI, so unit tests can import the pure helpers above without
+// triggering an actual ingest.
+const entryPoint = process.argv[1];
+if (entryPoint !== undefined && import.meta.url === pathToFileURL(entryPoint).href) {
+  main()
+    .catch((error: unknown) => {
+      console.error(error instanceof Error ? error.message : error);
+      process.exitCode = 1;
+    })
+    // Close the pool so the process exits (postgres.js keeps sockets open otherwise) — matters in CI.
+    .finally(closeDb);
+}

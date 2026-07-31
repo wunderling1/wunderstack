@@ -13,7 +13,8 @@
     "lint": "turbo run lint",
     "depcruise": "depcruise apps packages scripts",
     "check-ui-boundaries": "bash scripts/check-ui-boundaries.sh",
-    "bake-off": "pnpm --filter @wunderstack/bake-off bake-off"
+    "bake-off": "pnpm --filter @wunderstack/bake-off bake-off",
+    "promote-check": "pnpm --filter @wunderstack/promote check"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

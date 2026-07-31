@@ -48,6 +48,18 @@ function isHeading(line: string): boolean {
   if (/^(artikel|hoofdstuk|bijlage|paragraaf)\b/i.test(trimmed)) return true;
   // Numbered clause headings like "1", "1.2", "3.4.1 Titel".
   if (/^\d+(\.\d+)*[.)]?(\s+\S+)?$/.test(trimmed) && trimmed.length <= 80) return true;
+  // Section-number headings carrying a real, multi-word title ("1.1. Van toepassing",
+  // "4.3 Arbeidsduurverkorting (ADV)") — the numbering style of CAOs that do not write "Artikel N".
+  // The rule above stops at a single trailing word, so these were invisible and the whole CAO
+  // collapsed into one unanchored section (measured 2026-07-30, intervention C1).
+  //
+  // Requires the N.M form, so a bare clause marker ("1.") keeps falling through to splitLeden. A
+  // column run (two or more spaces, which is how the PDF parse marks table columns) disqualifies the
+  // line, so a salary row that opens with a number ("15 jaar  580,30  609,32") is not mistaken for
+  // an article heading and tables stay whole.
+  if (/^\d+(?:\.\d+)+[.)]?\s+\p{L}/u.test(trimmed) && !/\s{2,}/.test(trimmed) && trimmed.length <= 80) {
+    return true;
+  }
   return false;
 }
 

@@ -79,6 +79,7 @@ import {
 } from "./golden-set.js";
 import { ANSWER_THRESHOLDS, MULTI_TURN_SERVE_THRESHOLDS, answerFloorFailures } from "./answer-floors.js";
 import { acquireEvalLock, EvalAlreadyRunningError } from "./eval-lock.js";
+import { appendFundRecords, fundRecordsFromReport, resolveCommitSha } from "./fund-ledger.js";
 import { GATE_SPECS, type GateId, type GateRequirement, type GateSpec } from "./gates.js";
 import {
   aggregateScores,
@@ -156,11 +157,15 @@ const RETRIEVAL_INTEGRATION_THRESHOLDS: RetrievalThresholds = {
 
 /**
  * Out-of-corpus probes for the minScore refuse-without-LLM guard (divergence #6). None of these are
- * in the ETD CAO, so at the production minScore (0.48) the real pipeline should return zero chunks —
+ * in any CAO, so at the production minScore (0.48) the real pipeline should return zero chunks —
  * exercising the "nothing clears the floor -> refuse without calling the LLM" path that no gate
  * covered. The golden refusal cases cannot serve here: by design (E3) they carry in-corpus near-miss
  * distractors, which DO clear the floor. We require MIN_SCORE_GUARD_REQUIRED of them empty (one slot
  * of slack for embedding noise).
+ *
+ * Used by BOTH the base layer and the fund layer, because these probes are corpus-independent by
+ * construction: measured over `eval-fixtures`, `demo` and the 245-chunk ETD corpus they top out at
+ * 0.378 against a 0.48 floor (`scripts/eval/refusal-guard-report.md`, 2026-07-31).
  */
 const MIN_SCORE_PROBES = [
   "Hoeveel zonuren waren er gemiddeld in Valencia afgelopen zomer?",
@@ -795,9 +800,16 @@ async function retrievalIntegrationChecks(): Promise<Check[]> {
  * (golden-set.<fund>.jsonl) this drives the REAL pipeline (rewrite → pgvector → rerank → assemble)
  * against that fund's ingested corpus, scored on article/lid — NOT against fixtures, which is the
  * whole point of the fund layer (the audit's "two-layer split is only a console label" is closed by
- * making it a physical, separately-reported layer). Answerable cases feed recall/MRR; refusal cases
- * are out-of-corpus minScore probes that must return 0 hits (the refuse-without-LLM guard). Reported
- * per fund (per corpus snapshot) in eval-report.json — base-scores vs fund-scores stay apart.
+ * making it a physical, separately-reported layer). Answerable cases feed recall/MRR; the guard uses
+ * the shared MIN_SCORE_PROBES, not this set's own refusal cases. Reported per fund (per corpus
+ * snapshot) in eval-report.json — base-scores vs fund-scores stay apart.
+ *
+ * Why not the set's own refusal cases (changed 2026-07-31, was a red gate on every real corpus): they
+ * are in-corpus near-misses, and on a rich corpus they clear the floor — on the ETD corpus the probe
+ * scores 0.647 while two answerable cases sit at 0.569 and 0.642, so NO floor separates them. The
+ * measurement and the decision are in `docs/eval/BESLUIT-refusal-guard-2026-07-31.md`. Those cases
+ * stay in the golden set as intended-refusal behaviour; scoring them needs the answer layer, which
+ * this layer does not run (tracked as an open decision).
  *
  * Nightly-only like Gate B-integration, but ALSO needs MISTRAL_API_KEY: multi-turn fund cases are
  * condensed via the LLM before retrieval (fundCaseQuery), mirroring production. Uses production
@@ -805,7 +817,7 @@ async function retrievalIntegrationChecks(): Promise<Check[]> {
  */
 async function fundLayerChecks(set: GoldenFundSet): Promise<Check[]> {
   const answerable = set.cases.filter((testCase) => testCase.category !== "refusal");
-  const refusals = set.cases.filter((testCase) => testCase.category === "refusal");
+  const nearMiss = set.cases.filter((testCase) => testCase.category === "refusal");
 
   const rankedChunks: RetrievedChunk[][] = [];
   for (const testCase of answerable) {
@@ -821,17 +833,17 @@ async function fundLayerChecks(set: GoldenFundSet): Promise<Check[]> {
   const metrics = scoreIntegrationRecall(rankedChunks, answerable);
 
   let emptyProbes = 0;
-  for (const testCase of refusals) {
+  for (const query of MIN_SCORE_PROBES) {
     const result = await retrieveContext({
-      query: testCase.question,
+      query,
       fund: set.fund,
       topK: PRODUCTION_DEFAULTS.topK,
       minScore: PRODUCTION_DEFAULTS.minScore,
     });
     if (result.chunks.length === 0) emptyProbes += 1;
   }
-  // One slot of slack for embedding noise, mirroring the base minScore guard.
-  const requiredEmpty = refusals.length === 0 ? 0 : Math.max(1, refusals.length - 1);
+  // Same probes and same slack as the base layer, so a fund is held to one standard, not its own.
+  const requiredEmpty = MIN_SCORE_GUARD_REQUIRED;
 
   console.log(
     `\nGate F — fund "${set.key}" correctness on the REAL pipeline, fund "${set.fund}", ` +
@@ -840,8 +852,13 @@ async function fundLayerChecks(set: GoldenFundSet): Promise<Check[]> {
   );
   logRecallMetrics(`fund "${set.key}" (after full pipeline)`, metrics, RETRIEVAL_INTEGRATION_THRESHOLDS);
   console.log(
-    `  refusal guard — ${String(emptyProbes)}/${String(refusals.length)} out-of-corpus probes returned 0 hits ` +
-      `(need >= ${String(requiredEmpty)})\n`,
+    `  refusal guard — ${String(emptyProbes)}/${String(MIN_SCORE_PROBES.length)} out-of-corpus probes returned 0 hits ` +
+      `(need >= ${String(requiredEmpty)})`,
+  );
+  // Say out loud what this layer does NOT score, so an unscored case can never look covered.
+  console.log(
+    `  near-miss cases — ${String(nearMiss.length)} present, NOT scored here (needs the answer layer; ` +
+      `see docs/eval/BESLUIT-refusal-guard-2026-07-31.md)\n`,
   );
 
   fundLayerReports.push({
@@ -857,7 +874,8 @@ async function fundLayerChecks(set: GoldenFundSet): Promise<Check[]> {
       mrr: metrics.mrr,
     },
     thresholds: { ...RETRIEVAL_INTEGRATION_THRESHOLDS },
-    refusalGuard: { probes: refusals.length, empty: emptyProbes, required: requiredEmpty },
+    refusalGuard: { probes: MIN_SCORE_PROBES.length, empty: emptyProbes, required: requiredEmpty },
+    unscoredNearMissCases: nearMiss.length,
   });
 
   return [
@@ -865,7 +883,7 @@ async function fundLayerChecks(set: GoldenFundSet): Promise<Check[]> {
     {
       name: `fund "${set.key}" refusal-guard: >= ${String(requiredEmpty)} out-of-corpus probes return 0 hits (refuse-without-LLM)`,
       ok: emptyProbes >= requiredEmpty,
-      detail: `${String(emptyProbes)}/${String(refusals.length)} probes empty at minScore ${String(PRODUCTION_DEFAULTS.minScore)}`,
+      detail: `${String(emptyProbes)}/${String(MIN_SCORE_PROBES.length)} probes empty at minScore ${String(PRODUCTION_DEFAULTS.minScore)}`,
     },
   ];
 }
@@ -1470,7 +1488,9 @@ function writeRunArtefact(passed: boolean): void {
   const report: EvalReport = {
     schemaVersion: EVAL_REPORT_SCHEMA_VERSION,
     generatedAt: new Date().toISOString(),
-    commitSha: env.GITHUB_SHA ?? null,
+    // Falls back to local HEAD: a result that must be able to block a promotion has to be able to
+    // say which commit it is green about (Fase 4).
+    commitSha: resolveCommitSha(env.GITHUB_SHA),
     corpusVersion: GOLDEN_CORPUS_VERSION,
     passed,
     config: {
@@ -1493,6 +1513,14 @@ function writeRunArtefact(passed: boolean): void {
   };
   const path = writeEvalReport(report);
   console.log(`\nRun artefact written: ${path}`);
+
+  // The artefact is gitignored and overwritten by the next run, so each per-fund outcome also lands
+  // as a durable line that `pnpm promote-check` can read back (Fase 4).
+  const records = fundRecordsFromReport(report);
+  if (records.length > 0) {
+    const ledger = appendFundRecords(records);
+    console.log(`Promotion ledger: ${String(ledger.appended)} of ${String(records.length)} fund record(s) added to ${ledger.path}`);
+  }
 }
 
 async function main(): Promise<void> {

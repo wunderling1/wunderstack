@@ -255,6 +255,12 @@ const FUND_SET_META: Record<string, FundSetMeta> = {
   // (fund "demo", from scripts/ingest/demo-corpus). Runs on the nightly integration gate once that
   // corpus is ingested into the gate DB; base gates are unaffected (base fixture hash unchanged).
   demo: { fund: "demo", corpusVersion: "demo-1" },
+  // ETD-full — the SAME CAO as `etd` above, but the complete 62-page PDF as the production ingest
+  // stores it, under its own fund. Where `etd` scores hand-curated verbatim passages, this set scores
+  // what the pipeline actually produced from the source document, so it is the only fund set that can
+  // catch an ingest regression. Starter set, built from the template in
+  // docs/eval/golden-sets/TEMPLATE-starter.md; not yet reviewed by a fund.
+  "etd-full": { fund: "elektronische-detailhandel", corpusVersion: "etd-full-1" },
 };
 
 export interface GoldenFundSet {
