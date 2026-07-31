@@ -12,13 +12,39 @@ on:
     - cron: "0 3 * * *"
   # Manual baseline refresh: writes fixtures/baseline.json under nightly config and uploads it as an
   # artifact. Commit stays manual on purpose — baselines are reviewed, never auto-committed.
+  # `run_db_gates` instead runs the nightly DB-backed gates on demand: they had failed eleven nights
+  # unnoticed (docs/audit/FINDING-nightly-db-gate-never-ran-2026-07-31.md), and a change to that path
+  # you can only observe at 03:00 is a change you cannot verify.
   workflow_dispatch:
+    inputs:
+      run_db_gates:
+        description: "Run the nightly DB-backed gates now instead of refreshing the baseline"
+        type: boolean
+        default: false
+
+# The eval shares one Mistral rate limit, and two full runs at judge 3 do not fit inside it: on
+# 2026-07-31 a push run on main (41 min, all gates green so far) died on a 429 while a dispatched run
+# overlapped it for 19 minutes. The eval already refuses to run twice on one machine (eval-lock.ts);
+# this is that same property across runners. The paid paths therefore queue behind each other, while
+# each PR ref keeps its own group and cancels its own superseded runs.
+# Caveat: with three or more paid runs waiting, GitHub cancels the older pending one, so a push could
+# land without a verdict. Accepted for now — pushes to main are rare and a cancelled run is visible,
+# unlike the 429 it replaces.
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('ci-pr-{0}', github.ref) || 'ci-eval-paid' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   verify:
-    # workflow_dispatch is baseline-only (see write-baseline below); skip the paid verify eval there.
-    if: github.event_name != 'workflow_dispatch'
+    # workflow_dispatch is baseline-only (see write-baseline below), except when it is explicitly asked
+    # to exercise the DB gates; skip the paid verify eval otherwise.
+    if: github.event_name != 'workflow_dispatch' || inputs.run_db_gates == true
     runs-on: ubuntu-latest
+    env:
+      # Whether this run brings up the gate database. Nightly always does; a dispatch does on request.
+      GATE_DB: ${{ github.event_name == 'schedule' || inputs.run_db_gates == true }}
+      # Ephemeral, local, thrown away with the runner — so these credentials are not a secret.
+      GATE_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/wunderstack
     steps:
       - uses: actions/checkout@v4
 
@@ -49,14 +75,57 @@ jobs:
       - name: Unit tests
         run: pnpm turbo run test:unit
 
-      # Nightly only (E11): ingest the golden passages into the reserved "eval-fixtures" fund on the
-      # staging DB so Gate B-integration can run the REAL pipeline against them. Idempotent, so it is
-      # a fast no-op once ingested. PRs never touch the DB (see the eval step's DATABASE_URL below).
-      - name: Ingest golden fixtures (nightly integration gate)
-        if: github.event_name == 'schedule'
-        run: pnpm --filter @wunderstack/ingest ingest:fixtures
+      # The DB-backed gates (Gate B-integration, Gate D integration, G3-fund) need Postgres + pgvector.
+      # We start a throwaway one here rather than pointing at the managed staging database, because:
+      #   - the gate then measures only what this commit declares. A shared database carries leftovers
+      #     from earlier runs and from local work, and a gate that reads stale rows can be green for
+      #     reasons the commit does not contain.
+      #   - CI needs no DATABASE_URL secret and the managed database needs no public reachability.
+      # A `services:` block would start a container on every PR run too; `docker run` behind a condition
+      # keeps the PR path free. pgvector is pinned to the version in .cursor/rules/100-stack.mdc; the
+      # Postgres major is our choice here, so both versions are printed to make drift against Scalingo
+      # visible. This database holds public AVV-CAO text and synthetic fixtures only — real fund data
+      # must never be ingested on a runner outside the EU (000-core.mdc).
+      - name: Start gate database (Postgres + pgvector)
+        if: env.GATE_DB == 'true'
+        run: |
+          docker run -d --name gate-db \
+            -e POSTGRES_PASSWORD=postgres \
+            -e POSTGRES_DB=wunderstack \
+            -p 5432:5432 \
+            pgvector/pgvector:0.8.2-pg17
+          for _ in $(seq 1 30); do
+            docker exec gate-db pg_isready -U postgres -d wunderstack >/dev/null 2>&1 && break
+            sleep 2
+          done
+          # Unsuppressed, so an unreachable database fails here instead of inside a query.
+          docker exec gate-db pg_isready -U postgres -d wunderstack
+          docker exec gate-db psql -U postgres -d wunderstack -tAc "select version();"
+
+      - name: Migrate gate database
+        if: env.GATE_DB == 'true'
+        run: |
+          pnpm --filter @wunderstack/db db:migrate
+          docker exec gate-db psql -U postgres -d wunderstack -tAc \
+            "select 'pgvector ' || extversion from pg_extension where extname = 'vector';"
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL: ${{ env.GATE_DATABASE_URL }}
+
+      # Ingest every corpus the gates score against, from the repo, into the fresh database. All three
+      # sources are committed, so the gate's input is fully declared by this commit:
+      #   eval-fixtures  <- fixtures/golden-passages.jsonl (base layer + fund set "etd")
+      #   demo           <- scripts/ingest/demo-corpus/cao-fictief.md (fund set "demo")
+      #   elektronische-detailhandel <- scripts/ingest/input/*.pdf (fund set "etd-full", the only set
+      #                                 that can catch an ingest regression, so it runs the real parser)
+      - name: Ingest gate corpora
+        if: env.GATE_DB == 'true'
+        run: |
+          pnpm --filter @wunderstack/ingest ingest:fixtures
+          pnpm --filter @wunderstack/ingest ingest demo-corpus --fund demo --version 1 --prune
+          pnpm --filter @wunderstack/ingest ingest input \
+            --fund elektronische-detailhandel --version 1 --prune
+        env:
+          DATABASE_URL: ${{ env.GATE_DATABASE_URL }}
           SCALEWAY_API_KEY: ${{ secrets.SCALEWAY_API_KEY }}
 
       # Quality gate: blocks prompt/retrieval/answer regressions (Fase 9).
@@ -74,11 +143,12 @@ jobs:
         env:
           SCALEWAY_API_KEY: ${{ secrets.SCALEWAY_API_KEY }}
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
-          # DB-backed integration gates (Gate B-integration + Gate D integration) run ONLY nightly:
-          # the staging DB is wired here just for the schedule, so PRs run with no DATABASE_URL and
-          # those gates skip. EVAL_REQUIRE_DB makes them required (fail-if-missing) on the nightly.
-          DATABASE_URL: ${{ github.event_name == 'schedule' && secrets.DATABASE_URL || '' }}
-          EVAL_REQUIRE_DB: ${{ github.event_name == 'schedule' && '1' || '0' }}
+          # DB-backed gates (Gate B-integration, Gate D integration, G3-fund) run only where the gate
+          # database was brought up above: nightly, or a dispatch that asked for it. PRs run with no
+          # DATABASE_URL and those gates skip. EVAL_REQUIRE_DB makes them required (fail-if-missing)
+          # there, so a database that never came up cannot pass as a skip.
+          DATABASE_URL: ${{ env.GATE_DB == 'true' && env.GATE_DATABASE_URL || '' }}
+          EVAL_REQUIRE_DB: ${{ env.GATE_DB == 'true' && '1' || '0' }}
           # Same-repo PRs have secrets, so a missing/expired key must FAIL rather than silently pass
           # with only Gate A + D-contract. Fork PRs (head repo != this repo) have no secrets and keep
           # skipping B/C. See audit point #13.
@@ -107,7 +177,8 @@ jobs:
   # commits it with the measured values in the message (Fase E7). Median over EVAL_JUDGE_SAMPLES=3
   # damps single-sample judge noise in the recorded numbers.
   write-baseline:
-    if: github.event_name == 'workflow_dispatch'
+    # A dispatch that asked for the DB gates is not a baseline refresh; do not spend a second eval on it.
+    if: github.event_name == 'workflow_dispatch' && inputs.run_db_gates != true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

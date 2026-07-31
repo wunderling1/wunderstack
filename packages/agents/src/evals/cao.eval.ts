@@ -39,7 +39,7 @@
  * one is in flight exits immediately with a clear message instead of competing for the DB/API.
  */
 
-import { DEFAULT_LLM_MODEL, embed, generateText } from "@wunderstack/ai";
+import { DEFAULT_LLM_MODEL, embed, generateText, isRateLimited } from "@wunderstack/ai";
 import { closeDb, listFunds, rerank, retrieveContext, assemble, type RetrievedChunk } from "@wunderstack/rag";
 import {
   env,
@@ -1523,6 +1523,13 @@ function writeRunArtefact(passed: boolean): void {
   }
 }
 
+/**
+ * Exit code for a run that could not finish because the provider throttled us (sysexits EX_TEMPFAIL).
+ * Still a failure — an unfinished gate run must never read as green — but a distinct one, so "retry
+ * this" is separable from "a gate regressed" without reading the whole log.
+ */
+const EXIT_THROTTLED = 75;
+
 async function main(): Promise<void> {
   // Data-driven: the four-layer registry (GATE_SPECS) is walked in order; each gate resolves its own
   // prerequisites and reports passed/failed/skipped. Contract layer (G1) always runs; G2 needs keys;
@@ -1561,6 +1568,24 @@ try {
 
 main()
   .catch((error: unknown) => {
+    if (isRateLimited(error)) {
+      // A throttled run has no verdict: every gate after the 429 never ran, so the run says nothing
+      // about the commit. Before this, it was indistinguishable from a regression — same exit 1, same
+      // single line at the end of a 40-minute log (measured on `main` 2026-07-31, run 30639862139).
+      console.error(
+        "\nGATE RUN INCOMPLETE — the provider throttled us and the retry budget ran out.\n" +
+          "No verdict: the gates after this point did not run. This is NOT a regression signal.\n" +
+          error.message,
+      );
+      if (env.GITHUB_ACTIONS === "true") {
+        console.error(
+          "::error title=Gate run incomplete (provider throttled)::" +
+            "No gate verdict — the run stopped on an HTTP 429, it did not measure a regression.",
+        );
+      }
+      process.exitCode = EXIT_THROTTLED;
+      return;
+    }
     console.error(error instanceof Error ? error.message : error);
     process.exitCode = 1;
   })

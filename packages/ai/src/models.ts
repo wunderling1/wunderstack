@@ -1,7 +1,7 @@
 import { env } from "@wunderstack/shared";
 import { z } from "zod";
 
-import { ensureHttpKeepAlive } from "./http.js";
+import { ensureHttpKeepAlive, ProviderHttpError } from "./http.js";
 
 /**
  * The single seam for LLM calls. Everything else in the codebase talks to this,
@@ -252,7 +252,7 @@ export async function generateText(input: GenerateTextInput): Promise<GenerateTe
 
   if (!response.ok) {
     const detail = await response.text();
-    throw new Error(`Mistral request failed (${String(response.status)}): ${detail}`);
+    throw new ProviderHttpError("Mistral request", response.status, detail);
   }
 
   const payload: unknown = await response.json();
@@ -364,7 +364,7 @@ export async function* streamText(input: StreamTextInput): AsyncGenerator<Stream
 
   if (!response.ok) {
     const detail = await response.text();
-    throw new Error(`Mistral stream request failed (${String(response.status)}): ${detail}`);
+    throw new ProviderHttpError("Mistral stream request", response.status, detail);
   }
 
   if (!response.body) {

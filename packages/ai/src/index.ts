@@ -24,7 +24,7 @@ export {
   type EmbeddingResult,
 } from "./embeddings.js";
 
-export { ensureHttpKeepAlive } from "./http.js";
+export { ensureHttpKeepAlive, isRateLimited, ProviderHttpError } from "./http.js";
 
 export {
   rerankDocuments,
