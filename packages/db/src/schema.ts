@@ -137,6 +137,8 @@ export const interactionEvents = pgTable(
     question: text("question"),
     // Coarse theme metadata (roadmap signal). Null until a classifier exists (deferred, regel van drie).
     theme: text("theme"),
+    // Surface that produced the turn (playground | embed | mcp | api). Null for pre-channel events.
+    channel: text("channel"),
     // "up" | "down"; filled in by the feedback endpoint, matched on traceId. Null = no feedback given.
     feedback: text("feedback"),
   },
@@ -145,6 +147,7 @@ export const interactionEvents = pgTable(
     index("interaction_events_fund_idx").on(table.fund),
     index("interaction_events_session_idx").on(table.sessionId),
     index("interaction_events_trace_idx").on(table.traceId),
+    index("interaction_events_channel_idx").on(table.channel),
   ],
 );
 

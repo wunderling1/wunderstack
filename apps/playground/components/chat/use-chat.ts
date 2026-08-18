@@ -205,7 +205,13 @@ export function useChat(fund?: string) {
         const response = await fetch("/api/chat", {
           method: "POST",
           headers: runtimeApiHeaders(),
-          body: JSON.stringify({ question: trimmed, history, sessionId, ...(fund ? { fund } : {}) }),
+          body: JSON.stringify({
+            question: trimmed,
+            history,
+            sessionId,
+            channel: "playground",
+            ...(fund ? { fund } : {}),
+          }),
           signal: controller.signal,
         });
 

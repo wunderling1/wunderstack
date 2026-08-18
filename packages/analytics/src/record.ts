@@ -35,6 +35,7 @@ export async function recordInteractionEvent(
       citationCount: event.citationCount,
       question: event.question ?? null,
       theme: event.theme ?? null,
+      channel: event.channel ?? null,
     });
   return { recorded: true };
 }

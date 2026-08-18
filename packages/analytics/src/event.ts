@@ -1,3 +1,4 @@
+import { agentChannelSchema } from "@wunderstack/shared";
 import { z } from "zod";
 
 /**
@@ -30,6 +31,11 @@ export const interactionEventInputSchema = z.object({
   question: z.string().min(1).max(4000).nullish(),
   /** Coarse theme metadata; null until a classifier exists (deferred). */
   theme: z.string().min(1).max(200).nullish(),
+  /**
+   * Surface that produced this turn (playground | embed | mcp | api). Null for events recorded
+   * before the channel dimension existed (PLAN-mcp-server Fase 1a).
+   */
+  channel: agentChannelSchema.nullish(),
 });
 
 export type InteractionEventInput = z.input<typeof interactionEventInputSchema>;

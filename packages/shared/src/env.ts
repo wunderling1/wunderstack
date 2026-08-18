@@ -45,6 +45,23 @@ const envSchema = z.object({
   // Shared secret used to HMAC-verify inbound webhooks (see apps/demo/lib/webhook-auth.ts).
   // When unset the webhook rejects every request as unconfigured — a signed seam by default.
   WEBHOOK_SIGNING_SECRET: optional(z.string().min(1)),
+  // Shared secrets for the MCP server (POST /api/mcp). Dual-secret rotation: CURRENT is required
+  // when MCP is enabled; PREVIOUS stays valid during rotation (PLAN-mcp-server M5). When CURRENT
+  // is unset the MCP endpoint rejects every request as unconfigured.
+  MCP_SIGNING_SECRET: optional(z.string().min(1)),
+  MCP_SIGNING_SECRET_PREVIOUS: optional(z.string().min(1)),
+  // Bearer tokens for the MCP server. Hosted MCP clients (Copilot Studio, MCP Inspector,
+  // mcp-remote) can only send static headers, so they cannot compute the per-request HMAC above.
+  // A caller presenting `Authorization: Bearer <token>` is verified against these instead. Same
+  // dual-token rotation as the HMAC secrets. Minimum length guards against trivially guessable
+  // tokens, since a static bearer has no timestamp or replay protection.
+  MCP_BEARER_TOKEN: optional(z.string().min(32)),
+  MCP_BEARER_TOKEN_PREVIOUS: optional(z.string().min(32)),
+  // Optional Host allowlist for the MCP endpoint (DNS-rebinding guard), comma-separated.
+  // Example: MCP_ALLOWED_HOSTS=api.example.nl,localhost:3000. Unset = no Host check (dev).
+  MCP_ALLOWED_HOSTS: optional(z.string().min(1)),
+  // When truthy, register the sleep stub tool used to measure Copilot Studio host limits.
+  MCP_ENABLE_SLEEP_STUB: optional(z.enum(["1", "true", "0", "false"])),
   // Comma-separated allowlist of O&O fund keys the served chat API may answer for. When set, the
   // API authorizes the requested fund against this list and refuses the unscoped "all funds" query
   // (data-plane + corpus isolation, see security-audit finding #2). Required in production. Unset =

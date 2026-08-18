@@ -62,11 +62,13 @@ export async function OPTIONS(request: Request): Promise<Response> {
 export async function POST(request: Request): Promise<Response> {
   // Embed surface: validate the tenant-key (browser cross-origin) and derive the CORS allowlist.
   const auth = await resolveEmbedAuth(request);
-  if (!auth.ok) {
-    return Response.json({ error: auth.error }, { status: auth.status });
-  }
-  const allowlist = auth.config?.corsAllowlist ?? [];
+  const allowlist = auth.ok
+    ? (auth.config?.corsAllowlist ?? [])
+    : ((await getTenantConfig(getTenantId()).catch(() => null))?.corsAllowlist ?? []);
   const cors = corsHeaders(request, allowlist);
+  if (!auth.ok) {
+    return Response.json({ error: auth.error }, { status: auth.status, headers: cors });
+  }
 
   const limit = checkRateLimit(clientKey(request), RATE_LIMIT);
   if (!limit.ok) {
@@ -114,6 +116,8 @@ export async function POST(request: Request): Promise<Response> {
   // A client-supplied session id keeps one identity model across turns; fall back to a per-request
   // id so an event is never sessionless.
   const sessionId = parsed.data.sessionId ?? randomUUID();
+  // Clients self-report the surface (playground | embed); default to "api" for untagged callers.
+  const channel = parsed.data.channel ?? "api";
   const tenantId = getTenantId();
 
   // Global daily ceiling: a coarse backstop on the demo's total inference bill, counted only for
@@ -163,7 +167,12 @@ export async function POST(request: Request): Promise<Response> {
       const { sawError } = await pipeChatNdjsonStream({
         events: agent.answerStream(
           { question, fund, history },
-          { signal: workSignal, sessionId, ...(userId === undefined ? {} : { userId }) },
+          {
+            signal: workSignal,
+            sessionId,
+            channel,
+            ...(userId === undefined ? {} : { userId }),
+          },
         ),
         enqueue: (chunk) => controller.enqueue(chunk),
         encodeEvent: line,
@@ -199,6 +208,7 @@ export async function POST(request: Request): Promise<Response> {
             agentId: AGENT_ID,
             fund,
             sessionId,
+            channel,
             ...(userId === undefined ? {} : { userId }),
             ...(traceId === null ? {} : { traceId }),
             outcome,

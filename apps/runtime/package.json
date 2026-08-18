@@ -11,6 +11,7 @@
     "test:unit": "tsx --test 'lib/**/*.test.ts'"
   },
   "dependencies": {
+    "@modelcontextprotocol/server": "^2.0.0",
     "@wunderstack/agents": "workspace:*",
     "@wunderstack/analytics": "workspace:*",
     "@wunderstack/db": "workspace:*",

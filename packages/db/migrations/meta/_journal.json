@@ -71,6 +71,13 @@
       "when": 1784723722786,
       "tag": "0009_foamy_dorian_gray",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1785359348185,
+      "tag": "0010_interaction_events_channel",
+      "breakpoints": true
     }
   ]
 }

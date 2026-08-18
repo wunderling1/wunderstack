@@ -9,6 +9,9 @@ import { EmbedApp } from "./embed-app";
  * from the script tag's `data-*` (the stable snippet: script-src + key + agent); everything variable
  * is fetched at runtime from `GET /config`.
  *
+ * `data-mode="inline"` mounts into `[data-wunderstack-embed-slot]` as an always-open panel (marketing
+ * demo / dedicated fund page). Default is the launcher a fund pastes on an existing site.
+ *
  * The script element must be read synchronously at load time (document.currentScript), before the
  * async mount fires.
  */
@@ -16,10 +19,15 @@ const SCRIPT =
   (document.currentScript as HTMLScriptElement | null) ??
   document.querySelector<HTMLScriptElement>("script[data-wunderstack-embed]");
 
+const REMOUNT_EVENT = "wunderstack-embed:mount";
+
+type EmbedLayout = "launcher" | "inline";
+
 interface Snippet {
   endpoint: string;
   agentKey: string | null;
   agentId: string;
+  layout: EmbedLayout;
 }
 
 function readSnippet(): Snippet {
@@ -36,20 +44,36 @@ function readSnippet(): Snippet {
     endpoint: endpoint.replace(/\/$/, ""),
     agentKey: data.key ?? null,
     agentId: data.agent ?? "cao",
+    layout: data.mode === "inline" ? "inline" : "launcher",
   };
 }
 
 function mount(): void {
-  const { endpoint, agentKey, agentId } = readSnippet();
+  const { endpoint, agentKey, agentId, layout } = readSnippet();
   if (!endpoint) {
     console.error("[wunderstack-embed] no endpoint: set data-endpoint or load via the script src.");
     return;
   }
-  if (document.querySelector("[data-wunderstack-embed-root]")) return;
+
+  const existing = document.querySelector("[data-wunderstack-embed-root]");
+  if (existing) {
+    if (document.contains(existing)) return;
+    existing.remove();
+  }
+
+  const slot =
+    layout === "inline" ? document.querySelector("[data-wunderstack-embed-slot]") : null;
+  const parent = slot ?? document.body;
+  const inline = layout === "inline" && slot !== null;
 
   const host = document.createElement("div");
   host.setAttribute("data-wunderstack-embed-root", "");
-  document.body.appendChild(host);
+  if (inline) {
+    host.style.display = "block";
+    host.style.height = "100%";
+    host.style.width = "100%";
+  }
+  parent.appendChild(host);
 
   const shadow = host.attachShadow({ mode: "open" });
   const style = document.createElement("style");
@@ -57,14 +81,24 @@ function mount(): void {
   shadow.appendChild(style);
 
   const mountPoint = document.createElement("div");
+  if (inline) {
+    mountPoint.style.height = "100%";
+  }
   shadow.appendChild(mountPoint);
 
   createRoot(mountPoint).render(
     <StrictMode>
-      <EmbedApp endpoint={endpoint} agentKey={agentKey} agentId={agentId} />
+      <EmbedApp
+        endpoint={endpoint}
+        agentKey={agentKey}
+        agentId={agentId}
+        layout={inline ? "inline" : "launcher"}
+      />
     </StrictMode>,
   );
 }
+
+window.addEventListener(REMOUNT_EVENT, mount);
 
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", mount);

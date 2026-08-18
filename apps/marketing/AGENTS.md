@@ -14,8 +14,9 @@ a **content site**, not an app surface — no database, no auth, no agent/model 
   story is broader than what is wired today and must stay honest about live vs. roadmap.
 - **Live demo only for real agents.** Only entries with `status: "live"` (today: CAO) mount a real
   demo. That demo is the **Fase 4 embed** (`packages/embed`), loaded via the stable snippet against
-  tenant zero — no fork, no bespoke chat UI ("buildembed" decision). Everything else is a scripted
-  walkthrough.
+  tenant zero — no fork, no bespoke chat UI ("buildembed" decision). On the CAO detail page it uses
+  `data-mode="inline"` so the chat sits in the page; a fund's own site omits that and gets the
+  launcher. Everything else is a scripted walkthrough.
 
 ## Live demo config
 
@@ -26,7 +27,8 @@ The CAO detail page injects the embed snippet using:
 - `EMBED_PUBLIC_KEY` — the demo tenant's public key (safe in the snippet).
 
 For the cross-origin fetch to succeed, the runtime's **demo tenant CORS allowlist must include this
-marketing origin** (manage it in the dashboard embed console). Without both env vars the page shows a
+marketing origin** (manage it in the dashboard embed console). In local `NODE_ENV=development` the
+runtime already allowlists `http://localhost:3003`. Without both env vars the page shows a
 "not configured" note instead of a broken widget.
 
 ## Dev

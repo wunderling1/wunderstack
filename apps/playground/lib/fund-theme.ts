@@ -21,15 +21,8 @@ export interface FundTheme {
   starterCategories: StarterCategory[];
 }
 
-const DEFAULT_STARTER_CATEGORIES: StarterCategory[] = [
-  {
-    label: "Veelgestelde vragen",
-    questions: [
-      "Hoeveel vakantiedagen krijg ik bij een fulltime contract?",
-      "Welke opzegtermijnen staan er in de cao?",
-      "Hoe werken de loonschalen en functiegroepen?",
-    ],
-  },
+/** Topic categories that hold for every fund; the "Veelgestelde vragen" category is fund-specific. */
+const TOPIC_STARTER_CATEGORIES: StarterCategory[] = [
   {
     label: "Verlof",
     questions: [
@@ -64,6 +57,18 @@ const DEFAULT_STARTER_CATEGORIES: StarterCategory[] = [
   },
 ];
 
+const DEFAULT_STARTER_CATEGORIES: StarterCategory[] = [
+  {
+    label: "Veelgestelde vragen",
+    questions: [
+      "Hoeveel vakantiedagen krijg ik bij een fulltime contract?",
+      "Welke opzegtermijnen staan er in de cao?",
+      "Hoe werken de loonschalen en functiegroepen?",
+    ],
+  },
+  ...TOPIC_STARTER_CATEGORIES,
+];
+
 export const DEFAULT_THEME: FundTheme = {
   key: "default",
   logoText: "W",
@@ -84,6 +89,22 @@ const FUND_THEMES: Record<string, Partial<FundTheme>> = {
           "Hoe werkt de loonschaal voor mijn functiegroep?",
         ],
       },
+      ...TOPIC_STARTER_CATEGORIES,
+    ],
+  },
+  oomt: {
+    logoText: "OOMT",
+    label: "CAO-assistent — OOMT",
+    starterCategories: [
+      {
+        label: "Veelgestelde vragen",
+        questions: [
+          "Hoeveel vakantiedagen heb ik bij een fulltime contract?",
+          "Wat is mijn opzegtermijn?",
+          "Hoe werken de loonschalen en functiegroepen?",
+        ],
+      },
+      ...TOPIC_STARTER_CATEGORIES,
     ],
   },
 };

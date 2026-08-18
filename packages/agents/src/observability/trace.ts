@@ -30,6 +30,11 @@ export interface CaoTraceInput {
   userId?: string;
   /** Deployment environment (development | test | production) — surfaced as a Langfuse tag. */
   environment?: string;
+  /**
+   * Surface that produced this turn (playground | embed | mcp | api). Surfaced as a Langfuse tag so
+   * portal and MCP traffic can be separated (PLAN-mcp-server Fase 1a).
+   */
+  channel?: string;
 }
 
 export interface RetrievalHit {
@@ -136,17 +141,19 @@ export function startCaoTrace(mastra: Mastra, input: CaoTraceInput): CaoTrace {
         minScore: input.minScore,
       },
       // session_id + user_id give Langfuse the same identity model as the interaction event-log;
-      // fund + environment are the analytics dimensions we filter traces by.
+      // fund + environment + channel are the analytics dimensions we filter traces by.
       metadata: {
         ...(input.sessionId === undefined ? {} : { sessionId: input.sessionId }),
         ...(input.userId === undefined ? {} : { userId: input.userId }),
         ...(input.environment === undefined ? {} : { environment: input.environment }),
+        ...(input.channel === undefined ? {} : { channel: input.channel }),
         fund: input.fund ?? null,
       },
       tags: [
         "cao-agent",
         ...(input.fund ? [input.fund] : []),
         ...(input.environment ? [input.environment] : []),
+        ...(input.channel ? [input.channel] : []),
       ],
     });
   } catch {

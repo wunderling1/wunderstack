@@ -1,4 +1,4 @@
-import { citationSchema } from "@wunderstack/shared";
+import { citationSchema, agentChannelSchema } from "@wunderstack/shared";
 import { z } from "zod";
 
 /**
@@ -23,6 +23,11 @@ export const chatRequestSchema = z.object({
   sessionId: z.string().min(1).max(200).optional(),
   /** Pseudonymous end-user id; omitted for embed users (no identification in v1, AVG). */
   userId: z.string().min(1).max(200).optional(),
+  /**
+   * Surface that produced this turn. Clients self-report so playground and embed can be separated
+   * in Langfuse + analytics (PLAN-mcp-server Fase 1a). Unknown values are rejected.
+   */
+  channel: agentChannelSchema.optional(),
 });
 
 export type ChatRequest = z.infer<typeof chatRequestSchema>;

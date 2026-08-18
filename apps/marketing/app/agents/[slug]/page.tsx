@@ -70,10 +70,15 @@ export default async function AgentDetail({ params }: { params: Promise<{ slug: 
           {embed ? (
             <>
               <p className="text-text-muted">
-                De chatknop verschijnt rechtsonder. Dit is dezelfde insluitbare agent die een fonds op
-                zijn eigen site zet — hier gericht op de publieke demo (tenant zero).
+                Zelfde insluitbare agent die een fonds op zijn eigen site zet — hier als chatvenster
+                op de publieke demo (tenant zero).
               </p>
-              <EmbedWidget scriptSrc={embed.scriptSrc} agentKey={embed.agentKey} agentId={agent.slug} />
+              <EmbedWidget
+                scriptSrc={embed.scriptSrc}
+                agentKey={embed.agentKey}
+                agentId={agent.slug}
+                mode="inline"
+              />
             </>
           ) : (
             <Card className="p-5 text-sm text-text-muted">
