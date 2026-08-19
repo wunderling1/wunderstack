@@ -23,7 +23,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
 import { embed } from "@wunderstack/ai";
-import { chunks as chunksTable, closeDb, documents, eq, getDb } from "@wunderstack/db";
+import { and, chunks as chunksTable, closeDb, documents, eq, getDb } from "@wunderstack/db";
 import { EMBEDDING_CONFIG, EVAL_FIXTURE_FUND, env } from "@wunderstack/shared";
 import { z } from "zod";
 
@@ -111,7 +111,7 @@ async function main(): Promise<void> {
   const existing = await db
     .select({ contentHash: documents.contentHash })
     .from(documents)
-    .where(eq(documents.sourceUri, SOURCE_URI))
+    .where(and(eq(documents.sourceUri, SOURCE_URI), eq(documents.agentKey, "cao")))
     .limit(1);
 
   if (existing[0]?.contentHash === contentHash && !force) {
@@ -132,13 +132,14 @@ async function main(): Promise<void> {
       .insert(documents)
       .values({
         fund: EVAL_FIXTURE_FUND,
+        agentKey: "cao",
         title: "Golden eval fixtures",
         sourceUri: SOURCE_URI,
         version: contentHash.slice(0, 12),
         contentHash,
       })
       .onConflictDoUpdate({
-        target: documents.sourceUri,
+        target: [documents.agentKey, documents.sourceUri],
         set: {
           fund: EVAL_FIXTURE_FUND,
           title: "Golden eval fixtures",

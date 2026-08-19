@@ -184,6 +184,7 @@ export function passageToHit(passage: GoldenPassage): RetrievedChunk {
       title: passage.source,
       sourceUri: "",
       fund: "eval",
+      agentKey: "cao",
       version: GOLDEN_CORPUS_VERSION,
     },
     structure: {

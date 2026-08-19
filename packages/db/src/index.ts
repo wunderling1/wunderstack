@@ -3,11 +3,15 @@ export { getDb, getWriterDb, closeDb, type Database } from "./client.js";
 export {
   generateTenantKey,
   getTenantConfig,
+  getInstance,
+  getInstanceByPublicKey,
+  listInstances,
   listTenantConfigs,
   upsertTenantConfig,
   rotateTenantKey,
   type TenantConfigInput,
 } from "./tenant-config.js";
+export { getAgentConfig, parseAgentConfigData } from "./agent-config.js";
 
 // Re-export the query operators consumers need, so the ORM stays behind this seam
 // (no package/script imports drizzle-orm directly). Extend as new operators are needed.

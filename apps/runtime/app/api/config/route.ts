@@ -1,4 +1,3 @@
-import { getTenantConfig } from "@wunderstack/db";
 import {
   DEFAULT_ARTICLE_50_NOTICE,
   tenantPublicConfigSchema,
@@ -9,6 +8,7 @@ import { getTenantId } from "@wunderstack/tenant";
 import { corsHeaders, preflight } from "@/lib/cors";
 import { resolveEmbedAuth } from "@/lib/embed-auth";
 import { instanceFund } from "@/lib/fund-scope";
+import { tenantCorsAllowlist } from "@/lib/tenant-cors";
 
 /**
  * GET /api/config — the public config the embed fetches at boot (Fase 4). Serves this instance's
@@ -18,15 +18,14 @@ import { instanceFund } from "@/lib/fund-scope";
 export const runtime = "nodejs";
 
 export async function OPTIONS(request: Request): Promise<Response> {
-  const config = await getTenantConfig(getTenantId()).catch(() => null);
-  return preflight(request, config?.corsAllowlist ?? []);
+  return preflight(request, await tenantCorsAllowlist(getTenantId()));
 }
 
 export async function GET(request: Request): Promise<Response> {
   const auth = await resolveEmbedAuth(request);
   const allowlist = auth.ok
     ? (auth.config?.corsAllowlist ?? [])
-    : ((await getTenantConfig(getTenantId()).catch(() => null))?.corsAllowlist ?? []);
+    : await tenantCorsAllowlist(getTenantId());
   const cors = corsHeaders(request, allowlist);
   if (!auth.ok) {
     return Response.json({ error: auth.error }, { status: auth.status, headers: cors });
@@ -36,7 +35,7 @@ export async function GET(request: Request): Promise<Response> {
   const theme = tenantThemeSchema.parse(config?.theme ?? {});
   const texts = tenantTextsSchema.parse(config?.texts ?? {});
   const body = tenantPublicConfigSchema.parse({
-    agentId: config?.agentId ?? "cao",
+    agentId: config?.agentKey ?? "cao",
     theme,
     texts,
     article50: texts.article50 ?? DEFAULT_ARTICLE_50_NOTICE,

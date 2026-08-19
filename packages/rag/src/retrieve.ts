@@ -1,5 +1,5 @@
 import { embed } from "@wunderstack/ai";
-import { chunks, cosineDistance, documents, eq, getDb, sql } from "@wunderstack/db";
+import { chunks, cosineDistance, documents, and, eq, getDb, sql } from "@wunderstack/db";
 import { EMBEDDING_CONFIG } from "@wunderstack/shared";
 import { requireRerankConfig } from "@wunderstack/shared";
 import { z } from "zod";
@@ -28,8 +28,10 @@ export const retrieveInputSchema = z.object({
   candidateK: z.number().int().positive().max(50).optional(),
   /** How many chunks to keep after reranking (fed to assemble). Defaults to RERANK_CONFIG.topK (5). */
   topK: z.number().int().positive().max(50).optional(),
-  /** Restrict to a single O&O fund's CAO (control/data-plane key). Required on the agent path. */
+  /** Restrict to a single O&O fund (control/data-plane key). Required on the agent path. */
   fund: z.string().min(1),
+  /** Corpus agent key (e.g. cao | arbo). Required — no default; callers must scope explicitly. */
+  agentKey: z.string().min(1),
   /**
    * Minimum cosine similarity in [0,1] a chunk must reach to be kept. This is the seed of the
    * "say not found instead of hallucinating" guard the agent enforces in Fase 6; default 0
@@ -47,6 +49,7 @@ export interface RetrievedChunkSource {
   title: string;
   sourceUri: string;
   fund: string;
+  agentKey: string;
   version: string;
 }
 
@@ -113,7 +116,7 @@ export interface RetrievePhaseTimings {
 export async function retrieveValidatedTimed(
   input: ParsedRetrieveInput,
 ): Promise<{ chunks: RetrievedChunk[]; timings: RetrievePhaseTimings }> {
-  const { query, fund, minScore } = input;
+  const { query, fund, agentKey, minScore } = input;
   const config = requireRerankConfig();
   const candidateK = input.candidateK ?? config.candidateK;
 
@@ -140,12 +143,13 @@ export async function retrieveValidatedTimed(
       title: documents.title,
       sourceUri: documents.sourceUri,
       fund: documents.fund,
+      agentKey: documents.agentKey,
       version: documents.version,
       distance: sql<number>`${distance}`,
     })
     .from(chunks)
     .innerJoin(documents, eq(chunks.documentId, documents.id))
-    .where(eq(documents.fund, fund))
+    .where(and(eq(documents.fund, fund), eq(documents.agentKey, agentKey)))
     .orderBy(distance)
     .limit(candidateK);
   const searchMs = performance.now() - searchStart;
@@ -161,6 +165,7 @@ export async function retrieveValidatedTimed(
         title: row.title,
         sourceUri: row.sourceUri,
         fund: row.fund,
+        agentKey: row.agentKey,
         version: row.version,
       },
       structure: {

@@ -8,6 +8,11 @@ export {
 } from "./config/embedding.js";
 
 export {
+  agentConfigDataSchema,
+  type AgentConfigData,
+} from "./config/agent-config.js";
+
+export {
   RERANK_CONFIG,
   requireRerankConfig,
   type RerankConfig,
@@ -33,6 +38,17 @@ export {
   type Citation,
   type ModelCitation,
 } from "./contracts/citation.js";
+
+export {
+  chatHistoryMessageSchema,
+  chatRequestSchema,
+  chatStatusPhases,
+  chatEventSchema,
+  type ChatRequest,
+  type ChatCitation,
+  type ChatStatusPhase,
+  type ChatEvent,
+} from "./contracts/chat.js";
 
 export {
   agentChannels,

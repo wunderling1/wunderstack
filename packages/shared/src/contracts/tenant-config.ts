@@ -38,6 +38,8 @@ export type StarterCategory = z.infer<typeof starterCategorySchema>;
 export const tenantTextsSchema = z
   .object({
     tagline: z.string().max(200).optional(),
+    /** Empty-state supporting sentence under the tagline. */
+    intro: z.string().max(400).optional(),
     /** Overrides the default Article 50 transparency notice. */
     article50: z.string().max(500).optional(),
     /** Flat starter list (legacy). Used only when `starterCategories` is absent. */
@@ -64,6 +66,15 @@ export const tenantPublicConfigSchema = z.object({
   article50: z.string().min(1),
   /** Concrete fund this instance serves. The embed sends it on chat (no fund selector). */
   fund: z.string().min(1),
+  /** Dutch labels for retrieval progress phases (from agent_config or agent defaults). */
+  statusLabels: z
+    .object({
+      searching: z.string().min(1).max(80),
+      retrieved: z.string().min(1).max(80),
+      generating: z.string().min(1).max(80),
+    })
+    .strict()
+    .optional(),
 });
 export type TenantPublicConfig = z.infer<typeof tenantPublicConfigSchema>;
 

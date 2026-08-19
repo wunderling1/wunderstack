@@ -11,7 +11,7 @@ async function main(): Promise<void> {
   const fund = process.argv[3] ?? "demo";
   console.log(`Retrieving context for (fund=${fund}): "${question}"\n`);
 
-  const result = await retrieveContext({ query: question, fund, topK: 5 });
+  const result = await retrieveContext({ query: question, fund, agentKey: "cao", topK: 5 });
 
   console.log(`Chunks (${String(result.chunks.length)}):`);
   result.chunks.forEach((hit, index) => {

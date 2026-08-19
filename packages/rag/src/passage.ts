@@ -1,14 +1,24 @@
 import { and, asc, chunks, documents, eq, getDb } from "@wunderstack/db";
 import { z } from "zod";
 
-/** Distinct fund keys present in the corpus (used by the corpus-isolation eval gate). */
-export async function listFunds(): Promise<string[]> {
+export interface CorpusKey {
+  fund: string;
+  agentKey: string;
+}
+
+/** Distinct (fund, agent_key) pairs present in the corpus (used by the isolation eval gate). */
+export async function listCorpora(): Promise<CorpusKey[]> {
   const db = getDb();
   const rows = await db
-    .selectDistinct({ fund: documents.fund })
+    .selectDistinct({ fund: documents.fund, agentKey: documents.agentKey })
     .from(documents)
-    .orderBy(asc(documents.fund));
-  return rows.map((row) => row.fund);
+    .orderBy(asc(documents.fund), asc(documents.agentKey));
+  return rows;
+}
+
+/** Distinct funds present in the corpus (back-compat for fund-scoped gates). */
+export async function listFunds(): Promise<string[]> {
+  return [...new Set((await listCorpora()).map((corpus) => corpus.fund))];
 }
 
 /**
@@ -16,14 +26,16 @@ export async function listFunds(): Promise<string[]> {
  *
  * Before structure-aware article units are complete (Fase 10), we approximate the parent article by
  * merging the neighbouring chunks of the SAME document that share the citation's article — or, when
- * the chunk has no article, a small ordinal window around it. Every query is scoped by `fund` for
- * corpus isolation (one session = one corpus), matching the retrieval seam.
+ * the chunk has no article, a small ordinal window around it. Every query is scoped by `fund` and
+ * `agentKey` for corpus isolation (one session = one corpus), matching the retrieval seam.
  */
 
 export const passageInputSchema = z.object({
   chunkId: z.string().uuid(),
   /** Fund key — required for corpus isolation (never fetch across funds). */
   fund: z.string().min(1),
+  /** Corpus agent key — required; no default. */
+  agentKey: z.string().min(1),
 });
 
 export type PassageInput = z.input<typeof passageInputSchema>;
@@ -39,6 +51,7 @@ export interface PassageResult {
   title: string;
   sourceUri: string;
   fund: string;
+  agentKey: string;
   version: string;
 }
 
@@ -46,8 +59,9 @@ export interface PassageResult {
 const ORDINAL_WINDOW = 2;
 
 export async function fetchParentPassage(input: PassageInput): Promise<PassageResult | null> {
-  const { chunkId, fund } = passageInputSchema.parse(input);
+  const { chunkId, fund, agentKey } = passageInputSchema.parse(input);
   const db = getDb();
+  const corpusScope = and(eq(documents.fund, fund), eq(documents.agentKey, agentKey));
 
   const anchorRows = await db
     .select({
@@ -59,11 +73,12 @@ export async function fetchParentPassage(input: PassageInput): Promise<PassageRe
       title: documents.title,
       sourceUri: documents.sourceUri,
       fund: documents.fund,
+      agentKey: documents.agentKey,
       version: documents.version,
     })
     .from(chunks)
     .innerJoin(documents, eq(chunks.documentId, documents.id))
-    .where(and(eq(chunks.id, chunkId), eq(documents.fund, fund)))
+    .where(and(eq(chunks.id, chunkId), corpusScope))
     .limit(1);
 
   const anchor = anchorRows[0];
@@ -78,6 +93,7 @@ export async function fetchParentPassage(input: PassageInput): Promise<PassageRe
     title: anchor.title,
     sourceUri: anchor.sourceUri,
     fund: anchor.fund,
+    agentKey: anchor.agentKey,
     version: anchor.version,
   };
 

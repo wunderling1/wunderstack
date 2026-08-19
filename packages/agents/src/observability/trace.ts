@@ -19,6 +19,8 @@ import type { Span } from "@mastra/core/observability";
  */
 
 export interface CaoTraceInput {
+  /** Catalog agent id (e.g. cao | arbo) — surfaced as Langfuse span name and tag. */
+  agentKey?: string;
   question: string;
   retrievalQuery?: string;
   fund: string | undefined;
@@ -127,12 +129,14 @@ const NOOP_TRACE: CaoTrace = {
  * configured or if span creation fails, so callers never need to null-check.
  */
 export function startCaoTrace(mastra: Mastra, input: CaoTraceInput): CaoTrace {
+  const agentKey = input.agentKey ?? "cao";
+  const agentTag = `${agentKey}-agent`;
   let root: Span<SpanType.AGENT_RUN> | undefined;
   try {
     const instance = mastra.observability.getDefaultInstance();
     root = instance?.startSpan({
       type: SpanType.AGENT_RUN,
-      name: "cao-agent",
+      name: agentTag,
       input: {
         question: input.question,
         retrievalQuery: input.retrievalQuery ?? input.question,
@@ -150,7 +154,7 @@ export function startCaoTrace(mastra: Mastra, input: CaoTraceInput): CaoTrace {
         fund: input.fund ?? null,
       },
       tags: [
-        "cao-agent",
+        agentTag,
         ...(input.fund ? [input.fund] : []),
         ...(input.environment ? [input.environment] : []),
         ...(input.channel ? [input.channel] : []),

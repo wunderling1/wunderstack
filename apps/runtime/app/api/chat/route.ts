@@ -1,9 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { recordInteractionEvent, type InteractionOutcome } from "@wunderstack/analytics";
-import { getTenantConfig } from "@wunderstack/db";
 import { getTenantId } from "@wunderstack/tenant";
 import { env } from "@wunderstack/shared";
-import { getCaoAgent } from "@/lib/agent";
+import { getAgentById, resolveAgentIdFromConfig } from "@/lib/agent";
 import {
   createChatWorkSignal,
   DEFAULT_CHAT_HEARTBEAT_MS,
@@ -15,12 +14,13 @@ import { resolveEmbedAuth } from "@/lib/embed-auth";
 import { resolveFundScope } from "@/lib/fund-scope";
 import { readBodyBounded } from "@/lib/http";
 import { acquireSlot, checkDailyCap, checkRateLimit, clientKey, releaseSlot } from "@/lib/rate-limit";
+import { tenantCorsAllowlist } from "@/lib/tenant-cors";
 import { chatEventSchema, chatRequestSchema, type ChatEvent } from "./contract";
 
 /**
  * POST /api/chat — the runtime's chat entrypoint. A thin controller (see 200-architecture.mdc):
- * validate input (Zod) → delegate to the CAO-agent seam → stream events back as NDJSON. No
- * retrieval/agent/model logic lives here.
+ * validate input (Zod) → resolve agent from tenant config → delegate to the agent seam → stream NDJSON.
+ * Retrieval/agent/model logic does not live here.
  *
  * Because it is public and each call costs an embedding + an LLM generation, the controller also
  * enforces the perimeter controls the security audit requires: per-client rate limiting and a
@@ -38,7 +38,6 @@ import { chatEventSchema, chatRequestSchema, type ChatEvent } from "./contract";
 // The agent uses the Node runtime (postgres driver, Mastra); not the edge runtime.
 export const runtime = "nodejs";
 
-const AGENT_ID = "cao";
 const RATE_LIMIT = { windowMs: 60_000, max: 20 };
 /** Per-tenant-key ceiling (a fund's whole embed audience shares this), on top of the per-IP limit. */
 const KEY_RATE_LIMIT = { windowMs: 60_000, max: 120 };
@@ -55,8 +54,7 @@ function line(event: ChatEvent): Uint8Array {
 }
 
 export async function OPTIONS(request: Request): Promise<Response> {
-  const config = await getTenantConfig(getTenantId()).catch(() => null);
-  return preflight(request, config?.corsAllowlist ?? []);
+  return preflight(request, await tenantCorsAllowlist(getTenantId()));
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -64,7 +62,7 @@ export async function POST(request: Request): Promise<Response> {
   const auth = await resolveEmbedAuth(request);
   const allowlist = auth.ok
     ? (auth.config?.corsAllowlist ?? [])
-    : ((await getTenantConfig(getTenantId()).catch(() => null))?.corsAllowlist ?? []);
+    : await tenantCorsAllowlist(getTenantId());
   const cors = corsHeaders(request, allowlist);
   if (!auth.ok) {
     return Response.json({ error: auth.error }, { status: auth.status, headers: cors });
@@ -110,7 +108,14 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: scope.error }, { status: scope.status, headers: cors });
   }
 
-  const agent = getCaoAgent();
+  const agentId = resolveAgentIdFromConfig(auth.config);
+  let agent;
+  try {
+    agent = getAgentById(agentId);
+  } catch {
+    return Response.json({ error: "unknown_agent" }, { status: 400, headers: cors });
+  }
+
   const { question, history, userId } = parsed.data;
   const { fund } = scope;
   // A client-supplied session id keeps one identity model across turns; fall back to a per-request
@@ -205,7 +210,7 @@ export async function POST(request: Request): Promise<Response> {
         try {
           await recordInteractionEvent({
             tenantId,
-            agentId: AGENT_ID,
+            agentId,
             fund,
             sessionId,
             channel,
