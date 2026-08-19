@@ -116,7 +116,8 @@ describe("check, end to end over real files", () => {
   it("reads a pre-arbo ledger line (no agentKey) as cao, not as a reject", async () => {
     const dir = await workspace();
     const ledgerPath = join(dir, "g3-fund.jsonl");
-    const { agentKey: _ignored, ...legacy } = passedRecord();
+    const legacy: Record<string, unknown> = { ...passedRecord() };
+    delete legacy.agentKey;
     await writeFile(ledgerPath, `${JSON.stringify(legacy)}\n`, "utf8");
 
     const { records, rejected } = await loadLedger(ledgerPath);
