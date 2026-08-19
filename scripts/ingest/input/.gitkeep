@@ -1,3 +1,4 @@
-# Drop CAO source files here (.pdf, .txt, .md) and run:
-#   pnpm --filter @wunderstack/ingest ingest --fund <fund> --version <v>
-# This directory is the default ingestion source. A runnable example lives in ../sample.
+# Drop CAO / arbocatalogus source files here (.pdf, .txt, .md) and run:
+#   pnpm --filter @wunderstack/ingest ingest -- --fund <fund> --agent <key> --version <v>
+# This directory is the default ingestion source.
+# OOMT arbocatalogus: arbo_catalogus_oomt.pdf  (--fund oomt --agent arbo)

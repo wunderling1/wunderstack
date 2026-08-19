@@ -5,6 +5,7 @@
 // (see .cursor/rules/500-agents.mdc). Implemented in Phase 6 (see docs/plans/PLAN.md).
 
 export { createCaoAgent } from "./cao/agent.js";
+export { createArboAgent } from "./arbo/agent.js";
 
 export {
   agentDescriptorSchema,
@@ -26,9 +27,11 @@ export {
 
 export {
   caoQuestionSchema,
+  arboQuestionSchema,
   caoAnswerSchema,
   caoCitationSchema,
   caoUsageSchema,
+  type GroundedAgent,
   type CaoAgent,
   type CaoAnswerOptions,
   type CaoQuestion,

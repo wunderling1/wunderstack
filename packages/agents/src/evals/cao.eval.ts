@@ -40,7 +40,7 @@
  */
 
 import { DEFAULT_LLM_MODEL, embed, generateText, isRateLimited } from "@wunderstack/ai";
-import { closeDb, listFunds, rerank, retrieveContext, assemble, type RetrievedChunk } from "@wunderstack/rag";
+import { closeDb, rerank, retrieveContext, assemble, type RetrievedChunk } from "@wunderstack/rag";
 import {
   env,
   EVAL_FIXTURE_FUND,
@@ -53,7 +53,7 @@ import { detectClarification } from "../cao/clarify.js";
 import { condenseQuery, isElliptical, retrievalQueriesForFollowUp } from "../cao/condense.js";
 import { generateAnswerWithRepair } from "../cao/generate-answer.js";
 import { verifyAndBuild } from "../cao/agent.js";
-import { retrievalInputSchema, type RetrievalOutput } from "../cao/tools.js";
+import { type RetrievalOutput } from "../cao/tools.js";
 import { caoQuestionSchema } from "../types.js";
 import { CAO_SYSTEM_INSTRUCTIONS, NOT_FOUND_MESSAGE, buildAnswerPrompt } from "../cao/prompt.js";
 import {
@@ -80,6 +80,8 @@ import {
 import { ANSWER_THRESHOLDS, MULTI_TURN_SERVE_THRESHOLDS, answerFloorFailures } from "./answer-floors.js";
 import { acquireEvalLock, EvalAlreadyRunningError } from "./eval-lock.js";
 import { appendFundRecords, fundRecordsFromReport, resolveCommitSha } from "./fund-ledger.js";
+import { corpusIsolationContractChecks, corpusIsolationLiveChecks } from "./corpus-isolation.js";
+import { createEvalHarness, type EvalCheck as Check, type GateGroup, type GateRunResult } from "./harness.js";
 import { GATE_SPECS, type GateId, type GateRequirement, type GateSpec } from "./gates.js";
 import {
   aggregateScores,
@@ -135,6 +137,17 @@ type RetrievalThresholds = {
  */
 const REQUIRE_DB = env.EVAL_REQUIRE_DB === "1" || env.EVAL_REQUIRE_DB === "true";
 
+const {
+  gateResults,
+  pushGate,
+  pushUnavailable,
+  credentialsAvailable,
+  requirementLabel,
+} = createEvalHarness({ requireAll: REQUIRE_ALL, requireDb: REQUIRE_DB });
+
+/** Corpus agent key for eval retrieval — legacy CAO-only gates default here; fund sets carry their own. */
+const EVAL_AGENT_KEY = "cao";
+
 /**
  * The exact request defaults the production chat path uses, read straight from the agent contract
  * (caoQuestionSchema). Gate B-integration passes these to `retrieveContext` so it measures what
@@ -186,17 +199,10 @@ const RETRIEVAL_THRESHOLDS = {
   mrr: 0.88,
 } as const;
 
-interface Check {
-  name: string;
-  ok: boolean;
-  detail?: string;
-}
-
 /**
  * Run accumulators for the E9 artefact. Filled as gates execute; serialized once at the end of
  * main() (also on failure). Module-level because the eval is a single-run process — no reuse.
  */
-const gateResults: GateReport[] = [];
 let retrievalReport: RetrievalReport | null = null;
 let retrievalIntegrationReport: RetrievalIntegrationReport | null = null;
 let answerReport: AnswerReport | null = null;
@@ -702,6 +708,40 @@ function chunkMatchesCase(chunk: RetrievedChunk, testCase: ExpectedStructure): b
   return true;
 }
 
+function chunkMatchesFundCase(chunk: RetrievedChunk, testCase: GoldenFundCase, agentKey: string): boolean {
+  if (agentKey === "arbo" && testCase.expectedChapter) {
+    const chapter =
+      chunk.structure.chapter ??
+      (typeof chunk.metadata.chapter === "string" ? chunk.metadata.chapter : null);
+    if (!chapter) return false;
+    return normalizeRef(chapter) === normalizeRef(testCase.expectedChapter);
+  }
+  return chunkMatchesCase(chunk, testCase);
+}
+
+function scoreFundIntegrationRecall(
+  rankedChunks: RetrievedChunk[][],
+  queries: GoldenFundCase[],
+  agentKey: string,
+): RecallMetrics {
+  const recallHits: Record<number, number> = {};
+  for (const k of K_VALUES) recallHits[k] = 0;
+  let reciprocalRankSum = 0;
+
+  queries.forEach((query, queryIndex) => {
+    const ranked = rankedChunks[queryIndex] ?? [];
+    const rank = ranked.findIndex((chunk) => chunkMatchesFundCase(chunk, query, agentKey)) + 1;
+    if (rank > 0) {
+      reciprocalRankSum += 1 / rank;
+      for (const k of K_VALUES) if (rank <= k) recallHits[k] = (recallHits[k] ?? 0) + 1;
+    }
+  });
+
+  const recallAtK: Record<number, number> = {};
+  for (const k of K_VALUES) recallAtK[k] = (recallHits[k] ?? 0) / queries.length;
+  return { recallAtK, mrr: reciprocalRankSum / queries.length };
+}
+
 function scoreIntegrationRecall(rankedChunks: RetrievedChunk[][], queries: ExpectedStructure[]): RecallMetrics {
   const recallHits: Record<number, number> = {};
   for (const k of K_VALUES) recallHits[k] = 0;
@@ -741,7 +781,7 @@ async function retrievalIntegrationChecks(): Promise<Check[]> {
     const result = await retrieveContext({
       query: testCase.question,
       fund: EVAL_FIXTURE_FUND,
-      agentKey: "cao",
+      agentKey: EVAL_AGENT_KEY,
       topK: PRODUCTION_DEFAULTS.topK,
       minScore: PRODUCTION_DEFAULTS.minScore,
     });
@@ -754,7 +794,7 @@ async function retrievalIntegrationChecks(): Promise<Check[]> {
     const result = await retrieveContext({
       query: probe,
       fund: EVAL_FIXTURE_FUND,
-      agentKey: "cao",
+      agentKey: EVAL_AGENT_KEY,
       topK: PRODUCTION_DEFAULTS.topK,
       minScore: PRODUCTION_DEFAULTS.minScore,
     });
@@ -818,6 +858,7 @@ async function retrievalIntegrationChecks(): Promise<Check[]> {
  * topK/minScore.
  */
 async function fundLayerChecks(set: GoldenFundSet): Promise<Check[]> {
+  const agentKey = set.agentKey;
   const answerable = set.cases.filter((testCase) => testCase.category !== "refusal");
   const nearMiss = set.cases.filter((testCase) => testCase.category === "refusal");
 
@@ -827,20 +868,20 @@ async function fundLayerChecks(set: GoldenFundSet): Promise<Check[]> {
     const result = await retrieveContext({
       query,
       fund: set.fund,
-      agentKey: "cao",
+      agentKey,
       topK: PRODUCTION_DEFAULTS.topK,
       minScore: PRODUCTION_DEFAULTS.minScore,
     });
     rankedChunks.push(result.chunks);
   }
-  const metrics = scoreIntegrationRecall(rankedChunks, answerable);
+  const metrics = scoreFundIntegrationRecall(rankedChunks, answerable, agentKey);
 
   let emptyProbes = 0;
   for (const query of MIN_SCORE_PROBES) {
     const result = await retrieveContext({
       query,
       fund: set.fund,
-      agentKey: "cao",
+      agentKey,
       topK: PRODUCTION_DEFAULTS.topK,
       minScore: PRODUCTION_DEFAULTS.minScore,
     });
@@ -850,7 +891,7 @@ async function fundLayerChecks(set: GoldenFundSet): Promise<Check[]> {
   const requiredEmpty = MIN_SCORE_GUARD_REQUIRED;
 
   console.log(
-    `\nGate F — fund "${set.key}" correctness on the REAL pipeline, fund "${set.fund}", ` +
+    `\nGate F — fund "${set.key}" correctness on the REAL pipeline, fund "${set.fund}", agent "${agentKey}", ` +
       `corpus v${set.corpusVersion}, topK=${String(PRODUCTION_DEFAULTS.topK)}, ` +
       `minScore=${String(PRODUCTION_DEFAULTS.minScore)}, ${String(answerable.length)} queries:`,
   );
@@ -868,6 +909,7 @@ async function fundLayerChecks(set: GoldenFundSet): Promise<Check[]> {
   fundLayerReports.push({
     key: set.key,
     fund: set.fund,
+    agentKey,
     corpusVersion: set.corpusVersion,
     fixtureHash: set.fixtureHash,
     answerableQueries: answerable.length,
@@ -1287,154 +1329,6 @@ async function answerQualityChecks(): Promise<Check[]> {
   }
 
   return answerLevelChecks(aggregate);
-}
-
-/**
- * Corpus-isolation gate (Fase B/E): one session = one corpus, enforced at the seam. Two layers:
- *   - contract (always runs): the retrieval seam REQUIRES a fund; an unscoped input must be rejected,
- *     so no code path can ever run an all-funds query;
- *   - integration (needs DATABASE_URL + SCALEWAY_API_KEY): for every fund in the corpus, a broad
- *     query returns ONLY chunks from that fund — cross-fund leakage fails the gate.
- */
-function corpusIsolationContractChecks(): Check[] {
-  const unscoped = retrievalInputSchema.safeParse({ query: "vakantiedagen" });
-  const scoped = retrievalInputSchema.safeParse({ query: "vakantiedagen", fund: "demo" });
-  return [
-    {
-      name: "corpus-isolation: retrieval seam rejects an unscoped (no-fund) query",
-      ok: !unscoped.success,
-    },
-    {
-      name: "corpus-isolation: retrieval seam accepts a fund-scoped query",
-      ok: scoped.success,
-    },
-  ];
-}
-
-async function corpusIsolationLiveChecks(): Promise<Check[]> {
-  const funds = await listFunds();
-  if (funds.length === 0) {
-    return [{ name: "corpus-isolation: corpus has at least one fund to test", ok: false, detail: "no funds ingested" }];
-  }
-
-  const probeQuery = "vakantie loon toeslag pensioen arbeidsduur";
-  const checks: Check[] = [];
-  for (const fund of funds) {
-    const result = await retrieveContext({ query: probeQuery, fund, agentKey: "cao", topK: 20, minScore: 0 });
-    const leaked = result.chunks.filter((chunk) => chunk.source.fund !== fund);
-    checks.push({
-      name: `corpus-isolation: fund "${fund}" returns only its own chunks`,
-      ok: leaked.length === 0,
-      detail:
-        leaked.length === 0
-          ? `${String(result.chunks.length)} chunks, 0 cross-fund`
-          : `${String(leaked.length)} chunk(s) leaked from ${[...new Set(leaked.map((c) => c.source.fund))].join(", ")}`,
-    });
-  }
-
-  console.log(
-    `\nCorpus isolation — probed ${String(funds.length)} fund(s): ${funds.join(", ")} with a broad query.`,
-  );
-  return checks;
-}
-
-/** A gate whose checks all ran, optionally tagged with a suffix (per-fund sets emit one each). */
-interface GateGroup {
-  suffix: string;
-  checks: Check[];
-}
-/** What a gate's run function yields: a flat check list, or (perFundSet) one group per fund set. */
-type GateRunResult = Check[] | GateGroup[];
-
-/** Record one gate report to the console + artefact with a three-valued status; returns run-pass. */
-function pushGate(spec: GateSpec, checks: Check[], suffix?: string): boolean {
-  const id = suffix === undefined ? spec.id : `${spec.id} [${suffix}]`;
-  console.log(`\n${spec.layer} · ${id} — ${spec.title}:`);
-  for (const check of checks) {
-    console.log(`  [${check.ok ? "PASS" : "FAIL"}] ${check.name}${check.detail ? ` — ${check.detail}` : ""}`);
-  }
-  const passed = checks.every((check) => check.ok);
-  gateResults.push({
-    id,
-    layer: spec.layer,
-    title: spec.title,
-    status: passed ? "passed" : "failed",
-    checks: checks.map((check) => ({
-      name: check.name,
-      ok: check.ok,
-      ...(check.detail === undefined ? {} : { detail: check.detail }),
-    })),
-  });
-  return passed;
-}
-
-/**
- * A gate that cannot run because its credentials/DB are missing. On the protected paths (REQUIRE_ALL
- * for key gates, REQUIRE_DB for the nightly DB gates) this is a FAIL — skipped != passed. Otherwise
- * it records the first-class `skipped` status (never `passed`) so a dev/fork run stays cheap without
- * a skip ever masquerading as a pass in the artefact.
- */
-function pushUnavailable(spec: GateSpec, requirement: string): boolean {
-  const required = requiredWhenMissing(spec.requires);
-  if (required) {
-    console.log(`\n${spec.layer} · ${spec.id}: REQUIRED-BUT-UNAVAILABLE — ${requirement} (required on this job).`);
-    gateResults.push({
-      id: spec.id,
-      layer: spec.layer,
-      title: spec.title,
-      status: "failed",
-      checks: [{ name: `REQUIRED-BUT-UNAVAILABLE: ${requirement}`, ok: false }],
-    });
-    return false;
-  }
-  console.log(`\n${spec.layer} · ${spec.id}: SKIPPED (${requirement}). Set the credential(s) to run this gate; required on merge to main.`);
-  gateResults.push({
-    id: spec.id,
-    layer: spec.layer,
-    title: spec.title,
-    status: "skipped",
-    checks: [{ name: `SKIPPED: ${requirement}`, ok: true }],
-  });
-  return true;
-}
-
-/** Are the credentials/DB a gate needs present in this environment? */
-function credentialsAvailable(requires: GateRequirement): boolean {
-  switch (requires) {
-    case "none":
-      return true;
-    case "scaleway":
-      return Boolean(env.SCALEWAY_API_KEY);
-    case "scaleway+mistral":
-      return Boolean(env.SCALEWAY_API_KEY && env.MISTRAL_API_KEY);
-    case "db+scaleway":
-      return Boolean(env.DATABASE_URL && env.SCALEWAY_API_KEY);
-    case "db+scaleway+mistral":
-      return Boolean(env.DATABASE_URL && env.SCALEWAY_API_KEY && env.MISTRAL_API_KEY);
-  }
-}
-
-/** When a prerequisite is missing, does that FAIL the run (protected path) or merely SKIP the gate? */
-function requiredWhenMissing(requires: GateRequirement): boolean {
-  if (requires === "none") return false;
-  // DB-backed gates are required only on the nightly job (REQUIRE_DB); key gates on same-repo/merge/push (REQUIRE_ALL).
-  return requires.startsWith("db") ? REQUIRE_DB : REQUIRE_ALL;
-}
-
-/** Human-readable "what is missing" message for the skipped/failed artefact line. */
-function requirementLabel(requires: GateRequirement): string {
-  switch (requires) {
-    case "none":
-      return "";
-    case "scaleway":
-      return "SCALEWAY_API_KEY not set";
-    case "scaleway+mistral":
-      return "SCALEWAY_API_KEY and MISTRAL_API_KEY required";
-    case "db+scaleway":
-      return "DATABASE_URL and SCALEWAY_API_KEY required";
-    case "db+scaleway+mistral":
-      return "DATABASE_URL, SCALEWAY_API_KEY and MISTRAL_API_KEY required";
-  }
 }
 
 /**

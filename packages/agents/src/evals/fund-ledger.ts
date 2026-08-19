@@ -47,6 +47,8 @@ export interface FundGateRecord {
   setKey: string;
   /** Database fund key the set was scored against, e.g. "elektronische-detailhandel". */
   fund: string;
+  /** Catalog agent key for this fund set, e.g. "cao" | "arbo". */
+  agentKey: string;
   corpusVersion: string;
   status: GateStatus;
   /** Names of the checks that did not pass — the reason a NO-GO can be explained without the artefact. */
@@ -89,6 +91,7 @@ export function fundRecordsFromReport(report: LedgerSource): FundGateRecord[] {
       kind: "g3-fund" as const,
       setKey: fund.key,
       fund: fund.fund,
+      agentKey: fund.agentKey,
       corpusVersion: fund.corpusVersion,
       // A fund layer without a gate cannot be called passed; it is recorded as unrun so the reader
       // refuses it instead of silently dropping the fund from the ledger.

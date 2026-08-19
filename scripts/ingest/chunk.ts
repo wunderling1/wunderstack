@@ -122,7 +122,8 @@ function overlapTail(text: string, overlap: number): string {
   return spaceIndex > 0 ? slice.slice(spaceIndex + 1) : slice;
 }
 
-function packSection(body: string, target: number, overlap: number): string[] {
+/** Pack prose into size-bounded chunks with overlap (shared by CAO and arbo chunkers). */
+export function packSection(body: string, target: number, overlap: number): string[] {
   const pieces = splitParagraphs(body).flatMap((paragraph) =>
     splitLongParagraph(paragraph, target),
   );

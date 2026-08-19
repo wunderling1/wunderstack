@@ -96,7 +96,6 @@ export { assemble, type AssembledContext, type RetrievalTimings } from "./assemb
 export {
   fetchParentPassage,
   listCorpora,
-  listFunds,
   passageInputSchema,
   type CorpusKey,
   type PassageInput,

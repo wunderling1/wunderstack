@@ -6,6 +6,7 @@
   "scripts": {
     "ingest": "tsx --env-file-if-exists=../../.env run.ts",
     "ingest:fixtures": "tsx --env-file-if-exists=../../.env fixtures.ts",
+    "seed:oomt": "tsx --env-file-if-exists=../../.env oomt-instances.ts",
     "report": "tsx --env-file-if-exists=../../.env report.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",

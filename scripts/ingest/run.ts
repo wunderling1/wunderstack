@@ -26,6 +26,7 @@ import { and, chunks as chunksTable, closeDb, documents, eq, getDb, inArray, sql
 import { EMBEDDING_CONFIG, env } from "@wunderstack/shared";
 
 import { chunk, type Chunk } from "./chunk.js";
+import { chunkArbo } from "./chunk-arbo.js";
 import { describeFailure } from "./diagnostics.js";
 import { parseFile, SUPPORTED_EXTENSIONS } from "./parse.js";
 import { reportAfterIngest } from "./report.js";
@@ -61,7 +62,7 @@ function parseCli(): CliOptions {
     },
   });
   if (!values.agent) {
-    throw new Error("--agent <key> is required (e.g. cao).");
+    throw new Error("--agent <key> is required (e.g. cao, arbo).");
   }
   return {
     inputPath: positionals[0] ?? DEFAULT_INPUT_DIR,
@@ -159,7 +160,8 @@ function summarize(pieces: Chunk[]): Pick<FileOutcome, "tableChunks" | "structur
 
 function chunkForAgent(agentKey: string, text: string, options: ReturnType<typeof chunkOptionsFromEnv>): Chunk[] {
   if (agentKey === "cao") return chunk(text, options);
-  throw new Error(`Unknown ingest agent "${agentKey}" — expected cao.`);
+  if (agentKey === "arbo") return chunkArbo(text, options);
+  throw new Error(`Unknown ingest agent "${agentKey}" — expected cao or arbo.`);
 }
 
 async function ingestFile(options: CliOptions, filePath: string): Promise<FileOutcome> {

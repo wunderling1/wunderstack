@@ -43,6 +43,16 @@ export const caoQuestionSchema = z.object({
 
 export type CaoQuestion = z.input<typeof caoQuestionSchema>;
 
+/**
+ * Arbo-agent question shape — same seam as CAO with a separate minScore default calibrated on the
+ * arbocatalogus corpus (fallback; per-fund value lives in agent_config).
+ */
+export const arboQuestionSchema = caoQuestionSchema.extend({
+  minScore: z.number().min(0).max(1).default(0.35),
+});
+
+export type ArboQuestion = z.input<typeof arboQuestionSchema>;
+
 /** A verified, structure-aware citation (article/lid + quote + snippet). */
 export const caoCitationSchema = citationSchema;
 
@@ -136,11 +146,13 @@ export interface CaoAnswerOptions {
 }
 
 /**
- * The CAO-agent as the rest of the system sees it: a question in, a grounded, cited answer out.
- * `answer` resolves the whole answer at once; `answerStream` yields it incrementally with verified
- * citations at the end. Mastra stays hidden behind this interface (see .cursor/rules/500-agents.mdc).
+ * A grounded RAG agent as the rest of the system sees it: a question in, a cited answer out.
+ * Mastra stays hidden behind this interface (see .cursor/rules/500-agents.mdc).
  */
-export interface CaoAgent {
+export interface GroundedAgent {
   answer(input: CaoQuestion, options?: CaoAnswerOptions): Promise<CaoAnswer>;
   answerStream(input: CaoQuestion, options?: CaoAnswerOptions): AsyncIterable<CaoStreamEvent>;
 }
+
+/** Alias retained for the CAO module; all agents share the same seam shape in v1. */
+export type CaoAgent = GroundedAgent;
