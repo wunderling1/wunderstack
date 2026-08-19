@@ -1,4 +1,4 @@
-import { retrieveContext, type RetrievedChunk, type QueryExpansion } from "@wunderstack/rag";
+import { retrieveContext, type RetrievedChunk } from "@wunderstack/rag";
 import { citationSchema } from "@wunderstack/shared";
 import { z } from "zod";
 

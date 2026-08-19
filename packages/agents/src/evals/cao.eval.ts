@@ -82,7 +82,7 @@ import { acquireEvalLock, EvalAlreadyRunningError } from "./eval-lock.js";
 import { appendFundRecords, fundRecordsFromReport, resolveCommitSha } from "./fund-ledger.js";
 import { corpusIsolationContractChecks, corpusIsolationLiveChecks } from "./corpus-isolation.js";
 import { createEvalHarness, type EvalCheck as Check, type GateGroup, type GateRunResult } from "./harness.js";
-import { GATE_SPECS, type GateId, type GateRequirement, type GateSpec } from "./gates.js";
+import { GATE_SPECS, type GateId, type GateSpec } from "./gates.js";
 import {
   aggregateScores,
   assembleEvalContext,
@@ -96,7 +96,6 @@ import {
   writeEvalReport,
   type EvalReport,
   type FundLayerReport,
-  type GateReport,
   type RetrievalReport,
   type RetrievalIntegrationReport,
   type AnswerCaseReport,
