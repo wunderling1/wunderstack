@@ -14,6 +14,7 @@ function record(overrides: Partial<FundGateRecord> = {}): FundGateRecord {
     kind: "g3-fund",
     setKey: "etd-full",
     fund: "elektronische-detailhandel",
+    agentKey: "cao",
     corpusVersion: "etd-full-1",
     status: "passed",
     failedChecks: [],

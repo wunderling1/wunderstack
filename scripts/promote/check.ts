@@ -36,6 +36,8 @@ const recordSchema = z.object({
   kind: z.literal("g3-fund"),
   setKey: z.string().min(1),
   fund: z.string().min(1),
+  /** Absent on ledger lines written before the second agent; those runs were CAO-only. */
+  agentKey: z.string().min(1).default("cao"),
   corpusVersion: z.string(),
   status: z.enum(["passed", "failed", "skipped"]),
   failedChecks: z.array(z.string()),
@@ -162,7 +164,9 @@ function printVerdict(fund: string, tag: string, verdict: Verdict, rejected: rea
 
   if (verdict.record !== undefined) {
     const record = verdict.record;
-    console.log(`  G3-fund   ${record.status} · set "${record.setKey}" · fonds "${record.fund}"`);
+    console.log(
+      `  G3-fund   ${record.status} · set "${record.setKey}" · fonds "${record.fund}" · agent "${record.agentKey}"`,
+    );
     console.log(`  corpus    ${record.corpusVersion}`);
     console.log(`  run       ${record.generatedAt} · commit ${record.commitSha ?? "(onbekend)"}`);
     console.log(`  artefact  ${record.runArtefact}`);

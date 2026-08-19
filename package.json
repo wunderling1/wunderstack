@@ -14,7 +14,8 @@
     "depcruise": "depcruise apps packages scripts",
     "check-ui-boundaries": "bash scripts/check-ui-boundaries.sh",
     "bake-off": "pnpm --filter @wunderstack/bake-off bake-off",
-    "promote-check": "pnpm --filter @wunderstack/promote check"
+    "promote-check": "pnpm --filter @wunderstack/promote check",
+    "seed:oomt": "pnpm --filter @wunderstack/ingest seed:oomt"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

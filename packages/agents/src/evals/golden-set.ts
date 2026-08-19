@@ -216,14 +216,24 @@ export const goldenFundCaseSchema = z
     history: z.array(goldenCaseHistoryMessageSchema).max(6).optional(),
     expectedArticle: z.string().optional(),
     expectedLid: z.string().optional(),
-    referenceAnswer: z.string().min(1),
+    /** Arbo catalog cases match on chapter heading instead of CAO article/lid. */
+    expectedChapter: z.string().optional(),
+    referenceAnswer: z.string(),
     category: goldenCaseCategorySchema,
   })
   .superRefine((data, ctx) => {
-    if (data.category !== "refusal" && !data.expectedArticle) {
+    if (data.category === "refusal") return;
+    if (data.referenceAnswer.trim().length === 0) {
       ctx.addIssue({
         code: "custom",
-        message: "answerable fund cases must define expectedArticle (integration matches on article/lid)",
+        message: "answerable fund cases must define a non-empty referenceAnswer",
+        path: ["referenceAnswer"],
+      });
+    }
+    if (!data.expectedArticle && !data.expectedChapter) {
+      ctx.addIssue({
+        code: "custom",
+        message: "answerable fund cases must define expectedArticle or expectedChapter",
         path: ["expectedArticle"],
       });
     }
@@ -246,6 +256,8 @@ export type GoldenFundCase = z.infer<typeof goldenFundCaseSchema>;
 export interface FundSetMeta {
   fund: string;
   corpusVersion: string;
+  /** Retrieval agent key — defaults to cao for legacy fund sets. */
+  agentKey?: string;
 }
 
 const FUND_SET_META: Record<string, FundSetMeta> = {
@@ -262,13 +274,17 @@ const FUND_SET_META: Record<string, FundSetMeta> = {
   // catch an ingest regression. Starter set, built from the template in
   // docs/eval/golden-sets/TEMPLATE-starter.md; not yet reviewed by a fund.
   "etd-full": { fund: "elektronische-detailhandel", corpusVersion: "etd-full-1" },
+  // Arbo — OOMT sample arbocatalogus (scripts/ingest/input/arbo_catalogus_oomt.md).
+  "arbo.oomt": { fund: "oomt", corpusVersion: "arbo-oomt-1", agentKey: "arbo" },
 };
 
 export interface GoldenFundSet {
-  /** Filename token (golden-set.<key>.jsonl), e.g. "etd". */
+  /** Filename token (golden-set.<key>.jsonl), e.g. "etd" or "arbo.oomt". */
   key: string;
   /** `retrieveContext` fund the cases are scored against. */
   fund: string;
+  /** Catalog agent key for retrieval isolation. */
+  agentKey: string;
   /** This fund set's own corpus snapshot version, independent of GOLDEN_CORPUS_VERSION. */
   corpusVersion: string;
   /** Fixture file name. */
@@ -278,7 +294,7 @@ export interface GoldenFundSet {
   fixtureHash: string;
 }
 
-const FUND_SET_FILE_RE = /^golden-set\.([a-z0-9-]+)\.jsonl$/;
+const FUND_SET_FILE_RE = /^golden-set\.(.+)\.jsonl$/;
 
 /**
  * Discover the fund layers: every golden-set.<key>.jsonl in the fixtures dir except the base set.
@@ -304,6 +320,7 @@ function loadFundSets(): GoldenFundSet[] {
     sets.push({
       key,
       fund: meta.fund,
+      agentKey: meta.agentKey ?? "cao",
       corpusVersion: meta.corpusVersion,
       file,
       cases: parseJsonl(raw, goldenFundCaseSchema),

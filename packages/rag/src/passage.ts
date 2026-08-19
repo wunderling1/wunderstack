@@ -16,11 +16,6 @@ export async function listCorpora(): Promise<CorpusKey[]> {
   return rows;
 }
 
-/** Distinct funds present in the corpus (back-compat for fund-scoped gates). */
-export async function listFunds(): Promise<string[]> {
-  return [...new Set((await listCorpora()).map((corpus) => corpus.fund))];
-}
-
 /**
  * Fetch the full passage a citation points at, so the UI can expand "toon volledige passage".
  *

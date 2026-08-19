@@ -33,6 +33,7 @@ function passedRecord(overrides: Partial<FundGateRecord> = {}): FundGateRecord {
     kind: "g3-fund",
     setKey: "etd-full",
     fund: "elektronische-detailhandel",
+    agentKey: "cao",
     corpusVersion: "etd-full-1",
     status: "passed",
     failedChecks: [],
@@ -110,6 +111,18 @@ describe("check, end to end over real files", () => {
 
     assert.equal(verdict.go, false);
     assert.match(verdict.reasons.join(" "), /geïngest ná de gate-run/);
+  });
+
+  it("reads a pre-arbo ledger line (no agentKey) as cao, not as a reject", async () => {
+    const dir = await workspace();
+    const ledgerPath = join(dir, "g3-fund.jsonl");
+    const legacy: Record<string, unknown> = { ...passedRecord() };
+    delete legacy.agentKey;
+    await writeFile(ledgerPath, `${JSON.stringify(legacy)}\n`, "utf8");
+
+    const { records, rejected } = await loadLedger(ledgerPath);
+    assert.deepEqual(rejected, []);
+    assert.equal(records[0]?.agentKey, "cao");
   });
 
   it("refuses a malformed or future-version ledger line instead of reading it as evidence", async () => {

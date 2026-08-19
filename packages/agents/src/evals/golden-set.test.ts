@@ -132,13 +132,7 @@ describe("fund layer (E12)", () => {
     }
   });
 
-  it("answerable fund cases name an expectedArticle that the fund corpus can surface", () => {
-    // Fund cases are matched on article/lid against the real ingested corpus. A BASE-scored set
-    // (fund === EVAL_FIXTURE_FUND, i.e. ETD) is scored against the committed base passages, so every
-    // answerable article must exist there or Gate F cannot pass — that guard stays. A REAL-corpus set
-    // (e.g. demo, scored against a separately ingested corpus that the repo does not carry as passages)
-    // cannot be checked against goldenPassages here; the nightly integration gate checks it against the
-    // ingested corpus instead. For those we only assert the field is present (see golden-set.ts, E12).
+  it("answerable fund cases name structure the integration gate can match", () => {
     const passageArticles = new Set(
       goldenPassages.map((passage) => passage.article).filter((article): article is string => article !== undefined),
     );
@@ -146,8 +140,12 @@ describe("fund layer (E12)", () => {
       const answerable = set.cases.filter((testCase) => testCase.category !== "refusal");
       assert.ok(answerable.length > 0, `${set.key} has answerable cases`);
       for (const testCase of answerable) {
-        assert.ok(testCase.expectedArticle, `${testCase.id} defines expectedArticle`);
-        if (set.fund === EVAL_FIXTURE_FUND) {
+        if (set.agentKey === "arbo") {
+          assert.ok(testCase.expectedChapter, `${testCase.id} defines expectedChapter`);
+        } else {
+          assert.ok(testCase.expectedArticle, `${testCase.id} defines expectedArticle`);
+        }
+        if (set.fund === EVAL_FIXTURE_FUND && testCase.expectedArticle) {
           assert.ok(
             passageArticles.has(testCase.expectedArticle),
             `${testCase.id} expects article ${String(testCase.expectedArticle)} present in the fund corpus`,

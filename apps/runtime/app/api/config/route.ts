@@ -1,3 +1,4 @@
+import { getAgentConfig, parseAgentConfigData } from "@wunderstack/db";
 import {
   DEFAULT_ARTICLE_50_NOTICE,
   tenantPublicConfigSchema,
@@ -9,6 +10,19 @@ import { corsHeaders, preflight } from "@/lib/cors";
 import { resolveEmbedAuth } from "@/lib/embed-auth";
 import { instanceFund } from "@/lib/fund-scope";
 import { tenantCorsAllowlist } from "@/lib/tenant-cors";
+
+const DEFAULT_STATUS_LABELS = {
+  cao: {
+    searching: "CAO doorzoeken",
+    retrieved: "Passages beoordelen",
+    generating: "Bronvermelding controleren",
+  },
+  arbo: {
+    searching: "Catalogus doorzoeken",
+    retrieved: "Passages beoordelen",
+    generating: "Bronvermelding controleren",
+  },
+} as const;
 
 /**
  * GET /api/config — the public config the embed fetches at boot (Fase 4). Serves this instance's
@@ -32,14 +46,26 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   const config = auth.config;
+  const agentKey = config?.agentKey ?? "cao";
+  const fund = instanceFund();
   const theme = tenantThemeSchema.parse(config?.theme ?? {});
-  const texts = tenantTextsSchema.parse(config?.texts ?? {});
+  const parsedTexts = tenantTextsSchema.parse(config?.texts ?? {});
+  const agentRow = await getAgentConfig(agentKey, fund).catch(() => null);
+  const agentData = parseAgentConfigData(agentRow?.config);
+  const statusDefaults = DEFAULT_STATUS_LABELS[agentKey === "arbo" ? "arbo" : "cao"];
+  const texts = tenantTextsSchema.parse({
+    ...parsedTexts,
+    ...(parsedTexts.starterCategories === undefined && agentData.starterCategories
+      ? { starterCategories: agentData.starterCategories }
+      : {}),
+  });
   const body = tenantPublicConfigSchema.parse({
-    agentId: config?.agentKey ?? "cao",
+    agentId: agentKey,
     theme,
     texts,
     article50: texts.article50 ?? DEFAULT_ARTICLE_50_NOTICE,
-    fund: instanceFund(),
+    fund,
+    statusLabels: agentData.statusLabels ?? statusDefaults,
   });
 
   return Response.json(body, {

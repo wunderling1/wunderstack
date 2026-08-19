@@ -1,7 +1,8 @@
 import { z } from "zod";
 
 import { createCaoAgent } from "./cao/agent.js";
-import type { CaoAgent } from "./types.js";
+import { createArboAgent } from "./arbo/agent.js";
+import type { GroundedAgent } from "./types.js";
 
 /**
  * Agent catalog — control-plane registry of available agents.
@@ -22,13 +23,19 @@ const AGENT_CATALOG: AgentDescriptor[] = [
     label: "CAO-agent",
     description: "Antwoorden met bronvermelding uit CAO-teksten",
   },
+  {
+    id: "arbo",
+    label: "Arbocatalogus-agent",
+    description: "Antwoorden met bronvermelding uit de sectorale arbocatalogus",
+  },
 ];
 
-const agentFactories: Record<string, () => CaoAgent> = {
+const agentFactories: Record<string, () => GroundedAgent> = {
   cao: createCaoAgent,
+  arbo: createArboAgent,
 };
 
-let cachedAgents = new Map<string, CaoAgent>();
+let cachedAgents = new Map<string, GroundedAgent>();
 
 /** List all agents available in the catalog. */
 export function listAgents(): AgentDescriptor[] {
@@ -36,7 +43,7 @@ export function listAgents(): AgentDescriptor[] {
 }
 
 /** Resolve an agent by id; throws when unknown. */
-export function getAgent(id: string): CaoAgent {
+export function getAgent(id: string): GroundedAgent {
   const descriptor = AGENT_CATALOG.find((entry) => entry.id === id);
   if (!descriptor) {
     throw new Error(`Unknown agent: ${id}`);

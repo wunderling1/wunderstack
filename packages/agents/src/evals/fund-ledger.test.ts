@@ -8,6 +8,7 @@ function fundLayer(key: string, fund: string, corpusVersion: string): FundLayerR
   return {
     key,
     fund,
+    agentKey: "cao",
     corpusVersion,
     fixtureHash: "hash",
     answerableQueries: 14,
@@ -67,6 +68,7 @@ describe("fundRecordsFromReport", () => {
         kind: "g3-fund",
         setKey: "etd-full",
         fund: "elektronische-detailhandel",
+        agentKey: "cao",
         corpusVersion: "etd-full-1",
         status: "passed",
         failedChecks: [],

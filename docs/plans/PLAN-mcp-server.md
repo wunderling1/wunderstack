@@ -41,7 +41,7 @@ Kernontwerp:
 | M3 | Niet-gevonden | `NOT_FOUND_MESSAGE` (geëxporteerde constante in `packages/agents/src/cao/prompt.ts`) in `answer`, `citations: []`. Doorgeven, niet herbouwen. |
 | M4 | Plaats van de server | `apps/runtime/app/api/mcp/`. Geen `apps/mcp`-workspace. Redenen: (1) Scalingo routeert publieke HTTP alleen naar `web`; (2) `200-architecture.mdc`: alle externe toegang via `apps/runtime`; (3) perimeter-hergebruik. |
 | M5 | Secret | Echt gedeeld secret, HMAC naar webhook-patroon (`WEBHOOK_SIGNING_SECRET`). Dual-secret (current + previous) is nieuwe functionaliteit. |
-| M6 | Corpus-scope | `ask_cao` dekt uitsluitend het CAO-corpus; nieuwe corpora → interne routering, geen nieuwe tools. |
+| M6 | Corpus-scope | `ask_cao` dekt uitsluitend het CAO-corpus. Een tweede corpus (arbocatalogus) krijgt een eigen tool (`ask_arbo`); fund en agent worden server-side uit de instance-key opgelost — geen agent-parameter, geen interne router. Zie `docs/decisions/DECISION-second-agent-arbo.md`. |
 | M7 | Dependency | `@modelcontextprotocol/server` v2 (package split; was historically `@modelcontextprotocol/sdk`). **Niet** `@mastra/mcp`, **niet** `mcp-handler`/`@vercel/mcp-adapter`. Mastra pint transitief `@modelcontextprotocol/sdk` v1.x; pnpm isoleert dat. |
 | M8 | Bewijsmap | `docs/audit/mcp/` — de map die daadwerkelijk in gebruik is. |
 | M9 | Tool-resultaatvorm | `content[0].text` bevat antwoord **plus** gerenderde bronnenlijst; `structuredContent` bevat dezelfde info machine-leesbaar onder `outputSchema`. Zonder bronnen in het tekstblok verwijzen `[n]`-markers naar niets zodra Copilot relayeert. |

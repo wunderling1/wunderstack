@@ -4,10 +4,10 @@ import { describe, it } from "node:test";
 import { getAgent, listAgents, resetAgentCache } from "./catalog.js";
 
 describe("agent catalog", () => {
-  it("lists the CAO agent", () => {
+  it("lists registered agents", () => {
     const agents = listAgents();
-    assert.equal(agents.length, 1);
-    assert.equal(agents[0]?.id, "cao");
+    assert.equal(agents.length, 2);
+    assert.deepEqual(agents.map((agent) => agent.id).sort(), ["arbo", "cao"]);
   });
 
   it("resolves a known agent", () => {
@@ -15,6 +15,8 @@ describe("agent catalog", () => {
     const agent = getAgent("cao");
     assert.equal(typeof agent.answer, "function");
     assert.equal(typeof agent.answerStream, "function");
+    const arbo = getAgent("arbo");
+    assert.equal(typeof arbo.answer, "function");
   });
 
   it("throws for unknown agents", () => {

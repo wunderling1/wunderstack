@@ -132,6 +132,7 @@ export interface RetrievalIntegrationReport {
 export interface FundLayerReport {
   key: string;
   fund: string;
+  agentKey: string;
   corpusVersion: string;
   fixtureHash: string;
   answerableQueries: number;
