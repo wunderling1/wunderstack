@@ -10,7 +10,7 @@ function chunk(id: string, score: number): RetrievedChunk {
     ordinal: 0,
     content: `content-${id}`,
     score,
-    source: { documentId: "doc", title: "CAO", sourceUri: "", fund: "eval", version: "1" },
+    source: { documentId: "doc", title: "CAO", sourceUri: "", fund: "eval", agentKey: "cao", version: "1" },
     structure: { chapter: null, article: null, lid: null, sourceRef: null, chunkType: "text" },
     metadata: {},
   };

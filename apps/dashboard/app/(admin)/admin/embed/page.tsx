@@ -6,9 +6,8 @@ import { createTenantConfig, rotateKey, updateCors, updateTheme } from "./action
 import { EmbedSnippet } from "./snippet";
 
 /**
- * Embed & distribution console (Fase 4, admin-only, D12). Per tenant: the stable snippet + copy,
- * tenant-key display + rotation, CORS allowlist, and the curated theming subset (D17). All writes go
- * through the tenant_config_writer connection via the server actions.
+ * Embed & distribution console (Fase 4, admin-only, D12). Per tenant: snippets per agent instance,
+ * tenant-key display + rotation, CORS allowlist, and the curated theming subset (D17).
  */
 export const dynamic = "force-dynamic";
 
@@ -19,6 +18,7 @@ function scriptBase(): string {
 export default async function EmbedConsole() {
   const configs = await listTenantConfigs();
   const base = scriptBase();
+  const grouped = groupByTenant(configs);
 
   return (
     <div className="flex flex-col gap-8">
@@ -26,8 +26,8 @@ export default async function EmbedConsole() {
         <div>
           <h2 className="font-display text-lg font-semibold">Embed &amp; distributie</h2>
           <p className="text-sm text-text-muted">
-            Snippet, tenant-key, CORS-allowlist en theming per fonds. De snippet blijft stabiel; alles
-            wat je hier wijzigt gaat live via <code>GET /config</code> zonder nieuwe snippet.
+            Snippet per agent-instance (CAO + arbocatalogus), tenant-key, CORS-allowlist en theming.
+            De key beslist welke agent draait; <code>data-agent</code> is alleen een hint.
           </p>
         </div>
         <Link href="/admin" className="ml-auto whitespace-nowrap text-sm text-text-muted hover:text-text">
@@ -36,9 +36,10 @@ export default async function EmbedConsole() {
       </div>
 
       <Card className="p-5">
-        <h3 className="text-sm font-semibold">Nieuwe tenant-config</h3>
+        <h3 className="text-sm font-semibold">Nieuwe tenant-config (CAO-instance)</h3>
         <p className="mt-1 text-sm text-text-muted">
-          Maakt een config met een verse tenant-key aan (of laat een bestaande ongemoeid).
+          Maakt een CAO-instance met een verse tenant-key. Voor arbocatalogus: tweede instance met agent
+          <code className="mx-1">arbo</code> via seed-script of DB.
         </p>
         <form action={createTenantConfig} className="mt-3 flex items-end gap-2">
           <label className="flex flex-1 flex-col gap-1 text-sm">
@@ -49,62 +50,92 @@ export default async function EmbedConsole() {
         </form>
       </Card>
 
-      {configs.length === 0 ? (
+      {grouped.length === 0 ? (
         <p className="text-sm text-text-muted">Nog geen tenant-configs. Maak er hierboven een aan.</p>
       ) : (
-        configs.map((config) => <TenantCard key={config.tenantId} config={config} base={base} />)
+        grouped.map((group) => <TenantGroupCard key={group.tenantId} group={group} base={base} />)
       )}
     </div>
   );
 }
 
-function TenantCard({ config, base }: { config: TenantConfig; base: string }) {
-  const theme = (config.theme ?? {}) as Record<string, string>;
-  const texts = (config.texts ?? {}) as Record<string, string>;
-  const snippet = `<script src="${base}/embed.js" data-key="${config.publicKey}" data-agent="${config.agentId}" async></script>`;
+interface TenantGroup {
+  tenantId: string;
+  instances: TenantConfig[];
+}
+
+function groupByTenant(configs: TenantConfig[]): TenantGroup[] {
+  const map = new Map<string, TenantConfig[]>();
+  for (const config of configs) {
+    const list = map.get(config.tenantId) ?? [];
+    list.push(config);
+    map.set(config.tenantId, list);
+  }
+  return [...map.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([tenantId, instances]) => ({
+      tenantId,
+      instances: instances.sort((a, b) => a.agentKey.localeCompare(b.agentKey)),
+    }));
+}
+
+function TenantGroupCard({ group, base }: { group: TenantGroup; base: string }) {
+  const primary = group.instances[0];
+  if (!primary) return null;
+  const theme = (primary.theme ?? {}) as Record<string, string>;
+  const texts = (primary.texts ?? {}) as Record<string, string>;
 
   return (
     <Card className="flex flex-col gap-6 p-5">
       <div className="flex items-center gap-3">
-        <h3 className="font-display text-base font-semibold">{config.tenantId}</h3>
-        <span className="text-xs text-text-muted">agent: {config.agentId}</span>
+        <h3 className="font-display text-base font-semibold">{group.tenantId}</h3>
+        <span className="text-xs text-text-muted">{group.instances.length} instance(s)</span>
       </div>
 
-      <EmbedSnippet snippet={snippet} />
+      <div className="flex flex-col gap-4">
+        {group.instances.map((config) => {
+          const snippet = `<script src="${base}/embed.js" data-key="${config.publicKey}" data-agent="${config.agentKey}" async></script>`;
+          return (
+            <div key={`${config.tenantId}-${config.agentKey}`} className="rounded-md border border-border p-4">
+              <p className="text-xs font-medium text-text-muted">Agent: {config.agentKey}</p>
+              <EmbedSnippet snippet={snippet} />
+            </div>
+          );
+        })}
+      </div>
 
       <div className="grid gap-6 md:grid-cols-2">
-        <form action={rotateKey} className="flex flex-col gap-2">
-          <input type="hidden" name="tenantId" value={config.tenantId} />
-          <span className="text-sm font-medium">Tenant-key</span>
-          <code className="truncate rounded bg-surface-sunk px-2 py-1 text-xs">{config.publicKey}</code>
-          <p className="text-xs text-text-subtle">
-            Publiek (mag in de snippet staan). Roteren maakt oude snippets ongeldig.
-          </p>
-          <Button type="submit" variant="ghost" size="default" className="self-start">
-            Roteer key
-          </Button>
-        </form>
+        {group.instances.map((config) => (
+          <form key={`rotate-${config.agentKey}`} action={rotateKey} className="flex flex-col gap-2">
+            <input type="hidden" name="tenantId" value={config.tenantId} />
+            <input type="hidden" name="agentKey" value={config.agentKey} />
+            <span className="text-sm font-medium">Tenant-key ({config.agentKey})</span>
+            <code className="truncate rounded bg-surface-sunk px-2 py-1 text-xs">{config.publicKey}</code>
+            <Button type="submit" variant="ghost" size="default" className="self-start">
+              Roteer key
+            </Button>
+          </form>
+        ))}
 
         <form action={updateCors} className="flex flex-col gap-2">
-          <input type="hidden" name="tenantId" value={config.tenantId} />
+          <input type="hidden" name="tenantId" value={primary.tenantId} />
+          <input type="hidden" name="agentKey" value={primary.agentKey} />
           <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium">CORS-allowlist</span>
+            <span className="font-medium">CORS-allowlist (CAO-instance)</span>
             <Textarea
               name="corsAllowlist"
               rows={3}
-              defaultValue={config.corsAllowlist.join("\n")}
+              defaultValue={primary.corsAllowlist.join("\n")}
               placeholder="https://www.fonds.nl"
             />
           </label>
-          <p className="text-xs text-text-subtle">Eén origin per regel. Alleen deze mogen cross-origin.</p>
-          <Button type="submit" variant="ghost" size="default" className="self-start">
-            Opslaan
-          </Button>
+          <Button type="submit" variant="ghost" size="default" className="self-start">Opslaan</Button>
         </form>
       </div>
 
       <form action={updateTheme} className="grid gap-4 md:grid-cols-2">
-        <input type="hidden" name="tenantId" value={config.tenantId} />
+        <input type="hidden" name="tenantId" value={primary.tenantId} />
+        <input type="hidden" name="agentKey" value={primary.agentKey} />
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-text-muted">Primaire kleur (hex)</span>
           <Field name="primary" defaultValue={theme.primary ?? ""} placeholder="#4f46e5" />
@@ -119,15 +150,19 @@ function TenantCard({ config, base }: { config: TenantConfig; base: string }) {
         </label>
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-text-muted">Tagline</span>
-          <Field name="tagline" defaultValue={texts.tagline ?? ""} placeholder="Stel je vraag over de CAO" />
+          <Field name="tagline" defaultValue={texts.tagline ?? ""} placeholder="Vragen over je CAO?" />
         </label>
         <label className="flex flex-col gap-1 text-sm md:col-span-2">
-          <span className="text-text-muted">Artikel 50-melding (leeg = standaardtekst)</span>
-          <Field name="article50" defaultValue={texts.article50 ?? ""} />
+          <span className="text-text-muted">Intro (lege chat)</span>
+          <Field
+            name="intro"
+            defaultValue={texts.intro ?? ""}
+            placeholder="De AI-assistent geeft antwoord uit de catalogus, met de bron erbij."
+          />
         </label>
-        <div className="md:col-span-2">
-          <Button type="submit">Theming opslaan</Button>
-        </div>
+        <Button type="submit" variant="ghost" size="default" className="self-start md:col-span-2">
+          Theming opslaan
+        </Button>
       </form>
     </Card>
   );

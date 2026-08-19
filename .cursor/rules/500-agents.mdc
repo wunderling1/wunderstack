@@ -14,8 +14,11 @@ alwaysApply: false
   zwaarder framework.
 
 ## Multi-agent
-- Gebruik Mastra's first-class **Supervisor-pattern**. Gebruik NIET de deprecated
-  `AgentNetwork` / `.network()`.
+- Agents die **één gesprek delen** (één thread, host kiest niet): Mastra's first-class
+  **Supervisor-pattern**. Gebruik NIET de deprecated `AgentNetwork` / `.network()`.
+- Agents met **gescheiden oppervlakken** (eigen embed-snippet, eigen MCP-tool, eigen playground-ingang):
+  geen Supervisor, geen router-hop. Corpusisolatie via `agent_key` + instance-key; zie
+  `docs/decisions/DECISION-second-agent-arbo.md`.
 
 ## Tool-contracten
 - Elke agent-tool heeft een expliciet Zod input/output-schema.

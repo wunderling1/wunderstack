@@ -78,6 +78,22 @@ productie (`cao/agent.ts`), niet in de eval-harness, en is daarom géén registr
 | `G3-isolation` | G3 | DB + Scaleway | Gate D-integration |
 | `G4` *(runtime)* | G4 | — | E13 — productie-guard, geen eval-gate |
 
+### Kanaal als dimensie (MCP — geen eigen gate-laag)
+
+Het MCP-kanaal (`POST /api/mcp`, tool `ask_cao`) krijgt **geen eigen gate-laag**. Dat zou
+G1–G4 verwateren. In plaats daarvan is `channel` een dimensie waarop dezelfde garanties gelden:
+
+| Laag | MCP-toepassing |
+|---|---|
+| **G1 CONTRACT** | Zod-schema's van `ask_cao` in/uit (`apps/runtime/lib/mcp-ask-cao.ts`); tool-beschrijving als versioned constant |
+| **G2 GEDRAG** | Golden set blijft de gedragstoets; MCP deelt dezelfde `agent.answer()`-seam (geen aparte fixture-route) |
+| **G3 PRODUCTIE** | Relay-fidelity (citaties + weigerzin via Copilot) is een **release-drempel** bij MCP-go-live, gemeten in `docs/audit/mcp/copilot-baseline.md` — niet een nightly CI-gate totdat er signaal + baseline is |
+| **G4 RUNTIME** | `verifyAndBuild` / hard-fact-guard gelden onverkort vóór de MCP-overdracht; fouten gaan als `isError: true` (geen verzonnen CAO-antwoord) |
+
+Traces en analytics dragen `channel` (`playground` \| `embed` \| `mcp` \| `api`) zodat portaal-
+en MCP-verkeer in Langfuse en `interaction_events` uit elkaar te houden zijn. Soft budget-gate
+op latency blijft backlog (`cao.eval.ts`), niet in dit model.
+
 ---
 
 ### G1 — CONTRACT
@@ -406,6 +422,7 @@ niet vaststaat.
 | 2026-07-21 | **B2 besloten:** under-refusal-*rate*-regressiecheck verwijderd uit `answerRegressionChecks` | rate is noisy bij N=3 refusal-fixtures (@1-draw flipte de gate op 0.333); absolute count-gate ≤1 beschermt al | Cursor/Jordy |
 | 2026-07-21 | **Fase 5 (G4-streaminglek):** "bekend lek"-notitie verwijderd; §G4 herschreven naar buffer-to-verify (optie A). Emit-pad geëxtraheerd naar de pure seam `settledAnswerEvents` (agent.ts) en samen met `verifyAndBuild` geborgd door `agent.test.ts` | het lek was al gedicht door buffer-to-verify (commit `c763ea0`, 2026-07-20); de notitie was per abuis uit de pre-buffer-draft overgenomen. Bescherming was impliciet/ongetest en de client is token-stream-ready → regressietest legt het vast | Cursor/Jordy |
 | 2026-07-21 | **Fase 6 (docs-hygiëne):** §G3 isolatie-mechanisme expliciet gemaakt (app-laag, RLS niet geïmplementeerd); §4.5 toegevoegd (E4 `sourceRef`-residu **geaccepteerd**, geen matching-impact); **B6** vastgelegd (Langfuse dataset-run push = backlog); **Bijlage B** claim↔gate-kruistabel toegevoegd (gedekt vs. niet-claimen) | claims-hygiëne: geen doc-claim mag verder gaan dan een geïmplementeerde gate; RLS-formulering, Langfuse-besluit en E4-residu vastleggen | Cursor/Jordy |
+| 2026-07-29 | **Kanaaldimensie (MCP):** sectie "Kanaal als dimensie" toegevoegd — geen eigen gate-laag; G1–G4 gelden over `channel`; relay-fidelity als release-drempel bij MCP-go-live | `PLAN-mcp-server.md` Fase 7 | Cursor/Jordy |
 | 2026-07-31 | **B4 herzien + promotiepoort (§7):** nachtelijk `G3-fund`-rood blokkeert `main` niet maar wel promotie van dat fonds; uitvoerbaar als `pnpm promote-check <fonds> <tag>` op een append-only ledger (`docs/eval/gate-results/g3-fund.jsonl`). `eval-report.json` legt nu ook lokaal de commit vast, zodat een groen zich kan identificeren | Fase 4 ingest-herstelplan (besluit D5); een nachtelijk rood was tot nu toe een gat: het blokkeerde niets en het resultaat overleefde de volgende run niet | Cursor/Jordy |
 | 2026-07-31 | **Fonds-refusal-guard gerepareerd (testwijziging, C4 met meting):** de guard gebruikte de `refusal`-cases van de fonds-set als out-of-corpus-probes en eiste nul treffers. Die cases zijn bijna-treffers die per ontwerp iets ophalen: op de ETD-CAO scoort de probe 0,647 terwijl twee echte vragen op 0,569 en 0,642 staan, dus **geen enkele drempel** scheidt ze. De fondslaag gebruikt nu dezelfde drie gedeelde onzinvragen als de basislaag (0/3 treffers op alle corpora, marge 0,10). Bijna-treffers blijven in de golden set en worden expliciet als *niet gescoord* gerapporteerd (`unscoredNearMissCases`) i.p.v. stil te verdwijnen | Gemeten in `docs/eval/BESLUIT-refusal-guard-2026-07-31.md`; `cao.eval.ts:158-165` stelde deze ongeschiktheid al vast voor de basislaag, de fondslaag deed precies wat dat commentaar verbood. Groen op de fixtureset was een marge van 0,015 — ruis, geen ontwerp | Cursor/Jordy |
 | 2026-07-31 | **`Bewijst niet`-regel per laag (G1–G4) + sectie ingest-contract (§2):** expliciet gemaakt dat G2 niets over een echt corpus zegt en dat een groene `G3-fund [etd]` de productie-ingest niet dekt; het structuurrapport vastgelegd als visibility-laag met het pad naar drempels (na calibratie, alleen omhoog) | Fase 6 ingest-herstelplan; de blinde vlek uit `diagnosis-fund-article-metadata-2026-07-30.md` §3.2 stond nergens in het canonieke document, waardoor een groene gate meer leek te bewijzen dan hij deed | Cursor/Jordy |

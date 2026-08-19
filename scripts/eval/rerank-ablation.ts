@@ -144,6 +144,7 @@ async function runCase(testCase: GoldenCase, fund: string): Promise<CaseResult> 
   const pool = await retrieve({
     query: rewritten,
     fund,
+    agentKey: "cao",
     candidateK: config.candidateK,
     minScore: PRODUCTION_MIN_SCORE,
   });

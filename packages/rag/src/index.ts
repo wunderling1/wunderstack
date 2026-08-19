@@ -7,7 +7,9 @@ import { assemble, type AssembledContext, type RetrievalTimings } from "./assemb
 import { mergeRetrievedChunks } from "./merge-chunks.js";
 import { rerank } from "./rerank.js";
 import { retrieveInputSchema, retrieveValidatedTimed, type RetrieveInput } from "./retrieve.js";
-import { rewriteQuery } from "./rewrite.js";
+import { rewriteQuery, type QueryExpansion } from "./rewrite.js";
+
+type RetrieveContextInput = RetrieveInput & { queryExpansions?: QueryExpansion[] };
 
 /**
  * Run the full RAG retrieval pipeline for a query and return prompt-ready context + sources.
@@ -16,15 +18,18 @@ import { rewriteQuery } from "./rewrite.js";
  * sovereign) -> assemble (context + citations). The rewrite enriches the query before embedding;
  * both retrieval and rerank use the rewritten form so they stay consistent.
  */
-export async function retrieveContext(input: RetrieveInput): Promise<AssembledContext> {
+export async function retrieveContext(input: RetrieveContextInput): Promise<AssembledContext> {
   const totalStart = performance.now();
   const parsed = retrieveInputSchema.parse(input);
   const config = requireRerankConfig();
   const topK = parsed.topK ?? config.topK;
 
   const rewriteStart = performance.now();
-  const primaryRewritten = rewriteQuery(parsed.query).rewritten;
-  const additionalRewritten = (parsed.additionalQueries ?? []).map((query) => rewriteQuery(query).rewritten);
+  const expansions = input.queryExpansions;
+  const primaryRewritten = rewriteQuery(parsed.query, expansions).rewritten;
+  const additionalRewritten = (parsed.additionalQueries ?? []).map((query) =>
+    rewriteQuery(query, expansions).rewritten,
+  );
 
   const seenQueries = new Set<string>();
   const rewrittenQueries: string[] = [];
@@ -86,12 +91,14 @@ export {
 } from "./retrieve.js";
 export { mergeRetrievedChunks } from "./merge-chunks.js";
 export { rerank, type RerankInput, type RerankResult, type RerankStatus } from "./rerank.js";
-export { rewriteQuery, type RewriteResult } from "./rewrite.js";
+export { rewriteQuery, type RewriteResult, type QueryExpansion } from "./rewrite.js";
 export { assemble, type AssembledContext, type RetrievalTimings } from "./assemble.js";
 export {
   fetchParentPassage,
+  listCorpora,
   listFunds,
   passageInputSchema,
+  type CorpusKey,
   type PassageInput,
   type PassageResult,
 } from "./passage.js";

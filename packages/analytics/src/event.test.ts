@@ -44,4 +44,26 @@ describe("interaction event contract (Fase 1)", () => {
     assert.equal(parsed.question, "Hoeveel vakantiedagen heb ik?");
     assert.equal(parsed.userId, "u-9");
   });
+
+  it("accepts an optional channel and rejects unknown values", () => {
+    const parsed = interactionEventInputSchema.parse({
+      tenantId: "demo",
+      agentId: "cao",
+      fund: "demo",
+      sessionId: "s-3",
+      outcome: "answered",
+      channel: "playground",
+    });
+    assert.equal(parsed.channel, "playground");
+
+    const rejected = interactionEventInputSchema.safeParse({
+      tenantId: "demo",
+      agentId: "cao",
+      fund: "demo",
+      sessionId: "s-3",
+      outcome: "answered",
+      channel: "widget",
+    });
+    assert.equal(rejected.success, false);
+  });
 });

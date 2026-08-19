@@ -128,6 +128,11 @@ export interface CaoAnswerOptions {
   sessionId?: string;
   /** Pseudonymous end-user id for the trace; undefined for embed users (no identification in v1). */
   userId?: string;
+  /**
+   * Surface that produced this turn (playground | embed | mcp | api). Threaded onto the Langfuse
+   * trace so portal and MCP traffic can be separated (PLAN-mcp-server Fase 1a).
+   */
+  channel?: string;
 }
 
 /**

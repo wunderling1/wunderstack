@@ -19,18 +19,12 @@ export interface RewriteResult {
   expansions: string[];
 }
 
-interface Expansion {
-  /** Matches the abbreviation/jargon in the user's query (non-global; used with `.test`). */
+export interface QueryExpansion {
   pattern: RegExp;
-  /** The spelled-out CAO term to append when the pattern matches. */
   term: string;
 }
 
-/**
- * Conservative CAO abbreviation/synonym dictionary. Kept small and unambiguous on purpose — a
- * wrong expansion hurts retrieval. Extend as a real fund's CAO vocabulary demands it.
- */
-const CAO_EXPANSIONS: Expansion[] = [
+const DEFAULT_CAO_EXPANSIONS: QueryExpansion[] = [
   { pattern: /\bORT\b/i, term: "onregelmatigheidstoeslag" },
   { pattern: /\bADV\b/i, term: "arbeidsduurverkorting" },
   { pattern: /\bWTW\b/i, term: "werktijdenverkorting" },
@@ -53,18 +47,17 @@ function alreadyPresent(query: string, term: string): boolean {
   return new RegExp(`\\b${escaped}\\b`, "i").test(query);
 }
 
-export function rewriteQuery(query: string): RewriteResult {
+export function rewriteQuery(query: string, expansions: QueryExpansion[] = DEFAULT_CAO_EXPANSIONS): RewriteResult {
   const trimmed = query.trim();
-  const expansions: string[] = [];
+  const matched: string[] = [];
 
-  for (const { pattern, term } of CAO_EXPANSIONS) {
-    if (pattern.test(trimmed) && !alreadyPresent(trimmed, term) && !expansions.includes(term)) {
-      expansions.push(term);
+  for (const { pattern, term } of expansions) {
+    if (pattern.test(trimmed) && !alreadyPresent(trimmed, term) && !matched.includes(term)) {
+      matched.push(term);
     }
   }
 
-  const rewritten =
-    expansions.length > 0 ? `${trimmed} (${expansions.join(", ")})` : trimmed;
+  const rewritten = matched.length > 0 ? `${trimmed} (${matched.join(", ")})` : trimmed;
 
-  return { original: query, rewritten, expansions };
+  return { original: query, rewritten, expansions: matched };
 }

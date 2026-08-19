@@ -54,10 +54,19 @@ export const embedThemeSchema = z.object({
 });
 export type EmbedTheme = z.infer<typeof embedThemeSchema>;
 
+export const starterCategorySchema = z.object({
+  label: z.string().min(1).max(80),
+  questions: z.array(z.string().min(1).max(200)).min(1).max(6),
+});
+export type StarterCategory = z.infer<typeof starterCategorySchema>;
+
 export const embedTextsSchema = z.object({
   tagline: z.string().optional(),
   article50: z.string().optional(),
-  starters: z.array(z.string()).optional(),
+  /** Flat starter list (legacy). Used only when `starterCategories` is absent. */
+  starters: z.array(z.string().min(1).max(200)).max(6).optional(),
+  /** Category pills + questions. Omit to use the embed defaults. */
+  starterCategories: z.array(starterCategorySchema).min(1).max(8).optional(),
 });
 export type EmbedTexts = z.infer<typeof embedTextsSchema>;
 
@@ -66,5 +75,9 @@ export const embedConfigSchema = z.object({
   theme: embedThemeSchema,
   texts: embedTextsSchema,
   article50: z.string(),
+  /** Concrete fund this instance serves; sent on chat so the request is never unscoped. */
+  fund: z.string().min(1).optional(),
 });
 export type EmbedConfig = z.infer<typeof embedConfigSchema>;
+
+export type EmbedLayout = "launcher" | "inline";

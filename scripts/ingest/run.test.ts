@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { isCorpusFile } from "./run.js";
+import { isCorpusFile, isPruneCandidate } from "./run.js";
 
 describe("corpus file selection", () => {
   it("accepts the supported corpus formats", () => {
@@ -25,5 +25,19 @@ describe("corpus file selection", () => {
   it("rejects unsupported extensions", () => {
     assert.equal(isCorpusFile("notes.docx"), false);
     assert.equal(isCorpusFile(".gitkeep"), false);
+  });
+});
+
+describe("prune scopes by fund and agent_key", () => {
+  it("prune (etd, arbo) does not touch (etd, cao) rows", () => {
+    const caoDoc = { fund: "etd", agentKey: "cao", sourceUri: "etd/cao.pdf" };
+    const kept = new Set(["etd/arbo.pdf"]);
+    assert.equal(isPruneCandidate(caoDoc, "etd", "arbo", kept), false);
+  });
+
+  it("prune (etd, arbo) removes stale arbo rows not in the input set", () => {
+    const staleArbo = { fund: "etd", agentKey: "arbo", sourceUri: "etd/old-arbo.pdf" };
+    const kept = new Set(["etd/arbo.pdf"]);
+    assert.equal(isPruneCandidate(staleArbo, "etd", "arbo", kept), true);
   });
 });

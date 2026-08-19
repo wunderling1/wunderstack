@@ -741,6 +741,7 @@ async function retrievalIntegrationChecks(): Promise<Check[]> {
     const result = await retrieveContext({
       query: testCase.question,
       fund: EVAL_FIXTURE_FUND,
+      agentKey: "cao",
       topK: PRODUCTION_DEFAULTS.topK,
       minScore: PRODUCTION_DEFAULTS.minScore,
     });
@@ -753,6 +754,7 @@ async function retrievalIntegrationChecks(): Promise<Check[]> {
     const result = await retrieveContext({
       query: probe,
       fund: EVAL_FIXTURE_FUND,
+      agentKey: "cao",
       topK: PRODUCTION_DEFAULTS.topK,
       minScore: PRODUCTION_DEFAULTS.minScore,
     });
@@ -825,6 +827,7 @@ async function fundLayerChecks(set: GoldenFundSet): Promise<Check[]> {
     const result = await retrieveContext({
       query,
       fund: set.fund,
+      agentKey: "cao",
       topK: PRODUCTION_DEFAULTS.topK,
       minScore: PRODUCTION_DEFAULTS.minScore,
     });
@@ -837,6 +840,7 @@ async function fundLayerChecks(set: GoldenFundSet): Promise<Check[]> {
     const result = await retrieveContext({
       query,
       fund: set.fund,
+      agentKey: "cao",
       topK: PRODUCTION_DEFAULTS.topK,
       minScore: PRODUCTION_DEFAULTS.minScore,
     });
@@ -1316,7 +1320,7 @@ async function corpusIsolationLiveChecks(): Promise<Check[]> {
   const probeQuery = "vakantie loon toeslag pensioen arbeidsduur";
   const checks: Check[] = [];
   for (const fund of funds) {
-    const result = await retrieveContext({ query: probeQuery, fund, topK: 20, minScore: 0 });
+    const result = await retrieveContext({ query: probeQuery, fund, agentKey: "cao", topK: 20, minScore: 0 });
     const leaked = result.chunks.filter((chunk) => chunk.source.fund !== fund);
     checks.push({
       name: `corpus-isolation: fund "${fund}" returns only its own chunks`,

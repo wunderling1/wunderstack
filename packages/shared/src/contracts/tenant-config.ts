@@ -25,13 +25,27 @@ export const tenantThemeSchema = z
   .strict();
 export type TenantTheme = z.infer<typeof tenantThemeSchema>;
 
+/** One starter-question category shown on the empty embed chat. */
+export const starterCategorySchema = z
+  .object({
+    label: z.string().min(1).max(80),
+    questions: z.array(z.string().min(1).max(200)).min(1).max(6),
+  })
+  .strict();
+export type StarterCategory = z.infer<typeof starterCategorySchema>;
+
 /** User-facing (NL) text overrides for the embed. */
 export const tenantTextsSchema = z
   .object({
     tagline: z.string().max(200).optional(),
+    /** Empty-state supporting sentence under the tagline. */
+    intro: z.string().max(400).optional(),
     /** Overrides the default Article 50 transparency notice. */
     article50: z.string().max(500).optional(),
+    /** Flat starter list (legacy). Used only when `starterCategories` is absent. */
     starters: z.array(z.string().min(1).max(200)).max(6).optional(),
+    /** Category pills + questions on the empty chat. Omit to use the embed defaults. */
+    starterCategories: z.array(starterCategorySchema).min(1).max(8).optional(),
   })
   .strict();
 export type TenantTexts = z.infer<typeof tenantTextsSchema>;
@@ -50,6 +64,17 @@ export const tenantPublicConfigSchema = z.object({
   texts: tenantTextsSchema,
   /** Resolved Article 50 notice (tenant override or the default). */
   article50: z.string().min(1),
+  /** Concrete fund this instance serves. The embed sends it on chat (no fund selector). */
+  fund: z.string().min(1),
+  /** Dutch labels for retrieval progress phases (from agent_config or agent defaults). */
+  statusLabels: z
+    .object({
+      searching: z.string().min(1).max(80),
+      retrieved: z.string().min(1).max(80),
+      generating: z.string().min(1).max(80),
+    })
+    .strict()
+    .optional(),
 });
 export type TenantPublicConfig = z.infer<typeof tenantPublicConfigSchema>;
 

@@ -19,6 +19,7 @@
     "test:unit": "tsx --test 'src/**/*.test.ts'",
     "test": "tsx --env-file-if-exists=../../.env src/evals/cao.eval.ts",
     "smoke": "tsx --env-file-if-exists=../../.env src/smoke.ts",
+    "latency:mcp": "tsx --env-file-if-exists=../../.env src/latency-mcp.ts",
     "sync-model-prices": "tsx --env-file-if-exists=../../.env src/sync-model-prices.ts"
   },
   "devDependencies": {

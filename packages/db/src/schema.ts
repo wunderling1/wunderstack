@@ -13,25 +13,31 @@ import {
 } from "drizzle-orm/pg-core";
 
 /**
- * CAO source documents. One row per ingested CAO source (identified by source_uri).
+ * Source documents ingested into the RAG corpus. One row per ingested source (identified by
+ * agent_key + source_uri). `agent_key` isolates corpora on the same fund (e.g. cao vs arbo).
  *
  * `contentHash` (sha256 of the parsed source text) makes ingestion idempotent: re-running with
- * unchanged content is a no-op, a changed source triggers a deliberate re-embed. `source_uri`
- * is unique so the same source can never produce duplicate document rows.
+ * unchanged content is a no-op, a changed source triggers a deliberate re-embed. `(agent_key,
+ * source_uri)` is unique so the same source can never produce duplicate document rows per agent.
  */
 export const documents = pgTable(
   "documents",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    // The O&O fund / sector this CAO belongs to (control/data-plane key material).
+    // The O&O fund / sector (control/data-plane key material).
     fund: text("fund").notNull(),
+    /** Corpus agent key — isolates CAO vs arbocatalogus (and future agents) on the same fund. */
+    agentKey: text("agent_key").notNull(),
     title: text("title").notNull(),
     sourceUri: text("source_uri").notNull(),
     version: text("version").notNull(),
     contentHash: text("content_hash").notNull(),
     ingestedAt: timestamp("ingested_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [uniqueIndex("documents_source_uri_uq").on(table.sourceUri)],
+  (table) => [
+    uniqueIndex("documents_agent_source_uri_uq").on(table.agentKey, table.sourceUri),
+    index("documents_fund_agent_key_idx").on(table.fund, table.agentKey),
+  ],
 );
 
 /**
@@ -137,6 +143,8 @@ export const interactionEvents = pgTable(
     question: text("question"),
     // Coarse theme metadata (roadmap signal). Null until a classifier exists (deferred, regel van drie).
     theme: text("theme"),
+    // Surface that produced the turn (playground | embed | mcp | api). Null for pre-channel events.
+    channel: text("channel"),
     // "up" | "down"; filled in by the feedback endpoint, matched on traceId. Null = no feedback given.
     feedback: text("feedback"),
   },
@@ -145,6 +153,7 @@ export const interactionEvents = pgTable(
     index("interaction_events_fund_idx").on(table.fund),
     index("interaction_events_session_idx").on(table.sessionId),
     index("interaction_events_trace_idx").on(table.traceId),
+    index("interaction_events_channel_idx").on(table.channel),
   ],
 );
 
@@ -185,16 +194,24 @@ export const users = pgTable(
  * Written only by the console via the `tenant_config_writer` role (or DATABASE_URL locally); read by
  * the runtime (`GET /config`) and the dashboard.
  */
-export const tenantConfig = pgTable("tenant_config", {
-  tenantId: text("tenant_id").primaryKey(),
-  publicKey: text("public_key").notNull(),
-  corsAllowlist: text("cors_allowlist").array().notNull().default([]),
-  agentId: text("agent_id").notNull().default("cao"),
-  theme: jsonb("theme").$type<Record<string, unknown>>().notNull().default({}),
-  texts: jsonb("texts").$type<Record<string, unknown>>().notNull().default({}),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const tenantConfig = pgTable(
+  "tenant_config",
+  {
+    tenantId: text("tenant_id").notNull(),
+    /** Catalog agent id for this instance (e.g. cao | arbo). */
+    agentKey: text("agent_key").notNull(),
+    publicKey: text("public_key").notNull(),
+    corsAllowlist: text("cors_allowlist").array().notNull().default([]),
+    theme: jsonb("theme").$type<Record<string, unknown>>().notNull().default({}),
+    texts: jsonb("texts").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.tenantId, table.agentKey] }),
+    uniqueIndex("tenant_config_public_key_uq").on(table.publicKey),
+  ],
+);
 
 export type Document = typeof documents.$inferSelect;
 export type NewDocument = typeof documents.$inferInsert;

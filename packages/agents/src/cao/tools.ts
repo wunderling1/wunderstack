@@ -71,6 +71,7 @@ export async function runRetrieval(input: RetrievalInput): Promise<RetrievalOutp
     query: parsed.query,
     ...(parsed.additionalQueries === undefined ? {} : { additionalQueries: parsed.additionalQueries }),
     fund: parsed.fund,
+    agentKey: "cao",
     topK: parsed.topK,
     minScore: parsed.minScore,
   });

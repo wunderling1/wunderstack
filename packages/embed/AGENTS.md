@@ -12,6 +12,8 @@ site with a single, stable snippet.
   `GET /config` (D17 runtime theming — the tenant theme is injected as CSS custom properties, not the
   compile-time `[data-fund]` seam).
 - Shows the **Article 50** (EU AI Act) transparency notice by default, always.
+- Empty chat shows **starter categories** (defaults in the embed; optional `texts.starterCategories`
+  override from `GET /config`).
 
 ## The stable snippet
 
@@ -24,6 +26,8 @@ Everything variable is fetched at runtime, so the snippet is minimal and never c
 - `src` — the runtime origin; the embed derives its endpoint from it (override with `data-endpoint`).
 - `data-key` — the public tenant-key (safe to expose; gated by CORS + rate limiting, not secrecy).
 - `data-agent` — which agent to serve (default `cao`).
+- `data-mode="inline"` — optional. Mounts into `[data-wunderstack-embed-slot]` as an always-open
+  panel (marketing demo / a dedicated "ask the CAO" page). Default is the floating launcher.
 
 ## Rules
 

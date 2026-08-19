@@ -6,7 +6,7 @@
  * source is a no-op; a changed source replaces that document's chunks (a deliberate re-embed).
  *
  * Usage:
- *   pnpm --filter @wunderstack/ingest ingest [path] --fund <fund> --version <v>
+ *   pnpm --filter @wunderstack/ingest ingest [path] --fund <fund> --agent <key> --version <v>
  *   pnpm --filter @wunderstack/ingest ingest [path] --dry-run    # parse + chunk only, no DB/API
  *   pnpm --filter @wunderstack/ingest ingest [path] --force      # re-chunk + re-embed unchanged source
  *   pnpm --filter @wunderstack/ingest ingest [path] --prune      # input IS the fund's whole corpus
@@ -37,6 +37,7 @@ const INSERT_BATCH_SIZE = 200;
 interface CliOptions {
   inputPath: string;
   fund: string;
+  agentKey: string;
   version: string;
   dryRun: boolean;
   force: boolean;
@@ -51,6 +52,7 @@ function parseCli(): CliOptions {
     allowPositionals: true,
     options: {
       fund: { type: "string" },
+      agent: { type: "string" },
       version: { type: "string" },
       label: { type: "string" },
       "dry-run": { type: "boolean", default: false },
@@ -58,9 +60,13 @@ function parseCli(): CliOptions {
       prune: { type: "boolean", default: false },
     },
   });
+  if (!values.agent) {
+    throw new Error("--agent <key> is required (e.g. cao).");
+  }
   return {
     inputPath: positionals[0] ?? DEFAULT_INPUT_DIR,
     fund: values.fund ?? "demo",
+    agentKey: values.agent,
     version: values.version ?? "1",
     dryRun: values["dry-run"] ?? false,
     force: values.force ?? false,
@@ -151,6 +157,11 @@ function summarize(pieces: Chunk[]): Pick<FileOutcome, "tableChunks" | "structur
   return { tableChunks, structuredChunks, sampleRefs };
 }
 
+function chunkForAgent(agentKey: string, text: string, options: ReturnType<typeof chunkOptionsFromEnv>): Chunk[] {
+  if (agentKey === "cao") return chunk(text, options);
+  throw new Error(`Unknown ingest agent "${agentKey}" — expected cao.`);
+}
+
 async function ingestFile(options: CliOptions, filePath: string): Promise<FileOutcome> {
   // Namespace the source URI by fund so the same filename ingested under two funds produces two
   // distinct documents (source_uri is globally unique) instead of silently overwriting each other.
@@ -158,7 +169,7 @@ async function ingestFile(options: CliOptions, filePath: string): Promise<FileOu
   const title = basename(filePath, extname(filePath));
   const text = await parseFile(filePath);
   const contentHash = sha256(text);
-  const pieces = chunk(text, chunkOptionsFromEnv());
+  const pieces = chunkForAgent(options.agentKey, text, chunkOptionsFromEnv());
   const summary = summarize(pieces);
 
   if (options.dryRun) {
@@ -172,7 +183,7 @@ async function ingestFile(options: CliOptions, filePath: string): Promise<FileOu
   const existing = await db
     .select({ contentHash: documents.contentHash })
     .from(documents)
-    .where(eq(documents.sourceUri, sourceUri))
+    .where(and(eq(documents.sourceUri, sourceUri), eq(documents.agentKey, options.agentKey)))
     .limit(1);
 
   // Idempotency is keyed on the parsed SOURCE TEXT, not the chunk output. A chunker/config change
@@ -189,13 +200,14 @@ async function ingestFile(options: CliOptions, filePath: string): Promise<FileOu
       .insert(documents)
       .values({
         fund: options.fund,
+        agentKey: options.agentKey,
         title,
         sourceUri,
         version: options.version,
         contentHash,
       })
       .onConflictDoUpdate({
-        target: documents.sourceUri,
+        target: [documents.agentKey, documents.sourceUri],
         set: {
           fund: options.fund,
           title,
@@ -245,7 +257,20 @@ interface PrunedDocument {
 }
 
 /**
- * Retract documents of this fund that the current input set does not contain.
+ * Whether a held document row should be retracted when pruning a (fund, agent_key) corpus.
+ * Exported for unit tests — prune must never touch another agent's rows on the same fund.
+ */
+export function isPruneCandidate(
+  doc: { fund: string; agentKey: string; sourceUri: string },
+  fund: string,
+  agentKey: string,
+  keptSourceUris: Set<string>,
+): boolean {
+  return doc.fund === fund && doc.agentKey === agentKey && !keptSourceUris.has(doc.sourceUri);
+}
+
+/**
+ * Retract documents of this fund+agent that the current input set does not contain.
  *
  * Off by default, because an ingest is normally an ADDITION to a fund's corpus. With --prune the
  * caller states that the input IS the fund's complete corpus — which is what a corpus replacement
@@ -255,15 +280,20 @@ interface PrunedDocument {
  *
  * Chunks go with the document row via the schema's ON DELETE CASCADE.
  */
-async function pruneFund(fund: string, keptSourceUris: string[]): Promise<PrunedDocument[]> {
+async function pruneFund(fund: string, agentKey: string, keptSourceUris: string[]): Promise<PrunedDocument[]> {
   const db = getDb();
   const held = await db
-    .select({ id: documents.id, sourceUri: documents.sourceUri })
+    .select({
+      id: documents.id,
+      sourceUri: documents.sourceUri,
+      fund: documents.fund,
+      agentKey: documents.agentKey,
+    })
     .from(documents)
-    .where(eq(documents.fund, fund));
+    .where(and(eq(documents.fund, fund), eq(documents.agentKey, agentKey)));
 
   const kept = new Set(keptSourceUris);
-  const stale = held.filter((doc) => !kept.has(doc.sourceUri));
+  const stale = held.filter((doc) => isPruneCandidate(doc, fund, agentKey, kept));
   if (stale.length === 0) return [];
 
   const staleIds = stale.map((doc) => doc.id);
@@ -274,7 +304,7 @@ async function pruneFund(fund: string, keptSourceUris: string[]): Promise<Pruned
     .groupBy(chunksTable.documentId);
   const countByDocument = new Map(counts.map((row) => [row.documentId, row.count]));
 
-  await db.delete(documents).where(and(eq(documents.fund, fund), inArray(documents.id, staleIds)));
+  await db.delete(documents).where(and(eq(documents.fund, fund), eq(documents.agentKey, agentKey), inArray(documents.id, staleIds)));
 
   return stale.map((doc) => ({
     sourceUri: doc.sourceUri,
@@ -313,7 +343,7 @@ async function main(): Promise<void> {
   }
 
   if (options.prune && !options.dryRun) {
-    const pruned = await pruneFund(options.fund, ingestedSourceUris);
+    const pruned = await pruneFund(options.fund, options.agentKey, ingestedSourceUris);
     for (const doc of pruned) {
       console.log(`  retracted ${doc.sourceUri} (${String(doc.chunkCount)} chunks removed)`);
     }

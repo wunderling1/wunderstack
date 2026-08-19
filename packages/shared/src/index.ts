@@ -8,6 +8,11 @@ export {
 } from "./config/embedding.js";
 
 export {
+  agentConfigDataSchema,
+  type AgentConfigData,
+} from "./config/agent-config.js";
+
+export {
   RERANK_CONFIG,
   requireRerankConfig,
   type RerankConfig,
@@ -34,17 +39,35 @@ export {
   type ModelCitation,
 } from "./contracts/citation.js";
 
+export {
+  chatHistoryMessageSchema,
+  chatRequestSchema,
+  chatStatusPhases,
+  chatEventSchema,
+  type ChatRequest,
+  type ChatCitation,
+  type ChatStatusPhase,
+  type ChatEvent,
+} from "./contracts/chat.js";
+
+export {
+  agentChannels,
+  agentChannelSchema,
+  type AgentChannel,
+} from "./contracts/channel.js";
 export { parseCaoFunds, isFundScopeConfigured } from "./config/funds.js";
 
 export {
   tenantThemeSchema,
   tenantTextsSchema,
   tenantPublicConfigSchema,
+  starterCategorySchema,
   isTenantKeyFormat,
   DEFAULT_ARTICLE_50_NOTICE,
   type TenantTheme,
   type TenantTexts,
   type TenantPublicConfig,
+  type StarterCategory,
 } from "./contracts/tenant-config.js";
 
 export { EVAL_FIXTURE_FUND } from "./config/eval.js";

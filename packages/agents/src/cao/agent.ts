@@ -28,8 +28,9 @@ import { runRetrieval, type RetrievalOutput } from "./tools.js";
 import { stripFailedMarkers, stripUnverifiedMarkers, verifyCitations } from "./verify-citations.js";
 
 /**
- * The CAO-agent — one Mastra `Agent` (no Supervisor for a single agent; that pattern arrives with
- * the second agent). Mastra is fully contained here: callers only ever see the `CaoAgent` seam.
+ * The CAO-agent — one Mastra `Agent` behind the `CaoAgent` seam. Multi-agent routing uses separate
+ * surfaces per agent (no Supervisor); see docs/decisions/DECISION-second-agent-arbo.md. Mastra stays
+ * inside this package: callers never import Mastra directly.
  *
  * Flow per question (deterministic, request/response):
  *   1. open a Langfuse trace and retrieve grounded context through @wunderstack/rag (scoped to a
@@ -110,7 +111,7 @@ function tracingOptionsFor(
         hits: retrieval.hits,
       },
     },
-    tags: ["cao-agent", fund],
+    tags: [`${AGENT_KEY}-agent`, fund],
   };
 }
 
@@ -399,12 +400,14 @@ export function createCaoAgent(): CaoAgent {
       const userSupplied = userSuppliedText(parsedInput);
 
       const trace = startCaoTrace(mastra, {
+        agentKey: AGENT_KEY,
         question,
         fund,
         topK,
         minScore,
         ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
         ...(options.userId === undefined ? {} : { userId: options.userId }),
+        ...(options.channel === undefined ? {} : { channel: options.channel }),
         environment: env.NODE_ENV,
       });
       const traceId = trace.link().traceId ?? null;
@@ -495,12 +498,14 @@ export function createCaoAgent(): CaoAgent {
       const requestStart = performance.now();
 
       const trace = startCaoTrace(mastra, {
+        agentKey: AGENT_KEY,
         question,
         fund,
         topK,
         minScore,
         ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
         ...(options.userId === undefined ? {} : { userId: options.userId }),
+        ...(options.channel === undefined ? {} : { channel: options.channel }),
         environment: env.NODE_ENV,
       });
       const traceId = trace.link().traceId ?? null;

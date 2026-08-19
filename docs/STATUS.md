@@ -7,6 +7,10 @@ _Gegenereerd: 2026-07-19 · Audit-methode: statische verificatie (geen test-runs
 > §4.2 hieronder is herschreven naar G-termen en die verse run. Rode-gate-uitspraken elders in dit
 > document (§1, §5, §7, §9, §10) horen bij de oudere `fix/citation-pipeline`-snapshot en zijn op deze
 > branch achterhaald.
+>
+> **Update 2026-07-29.** De under-refusal **0.333** in §7/§9 was een corrupt-baseline-incident
+> (zie `GATE-ARCHITECTURE.md`). Huidige `baseline.json` en `eval-report.json`: `underRefusalRate: 0`.
+> Die passages hieronder zijn historisch en mogen niet als actuele status gelezen worden.
 
 > Legenda: ✅ Done (feit, bewijs benoemd) · 🟡 Claimed done / discrepantie · 🔵 In progress (deels bewijs) · ⚪ Not started · ❓ Onduidelijk/niet gevonden · ⚠️ Requires test run.
 > Labels bij claims: `feit` (geverifieerd in code) · `schatting` (afgeleid uit sterke signalen) · `aanname` (plan zegt het, geen bewijs gevonden).

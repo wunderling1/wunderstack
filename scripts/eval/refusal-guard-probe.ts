@@ -100,7 +100,7 @@ async function probe(kind: ProbeKind, id: string, question: string, fund: string
   const { rewritten } = rewriteQuery(question);
   // minScore 0 returns the whole candidate pool with scores, so one read shows both what the guard
   // sees today (hits >= the floor) and what any other floor would see.
-  const pool = await retrieve({ query: rewritten, fund, candidateK: config.candidateK, minScore: 0 });
+  const pool = await retrieve({ query: rewritten, fund, agentKey: "cao", candidateK: config.candidateK, minScore: 0 });
   return {
     kind,
     id,

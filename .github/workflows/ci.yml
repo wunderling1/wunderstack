@@ -121,9 +121,9 @@ jobs:
         if: env.GATE_DB == 'true'
         run: |
           pnpm --filter @wunderstack/ingest ingest:fixtures
-          pnpm --filter @wunderstack/ingest ingest demo-corpus --fund demo --version 1 --prune
+          pnpm --filter @wunderstack/ingest ingest demo-corpus --fund demo --agent cao --version 1 --prune
           pnpm --filter @wunderstack/ingest ingest input \
-            --fund elektronische-detailhandel --version 1 --prune
+            --fund elektronische-detailhandel --agent cao --version 1 --prune
         env:
           DATABASE_URL: ${{ env.GATE_DATABASE_URL }}
           SCALEWAY_API_KEY: ${{ secrets.SCALEWAY_API_KEY }}

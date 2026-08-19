@@ -7,12 +7,14 @@ import {
   RefusalNotice,
 } from "@wunderstack/ui";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { Starters, resolveStarterCategories } from "./starters";
 import {
   chatEventSchema,
   embedConfigSchema,
   type ChatEvent,
   type EmbedCitation,
   type EmbedConfig,
+  type EmbedLayout,
 } from "./types";
 
 interface Turn {
@@ -28,6 +30,8 @@ interface Props {
   endpoint: string;
   agentKey: string | null;
   agentId: string;
+  /** `inline` = in-page panel (marketing / dedicated page). Default is the fund-site launcher. */
+  layout?: EmbedLayout;
 }
 
 const DEFAULT_ARTICLE_50 =
@@ -48,8 +52,9 @@ function themeStyle(theme: EmbedConfig["theme"] | undefined): CSSProperties {
   return style as CSSProperties;
 }
 
-export function EmbedApp({ endpoint, agentKey, agentId }: Props) {
-  const [open, setOpen] = useState(false);
+export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: Props) {
+  const inline = layout === "inline";
+  const [open, setOpen] = useState(inline);
   const [config, setConfig] = useState<EmbedConfig | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
@@ -133,7 +138,13 @@ export function EmbedApp({ endpoint, agentKey, agentId }: Props) {
           "content-type": "application/json",
           ...(agentKey ? { "x-wunderstack-key": agentKey } : {}),
         },
-        body: JSON.stringify({ question, history, sessionId }),
+        body: JSON.stringify({
+          question,
+          history,
+          sessionId,
+          channel: "embed",
+          ...(config?.fund ? { fund: config.fund } : {}),
+        }),
       });
       if (!res.ok || !res.body) throw new Error("request_failed");
 
@@ -169,99 +180,116 @@ export function EmbedApp({ endpoint, agentKey, agentId }: Props) {
     }
   }
 
+  const panel = (
+    <Card
+      className={
+        inline
+          ? "flex h-full w-full flex-col overflow-hidden p-0"
+          : "flex h-[70vh] max-h-[600px] w-[min(92vw,380px)] flex-col overflow-hidden p-0 shadow-xl"
+      }
+    >
+      <div className="flex items-center gap-2 border-b border-border bg-surface px-4 py-3">
+        {logo ? <img src={logo} alt="" className="h-6 w-auto" /> : null}
+        <p className="min-w-0 truncate text-sm font-semibold text-text">{tagline}</p>
+        {inline ? null : (
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            aria-label="Sluiten"
+            className="ml-auto rounded p-1 text-text-muted hover:text-text"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+
+      <div ref={scrollRef} className="flex flex-1 flex-col gap-3 overflow-y-auto bg-page px-4 py-4">
+        {turns.length === 0 ? (
+          <Starters
+            categories={resolveStarterCategories(config?.texts)}
+            onPick={(question) => void send(question)}
+          />
+        ) : null}
+        {turns.map((turn, index) => (
+          <div key={index} className="flex flex-col gap-2">
+            {turn.refused ? (
+              <RefusalNotice>{turn.text}</RefusalNotice>
+            ) : (
+              <AnswerCard role={turn.role}>
+                {turn.text || (turn.role === "agent" ? "…" : "")}
+              </AnswerCard>
+            )}
+            {turn.citations && turn.citations.length > 0 ? (
+              <div className="flex flex-col gap-2">
+                {turn.citations.map((citation) => (
+                  <CitationBlock
+                    key={citation.ref}
+                    refNumber={citation.ref}
+                    verification="verified"
+                    label={citation.sourceRef ?? citation.heading ?? citation.title}
+                    quote={citation.snippet || citation.quote}
+                  />
+                ))}
+              </div>
+            ) : null}
+            {turn.role === "agent" &&
+            !turn.refused &&
+            turn.followUpQuestions &&
+            turn.followUpQuestions.length > 0 ? (
+              <div className="flex flex-col gap-1.5">
+                <p className="text-[11px] font-medium text-text-muted">Handige vervolgvragen</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {turn.followUpQuestions.map((question) => (
+                    <button
+                      key={question}
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void send(question)}
+                      className="rounded-pill border border-primary/30 bg-primary-tint px-2.5 py-1 text-left text-xs text-primary disabled:opacity-50"
+                    >
+                      {question}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+
+      <form
+        className="flex items-end gap-2 border-t border-border bg-surface px-3 py-3"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void send();
+        }}
+      >
+        <Field
+          value={input}
+          onChange={(event) => setInput(event.target.value)}
+          placeholder="Typ je vraag…"
+          disabled={busy}
+          className="flex-1"
+        />
+        <Button type="submit" disabled={busy || input.trim().length === 0}>
+          {busy ? "…" : "Stuur"}
+        </Button>
+      </form>
+
+      <p className="border-t border-border bg-surface px-4 py-2 text-[11px] leading-snug text-text-subtle">
+        {article50}
+      </p>
+    </Card>
+  );
+
   return (
     <div
       data-agent={agentId}
       style={themeStyle(config?.theme)}
-      className="fixed bottom-4 right-4 z-[2147483647] font-sans"
+      className={inline ? "h-full w-full font-sans" : "fixed bottom-4 right-4 z-[2147483647] font-sans"}
     >
-      {open ? (
-        <Card className="flex h-[70vh] max-h-[600px] w-[min(92vw,380px)] flex-col overflow-hidden p-0 shadow-xl">
-          <div className="flex items-center gap-2 border-b border-border bg-surface px-4 py-3">
-            {logo ? <img src={logo} alt="" className="h-6 w-auto" /> : null}
-            <p className="min-w-0 truncate text-sm font-semibold text-text">{tagline}</p>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              aria-label="Sluiten"
-              className="ml-auto rounded p-1 text-text-muted hover:text-text"
-            >
-              ✕
-            </button>
-          </div>
-
-          <div ref={scrollRef} className="flex flex-1 flex-col gap-3 overflow-y-auto bg-page px-4 py-4">
-            {turns.length === 0 ? <p className="text-sm text-text-muted">{tagline}</p> : null}
-            {turns.map((turn, index) => (
-              <div key={index} className="flex flex-col gap-2">
-                {turn.refused ? (
-                  <RefusalNotice>{turn.text}</RefusalNotice>
-                ) : (
-                  <AnswerCard role={turn.role}>
-                    {turn.text || (turn.role === "agent" ? "…" : "")}
-                  </AnswerCard>
-                )}
-                {turn.citations && turn.citations.length > 0 ? (
-                  <div className="flex flex-col gap-2">
-                    {turn.citations.map((citation) => (
-                      <CitationBlock
-                        key={citation.ref}
-                        refNumber={citation.ref}
-                        verification="verified"
-                        label={citation.sourceRef ?? citation.heading ?? citation.title}
-                        quote={citation.snippet || citation.quote}
-                      />
-                    ))}
-                  </div>
-                ) : null}
-                {turn.role === "agent" &&
-                !turn.refused &&
-                turn.followUpQuestions &&
-                turn.followUpQuestions.length > 0 ? (
-                  <div className="flex flex-col gap-1.5">
-                    <p className="text-[11px] font-medium text-text-muted">Handige vervolgvragen</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {turn.followUpQuestions.map((question) => (
-                        <button
-                          key={question}
-                          type="button"
-                          disabled={busy}
-                          onClick={() => void send(question)}
-                          className="rounded-pill border border-primary/30 bg-primary-tint px-2.5 py-1 text-left text-xs text-primary disabled:opacity-50"
-                        >
-                          {question}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            ))}
-          </div>
-
-          <form
-            className="flex items-end gap-2 border-t border-border bg-surface px-3 py-3"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void send();
-            }}
-          >
-            <Field
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              placeholder="Typ je vraag…"
-              disabled={busy}
-              className="flex-1"
-            />
-            <Button type="submit" disabled={busy || input.trim().length === 0}>
-              {busy ? "…" : "Stuur"}
-            </Button>
-          </form>
-
-          <p className="border-t border-border bg-surface px-4 py-2 text-[11px] leading-snug text-text-subtle">
-            {article50}
-          </p>
-        </Card>
+      {inline || open ? (
+        panel
       ) : (
         <button
           type="button"
