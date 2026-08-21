@@ -97,7 +97,7 @@ async function main(): Promise<void> {
   console.log(`  NEXT_PUBLIC_WUNDERSTACK_TENANT_KEY_ARBO=${arbo.publicKey}`);
   console.log("\nThen ingest the arbocatalogus:");
   console.log(
-    "  pnpm --filter @wunderstack/ingest ingest input/arbo_catalogus_oomt.pdf --fund oomt --agent arbo --version arbo-oomt-1",
+    "  pnpm --filter @wunderstack/ingest ingest arbo-oomt --fund oomt --agent arbo --version arbo-oomt-1 --prune",
   );
 }
 
