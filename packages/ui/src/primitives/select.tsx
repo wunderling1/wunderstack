@@ -10,10 +10,10 @@ export type SelectProps = SelectHTMLAttributes<HTMLSelectElement>;
  */
 export function Select({ className, children, ...props }: SelectProps) {
   return (
-    <div className="relative inline-flex w-full">
+    <div className="relative flex w-full min-w-0">
       <select
         className={cn(
-          "h-10 w-full appearance-none rounded-[var(--radius-pill)] border border-border bg-surface pl-4 pr-10 text-sm text-text",
+          "h-10 min-w-0 w-full truncate appearance-none rounded-[var(--radius-pill)] border border-border bg-surface pl-4 pr-10 text-sm text-text",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-page",
           "disabled:cursor-not-allowed disabled:opacity-50",
           className,

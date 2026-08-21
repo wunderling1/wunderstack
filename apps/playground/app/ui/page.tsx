@@ -127,6 +127,7 @@ export default function UiPreviewPage() {
           <Pill>Neutraal</Pill>
           <Pill variant="primary">Vakantie</Pill>
           <Pill variant="outline">Artikel 12.3</Pill>
+          <Pill variant="selected">Actief</Pill>
         </div>
       </Section>
 
@@ -203,7 +204,17 @@ export default function UiPreviewPage() {
       <Section title="Trust-patterns — conversatie">
         <div className="flex flex-col gap-4">
           <AnswerCard role="user">Hoeveel vakantiedagen krijg ik volgens de CAO?</AnswerCard>
-          <AnswerCard role="agent">
+          <AnswerCard
+            role="agent"
+            agentLabel="AI-assistent"
+            agentSubLabel="CAO-agent"
+            footer={
+              <div className="border-t border-border px-8 py-4 text-sm text-text-muted">
+                <span className="text-[11px] font-medium uppercase tracking-wider text-text-subtle">Bronnen</span>
+                <p className="mt-1 text-xs text-text-subtle">· Artikel 12, lid 3 — uw fund CAO v2024</p>
+              </div>
+            }
+          >
             Volgens de CAO heb je recht op 25 vakantiedagen per jaar bij een voltijds dienstverband
             <CitationBadge refNumber={1} className="ml-1" />.
           </AnswerCard>

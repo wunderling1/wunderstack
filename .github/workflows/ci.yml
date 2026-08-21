@@ -71,6 +71,9 @@ jobs:
       - name: UI boundaries
         run: pnpm check-ui-boundaries
 
+      - name: Motion tokens
+        run: pnpm check-motion
+
       # Fast, offline unit tests
       - name: Unit tests
         run: pnpm turbo run test:unit

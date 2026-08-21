@@ -13,9 +13,9 @@ export function IconButton({ className, label, children, ...props }: IconButtonP
       type="button"
       aria-label={label}
       className={cn(
-        "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-on-primary transition-colors",
+        "motion-control inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-on-primary shadow-[var(--elevation-glow)]",
         "hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-page",
-        "disabled:pointer-events-none disabled:opacity-50",
+        "disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none",
         className,
       )}
       {...props}

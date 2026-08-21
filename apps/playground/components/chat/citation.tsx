@@ -116,7 +116,7 @@ function CitationItem({
         className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text-muted hover:bg-surface-sunk"
       >
         <ChevronRight
-          className={`h-4 w-4 shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
+          className={`h-4 w-4 shrink-0 [transition:transform_var(--motion-state)] ${open ? "rotate-90" : ""}`}
           aria-hidden
         />
         <FileText className="h-4 w-4 shrink-0" aria-hidden />

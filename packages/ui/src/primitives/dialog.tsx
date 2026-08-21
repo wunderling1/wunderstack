@@ -17,7 +17,7 @@ export function DialogOverlay({
 }: ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>) {
   return (
     <DialogPrimitive.Overlay
-      className={cn("fixed inset-0 z-50 bg-text/50 backdrop-blur-sm", className)}
+      className={cn("motion-overlay fixed inset-0 z-50 bg-text/50 backdrop-blur-sm", className)}
       {...props}
     />
   );
@@ -40,8 +40,8 @@ export function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Content
         className={cn(
-          "fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2",
-          "rounded-[var(--radius-card)] border border-border bg-surface p-6 text-text shadow-lg",
+          "motion-dialog-content fixed left-1/2 top-1/2 z-50 w-full max-w-md",
+          "rounded-[var(--radius-card)] bg-surface p-6 text-text shadow-[var(--elevation-raised)]",
           className,
         )}
         {...props}
@@ -50,7 +50,7 @@ export function DialogContent({
         <DialogPrimitive.Close
           aria-label={closeLabel}
           className={cn(
-            "absolute right-4 top-4 rounded-[var(--radius-control)] p-1 text-text-muted transition-colors",
+            "motion-control absolute right-4 top-4 rounded-[var(--radius-control)] p-1 text-text-muted",
             "hover:bg-surface-sunk hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
           )}
         >

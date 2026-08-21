@@ -31,7 +31,11 @@
   --color-state-danger-fg: var(--state-danger-fg);
   --radius-control: var(--radius-control);
   --radius-card: var(--radius-card);
+  --radius-badge: var(--radius-badge);
   --radius-pill: var(--radius-pill);
+  --shadow-card: var(--elevation-card);
+  --shadow-raised: var(--elevation-raised);
+  --shadow-glow: var(--elevation-glow);
   --font-sans: var(--font-body);
   --font-display: var(--font-display);
   --text-xs: var(--text-xs);

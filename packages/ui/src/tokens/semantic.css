@@ -28,10 +28,31 @@
   --state-danger-bg: var(--danger-bg);
   --state-danger-fg: var(--danger-fg);
 
+  /* Motion — semantic (components use only these, never raw ms or cubic-bezier) */
+  --motion-press: var(--duration-100) var(--ease-standard);
+  --motion-state: var(--duration-150) var(--ease-standard);
+  --motion-enter: var(--duration-250) var(--ease-out-soft);
+  /* Empty-state stagger: longer + standard ease so the fade is readable (out-soft snaps opacity). */
+  --motion-enter-slow: var(--duration-400) var(--ease-standard);
+  /* Exit is intentionally shorter than enter: disappearing should never feel like waiting. */
+  --motion-exit: var(--duration-150) var(--ease-standard);
+  --motion-offset-enter: var(--distance-sm);
+  --motion-stagger: var(--duration-100);
+  /* Loop: state-bound (spins until the triggering element unmounts). Not an enter/exit duration. */
+  --motion-spin: var(--duration-spin) var(--ease-linear) infinite;
+
+  /* Elevation — components use only these names, never raw box-shadow values. */
+  --elevation-card: var(--shadow-sm);
+  --elevation-raised: var(--shadow-md);
+  /* Glow uses color-mix so the fund primary colour carries through. */
+  --elevation-glow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 20%, transparent),
+    var(--shadow-sm);
+
   /* Shape */
   --radius-input: 6px;
-  --radius-control: 10px;
-  --radius-card: 16px;
+  --radius-control: 12px;
+  --radius-card: 20px;
+  --radius-badge: 6px;
   --radius-pill: 999px;
 
   /* Type */
@@ -44,4 +65,33 @@
   --text-xl: 25px;
   --text-2xl: 31px;
   --text-3xl: 39px;
+}
+
+/*
+ * Reduced motion — handled exactly once, here.
+ * No useReducedMotion hook, no per-component @media block.
+ * A component that needs to inspect this value is a signal the token is wrong.
+ *
+ * 0.01ms and not 0: transitionend/animationend still fire so code waiting on
+ * those events cannot hang. Do not change to 0ms.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-50: 0.01ms;
+    --duration-100: 0.01ms;
+    --duration-150: 0.01ms;
+    --duration-250: 0.01ms;
+    --duration-400: 0.01ms;
+    --duration-spin: 0.01ms;
+    --motion-offset-enter: 0px;
+    /* Freeze loops. Zeroing duration alone + `infinite` would hyper-spin. */
+    --motion-spin: var(--duration-spin) var(--ease-linear) 1;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
 }

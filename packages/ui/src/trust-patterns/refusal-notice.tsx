@@ -12,15 +12,15 @@ export function RefusalNotice({ children, className }: RefusalNoticeProps) {
   return (
     <div
       className={cn(
-        "rounded-[var(--radius-control)] border border-border bg-state-refusal-bg px-4 py-3 text-sm text-state-refusal-fg",
+        "w-full rounded-[var(--radius-card)] bg-surface px-8 py-6 text-base leading-relaxed shadow-[var(--elevation-card)]",
         className,
       )}
       role="status"
     >
-      <Chip variant="refusal" className="mb-2">
+      <Chip variant="refusal" className="mb-3">
         Niet in de bron
       </Chip>
-      <p className="leading-relaxed">{children}</p>
+      <p className="text-text">{children}</p>
     </div>
   );
 }
