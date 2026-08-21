@@ -53,8 +53,13 @@ function followUpSignal(caller?: AbortSignal): AbortSignal {
 }
 
 /**
- * Tolerant parse: prefer a JSON array; fall back to one-question-per-line. Then trim, dedupe,
- * drop the original question, and cap at {@link MAX_QUESTIONS}.
+ * Tolerant parse: prefer a JSON array; fall back to packed `"q1","q2"` strings, then
+ * one-question-per-line. Then trim, dedupe, drop the original question, and cap at
+ * {@link MAX_QUESTIONS}.
+ *
+ * Small models often truncate the array (`maxTokens`) or omit the wrapping `[…]`. The
+ * previous newline fallback then treated the whole blob as one chip, which rendered as a
+ * single button containing `Vraag 1?","Vraag 2?`.
  */
 export function parseFollowUpQuestions(raw: string, originalQuestion: string): string[] {
   const trimmed = raw.trim();
@@ -62,28 +67,7 @@ export function parseFollowUpQuestions(raw: string, originalQuestion: string): s
     return [];
   }
 
-  let candidates: string[] | null = null;
-
-  // Prefer a JSON array — models sometimes wrap it in markdown fences.
-  const jsonCandidate = extractJsonArray(trimmed);
-  if (jsonCandidate !== null) {
-    try {
-      const parsed: unknown = JSON.parse(jsonCandidate);
-      if (Array.isArray(parsed)) {
-        candidates = parsed.filter((item): item is string => typeof item === "string");
-      }
-    } catch {
-      /* fall through to line split */
-    }
-  }
-
-  if (candidates === null) {
-    candidates = trimmed
-      .split("\n")
-      .map((line) => stripListLine(line))
-      .filter((line) => line.length > 0);
-  }
-
+  const candidates = collectCandidates(trimmed);
   const seen = new Set<string>();
   const originalKey = normalizeKey(originalQuestion);
   const cleaned: string[] = [];
@@ -107,6 +91,102 @@ export function parseFollowUpQuestions(raw: string, originalQuestion: string): s
   return cleaned;
 }
 
+function collectCandidates(trimmed: string): string[] {
+  const fromJson = parseJsonQuestionArray(trimmed);
+  if (fromJson !== null) {
+    return fromJson.flatMap(expandPackedQuestion);
+  }
+
+  const packed = splitPackedQuotedQuestions(trimmed);
+  if (packed.length > 1) {
+    return packed;
+  }
+
+  return trimmed
+    .split("\n")
+    .map((line) => stripListLine(line))
+    .filter((line) => line.length > 0)
+    .flatMap(expandPackedQuestion);
+}
+
+/** Split a single string that is still a packed `"q1","q2"` blob (JSON parse yielded one element). */
+function expandPackedQuestion(question: string): string[] {
+  if (!question.includes('","')) {
+    return [question];
+  }
+  const split = splitPackedQuotedQuestions(question);
+  return split.length > 1 ? split : [question];
+}
+
+function parseJsonQuestionArray(text: string): string[] | null {
+  const candidate = jsonArrayCandidate(text);
+  if (candidate === null) {
+    return null;
+  }
+  const parsed = parseJsonArray(candidate) ?? parseJsonArray(repairTruncatedJsonArray(candidate));
+  if (parsed === null) {
+    return null;
+  }
+  const strings = parsed.filter((item): item is string => typeof item === "string");
+  return strings.length > 0 ? strings : null;
+}
+
+function parseJsonArray(json: string): unknown[] | null {
+  try {
+    const parsed: unknown = JSON.parse(json);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Close a truncated JSON string array so `JSON.parse` can recover complete items plus the
+ * last (possibly unfinished) question. Does not invent missing items.
+ */
+function repairTruncatedJsonArray(json: string): string {
+  let repaired = json.trimEnd();
+  if (repaired.endsWith("]")) {
+    return repaired;
+  }
+  if (!repaired.endsWith('"')) {
+    repaired += '"';
+  }
+  return `${repaired}]`;
+}
+
+function jsonArrayCandidate(text: string): string | null {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const body = (fenced?.[1]?.trim() ?? text).trim();
+  const extracted = extractJsonArray(body);
+  if (extracted !== null) {
+    return extracted;
+  }
+  if (body.startsWith("[")) {
+    return body;
+  }
+  if (body.includes('","')) {
+    return `[${body}]`;
+  }
+  return null;
+}
+
+/**
+ * Split a packed quoted-string blob (`"Q1?","Q2?"` or `["Q1?","Q2?"`) into bare questions.
+ * Only splits on `","` so a real question that contains a comma stays intact.
+ */
+function splitPackedQuotedQuestions(text: string): string[] {
+  const stripped = text.trim().replace(/^\[+\s*/, "").replace(/\s*\]+$/, "");
+  if (!stripped.includes('","')) {
+    const cleaned = stripListLine(stripped);
+    return cleaned.length > 0 ? [cleaned] : [];
+  }
+  return stripped
+    .split('","')
+    .map((part) => stripListLine(part))
+    .filter((part) => part.length > 0);
+}
+
 /**
  * Clean a single fallback line into a bare question. Strips a leading list marker
  * (`-`, `*`, `1.`, `1)`) and then peels JSON array/string wrapper artifacts the model
@@ -122,14 +202,12 @@ function stripListLine(line: string): string {
 
 /** Pull a `[...]` JSON array out of free text / markdown fences, or null if none found. */
 function extractJsonArray(text: string): string | null {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  const body = fenced?.[1]?.trim() ?? text;
-  const start = body.indexOf("[");
-  const end = body.lastIndexOf("]");
+  const start = text.indexOf("[");
+  const end = text.lastIndexOf("]");
   if (start === -1 || end === -1 || end <= start) {
     return null;
   }
-  return body.slice(start, end + 1);
+  return text.slice(start, end + 1);
 }
 
 /**
@@ -149,7 +227,7 @@ export async function suggestFollowUps(input: SuggestFollowUpsInput): Promise<Su
     const result = await generateText({
       model: FOLLOW_UP_MODEL,
       temperature: 0.3,
-      maxTokens: 160,
+      maxTokens: 280,
       abortSignal: followUpSignal(input.abortSignal),
       messages: [
         {

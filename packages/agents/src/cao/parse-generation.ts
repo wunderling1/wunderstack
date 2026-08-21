@@ -46,12 +46,32 @@ function locateSentinel(raw: string): { index: number; length: number } {
 }
 
 export interface ParsedGenerationOutput {
-  /** Answer prose with `[n]` markers; sentinel and citation block stripped. */
+  /** Answer prose with `[n]` markers; sentinel, citation block, and leaked chunk_id stripped. */
   answerMarkdown: string;
   /** Raw model citations before verification (may be empty if parsing failed). */
   modelCitations: ModelCitation[];
   /** True when the citation JSON block could not be parsed. */
   citationParseFailed: boolean;
+}
+
+/**
+ * Remove citation-protocol identifiers the model copies from assembled context
+ * (`[n] chunk_id=<id> …`) into the user-facing running text. Users see `[n]` chips;
+ * the uuid belongs only in the post-sentinel JSON.
+ *
+ * Matches `chunk_id=` (equals), not JSON `"chunk_id":`, so a leaked JSON array in the
+ * prose is left for the citation-coupling guard instead of being silently mangled.
+ */
+export function stripChunkIdsFromProse(answer: string): string {
+  return answer
+    .replace(/\s*\[chunk_id=[^\]]+\]/gi, "")
+    .replace(/\s*\bchunk_id=[A-Za-z0-9._-]+/gi, "")
+    .replace(/\s*\.?[ \t]*Citaat:\s*"[^"]*"/gi, "")
+    .replace(/ +([.,;:])/g, "$1")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/ {2,}/g, " ")
+    .trimEnd();
 }
 
 /**
@@ -62,13 +82,13 @@ export function parseGenerationOutput(raw: string): ParsedGenerationOutput {
   const sentinel = locateSentinel(raw);
   if (sentinel.index === -1) {
     return {
-      answerMarkdown: raw.trimEnd(),
+      answerMarkdown: stripChunkIdsFromProse(raw.trimEnd()),
       modelCitations: [],
       citationParseFailed: true,
     };
   }
 
-  const answerMarkdown = raw.slice(0, sentinel.index).trimEnd();
+  const answerMarkdown = stripChunkIdsFromProse(raw.slice(0, sentinel.index).trimEnd());
   const afterSentinel = raw.slice(sentinel.index + sentinel.length).trim();
 
   if (afterSentinel.length === 0) {

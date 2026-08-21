@@ -131,6 +131,22 @@ describe("verifyAndBuild — G4 citation coupling", () => {
     assert.ok(result.answer.includes("[1]"));
   });
 
+  it("does not serve leaked chunk_id in the running text", () => {
+    const content = "Zet de (elektronische)parkeerrem vast. Markeer de werkplek.";
+    const chunkId = "07950b16-657b-46f6-9224-2af7d36e47f7";
+    const retrieval = retrievalWithChunk(chunkId, content);
+    const prose =
+      `**Zet de (elektronische)parkeerrem vast** [1]. Citaat: "Zet de (elektronische)parkeerrem vast" [chunk_id=${chunkId}].`;
+    const output = raw(prose, [{ marker: 1, chunk_id: chunkId, quote: "Zet de (elektronische)parkeerrem vast" }]);
+    const result = verifyAndBuild(output, retrieval, "");
+    assert.equal(result.found, true);
+    assert.equal(result.answer.includes("chunk_id"), false, "protocol id must not reach the user");
+    assert.equal(result.answer.includes(chunkId), false);
+    assert.ok(result.answer.includes("[1]"));
+    assert.equal(result.citations.length, 1);
+    assert.equal(result.citations[0]?.chunkId, chunkId, "the citation card still carries the id");
+  });
+
   it("does not convert a legitimate model refusal (no fact, no marker) into UNVERIFIABLE", () => {
     const retrieval = retrievalWithGrounding(grounding);
     const result = verifyAndBuild(NOT_FOUND_MESSAGE, retrieval, "");
