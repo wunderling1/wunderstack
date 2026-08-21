@@ -1,25 +1,22 @@
 "use client";
 
+import { Avatar } from "@wunderstack/ui";
 import { ChevronDown } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { playgroundHref } from "@/lib/playground-href";
-import { fundSourceLabel } from "@/lib/fund-theme";
 import { cn } from "@/lib/utils";
+import { PLAYGROUND_AGENT_BY_ID, PLAYGROUND_AGENTS, type PlaygroundAgent } from "@/lib/runtime-config";
 
-/**
- * Explicit corpus (fund) selector for the demo. One session = one corpus: the user picks which
- * fund's CAO to search, and the choice drives both retrieval scope (server-side) and the theme.
- * Changing it navigates to `?fund=<key>`, reloading the page so the server resolves the new scope.
- */
-export function FundSelector({ funds, active }: { funds: string[]; active: string }) {
+/** Switch CAO vs arbocatalogus demo instances (separate embed keys). */
+export function AgentSelector({ active }: { active: PlaygroundAgent }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const listId = useId();
-  const singleFund = funds.length <= 1;
+  const selected = PLAYGROUND_AGENT_BY_ID[active];
 
   useEffect(() => {
     if (!open) return;
@@ -39,48 +36,60 @@ export function FundSelector({ funds, active }: { funds: string[]; active: strin
     };
   }, [open]);
 
+  const hrefFor = (id: PlaygroundAgent) => playgroundHref(pathname, searchParams, { agent: id });
+
   return (
-    <div ref={rootRef} className="relative min-w-0">
+    <div ref={rootRef} className="relative">
       <button
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={listId}
-        aria-label="Kies bron"
-        disabled={singleFund}
+        aria-label="Kies agent"
         onClick={() => setOpen((value) => !value)}
         className={cn(
-          "flex w-full min-w-0 items-center gap-2 rounded-[var(--radius-control)] border border-border bg-surface px-2.5 py-2 text-left",
+          "flex w-full items-center gap-2.5 rounded-[var(--radius-control)] border border-border bg-surface px-2.5 py-2 text-left",
           "hover:bg-surface-sunk focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-page",
-          "disabled:cursor-not-allowed disabled:opacity-50",
         )}
       >
-        <span className="min-w-0 flex-1 truncate text-sm text-text">{fundSourceLabel(active)}</span>
+        <AgentGlyph initials={selected.initials} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium text-text">{selected.label}</span>
+          <span className="block truncate text-xs text-text-muted">{selected.kind}</span>
+        </span>
         <ChevronDown aria-hidden className="h-4 w-4 shrink-0 text-text-muted" />
       </button>
-      {open && !singleFund ? (
+      {open ? (
         <ul
           id={listId}
           role="listbox"
-          aria-label="Bronnen"
+          aria-label="Agents"
           className="absolute z-20 mt-1 w-full overflow-hidden rounded-[var(--radius-control)] border border-border bg-surface py-1 shadow-[var(--elevation-raised)]"
         >
-          {funds.map((fund) => {
-            const isActive = fund === active;
+          {PLAYGROUND_AGENTS.map((agent) => {
+            const isActive = agent.id === active;
             return (
-              <li key={fund} role="option" aria-selected={isActive}>
+              <li key={agent.id} role="option" aria-selected={isActive}>
                 <button
                   type="button"
                   className={cn(
-                    "flex w-full min-w-0 px-2.5 py-2 text-left text-sm",
+                    "flex w-full items-center gap-2.5 px-2.5 py-2 text-left",
                     isActive ? "bg-primary-tint text-primary" : "text-text hover:bg-surface-sunk",
                   )}
                   onClick={() => {
                     setOpen(false);
-                    router.push(playgroundHref(pathname, searchParams, { fund }));
+                    router.push(hrefFor(agent.id));
                   }}
                 >
-                  <span className="min-w-0 truncate">{fundSourceLabel(fund)}</span>
+                  <AgentGlyph initials={agent.initials} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">{agent.label}</span>
+                    <span
+                      className={cn("block truncate text-xs", isActive ? "text-primary" : "text-text-muted")}
+                    >
+                      {agent.kind}
+                    </span>
+                  </span>
                 </button>
               </li>
             );
@@ -88,5 +97,11 @@ export function FundSelector({ funds, active }: { funds: string[]; active: strin
         </ul>
       ) : null}
     </div>
+  );
+}
+
+function AgentGlyph({ initials }: { initials: string }) {
+  return (
+    <Avatar className="rounded-[var(--radius-control)] text-xs font-semibold">{initials}</Avatar>
   );
 }

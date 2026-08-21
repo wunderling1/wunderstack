@@ -10,6 +10,8 @@ const pillVariants = cva(
         neutral: "bg-surface-sunk text-text-muted",
         primary: "bg-primary-tint text-primary",
         outline: "border border-border bg-surface text-text",
+        /** Active/selected state — solid primary with glow. Used for category pills. */
+        selected: "bg-primary text-on-primary shadow-[var(--elevation-glow)]",
       },
     },
     defaultVariants: {

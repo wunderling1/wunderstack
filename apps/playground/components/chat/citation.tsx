@@ -1,9 +1,12 @@
 "use client";
 
+import { CitationBadge } from "@wunderstack/ui";
 import { ChevronRight, FileText } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { ChatCitation } from "@/app/api/chat/contract";
-import type { PassageResponse } from "@/app/api/passage/contract";
+import { passageResponseSchema, type PassageResponse } from "@/app/api/passage/contract";
+import { runtimeApiHeaders } from "@/lib/runtime-api";
+import type { PlaygroundAgent } from "@/lib/runtime-config";
 import { cn } from "@/lib/utils";
 
 /**
@@ -46,11 +49,13 @@ function CitationItem({
   citation,
   messageId,
   fund,
+  agent,
   active,
 }: {
   citation: ChatCitation;
   messageId: string;
   fund: string | undefined;
+  agent: PlaygroundAgent;
   active: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -77,13 +82,17 @@ function CitationItem({
     try {
       const response = await fetch("/api/passage", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: runtimeApiHeaders(agent),
         body: JSON.stringify({ chunkId: citation.chunkId, ...(fund ? { fund } : {}) }),
       });
       if (!response.ok) {
         throw new Error(`passage request failed: ${String(response.status)}`);
       }
-      setPassage((await response.json()) as PassageResponse);
+      const parsed = passageResponseSchema.safeParse(await response.json());
+      if (!parsed.success) {
+        throw new Error("passage response failed validation");
+      }
+      setPassage(parsed.data);
     } catch {
       setPassageError(true);
     } finally {
@@ -96,37 +105,33 @@ function CitationItem({
       ref={ref}
       id={`cite-${messageId}-${String(citation.ref)}`}
       className={cn(
-        "rounded-md border bg-page transition-colors",
-        active ? "border-primary ring-1 ring-primary" : "border-border",
+        "overflow-hidden rounded-[var(--radius-control)] border bg-surface",
+        active ? "border-primary" : "border-border",
       )}
     >
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs text-text-muted transition-colors hover:bg-surface-sunk"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text-muted hover:bg-surface-sunk"
       >
         <ChevronRight
-          className={`h-3 w-3 shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
+          className={`h-4 w-4 shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
           aria-hidden
         />
-        <span className="shrink-0 rounded bg-surface-sunk px-1.5 py-0.5 font-mono text-[10px]">
-          [{citation.ref}]
-        </span>
-        <FileText className="h-3 w-3 shrink-0" aria-hidden />
-        <span className="truncate font-medium text-text">{citationHeading(citation)}</span>
-        <span className="ml-auto shrink-0 opacity-60">
-          {citation.fund} · v{citation.version}
-        </span>
+        <FileText className="h-4 w-4 shrink-0" aria-hidden />
+        <span className="min-w-0 flex-1 truncate font-medium text-text">{citationHeading(citation)}</span>
+        <CitationBadge refNumber={citation.ref} className="shrink-0" />
+        <span className="shrink-0 text-text-subtle">{citation.fund}</span>
       </button>
 
       {open ? (
-        <div className="border-t border-border px-3 py-2 text-xs leading-relaxed text-text-muted">
-          <p className="mb-1 text-[11px] text-text-muted">
-            {citation.title} · {citation.fund} · v{citation.version}
-          </p>
-          <p className="whitespace-pre-wrap">
+        <div className="px-3 py-2 text-xs leading-relaxed text-text-muted">
+          <blockquote className="mb-1 border-l-2 border-border pl-4 whitespace-pre-wrap">
             <HighlightedSnippet snippet={citation.snippet} quote={citation.quote} />
+          </blockquote>
+          <p className="font-mono text-[11px] text-text-subtle">
+            {citation.title} · {citation.fund} · v{citation.version}
           </p>
 
           {passage ? (
@@ -164,12 +169,14 @@ export function Citations({
   citations,
   messageId,
   fund,
+  agent = "cao",
   activeRef = null,
   candidate = false,
 }: {
   citations: ChatCitation[];
   messageId: string;
   fund?: string;
+  agent?: PlaygroundAgent;
   activeRef?: number | null;
   candidate?: boolean;
 }) {
@@ -178,17 +185,18 @@ export function Citations({
   }
 
   return (
-    <div className={cn("mt-3 border-t border-border pt-2", candidate && "opacity-70")}>
-      <p className="mb-1.5 text-xs font-medium text-text-muted">
+    <div className={cn("border-t border-border px-8 py-5", candidate && "opacity-70")}>
+      <p className="mb-3 text-[11px] font-medium uppercase tracking-wider text-text-subtle">
         {candidate ? "Mogelijke bronnen" : "Bronnen"}
       </p>
-      <ul className="flex flex-col gap-1">
+      <ul className="flex flex-col gap-3">
         {citations.map((citation) => (
           <CitationItem
             key={`${String(citation.ref)}-${citation.chunkId}`}
             citation={citation}
             messageId={messageId}
             fund={fund}
+            agent={agent}
             active={activeRef === citation.ref}
           />
         ))}

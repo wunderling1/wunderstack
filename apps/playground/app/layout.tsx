@@ -5,7 +5,7 @@ import "./globals.css";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Wunderstack — CAO-agent demo",
+  title: "Wunderstack Playground",
   description: "Stel je vraag over de CAO en krijg een antwoord met bronvermelding.",
 };
 

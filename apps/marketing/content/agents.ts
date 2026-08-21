@@ -52,6 +52,25 @@ export const AGENTS: AgentContent[] = [
     ],
   },
   {
+    slug: "arbo",
+    name: "Arbocatalogus-agent",
+    tagline: "Sectorale arbo-maatregelen met bronvermelding uit de catalogus.",
+    summary:
+      "De arbocatalogus-agent beantwoordt vragen over sectorale arbo-maatregelen en risico's. " +
+      "Antwoorden komen uitsluitend uit de arbocatalogus van het fonds — niet uit de Arbowet of een CAO.",
+    status: "binnenkort",
+    highlights: [
+      "Bronvermelding per antwoord, geverifieerd tegen de catalogus.",
+      "Weigert vragen over Arbowet, CAO-recht en individueel advies — met route naar de juiste plek.",
+      "Gescheiden corpus en embed-key naast de CAO-agent.",
+    ],
+    walkthrough: [
+      "Stel je arbo-vraag (bijv. tillen, PBM of beeldschermwerk).",
+      "De agent zoekt in de arbocatalogus.",
+      "Je krijgt maatregelen en risico's met bronverwijzing.",
+    ],
+  },
+  {
     slug: "subsidie",
     name: "Subsidie-agent",
     tagline: "Wegwijs in scholings- en ontwikkelsubsidies van het fonds.",

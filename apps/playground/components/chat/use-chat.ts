@@ -6,7 +6,9 @@ import {
   type ChatCitation,
   type ChatStatusPhase,
 } from "@/app/api/chat/contract";
+import { readChatInactivityMs } from "@/lib/public-env";
 import { runtimeApiHeaders } from "@/lib/runtime-api";
+import type { PlaygroundAgent } from "@/lib/runtime-config";
 
 /**
  * Client-side chat state + the NDJSON stream reader. Talks only to `/api/chat`; it never touches the
@@ -46,22 +48,6 @@ const INACTIVITY_ERROR =
   "Het duurde te lang om je vraag te beantwoorden. Probeer het opnieuw.";
 const SESSION_STORAGE_KEY = "wunderstack-session-id";
 
-/**
- * Client-side backstop: if no NDJSON bytes arrive (including empty heartbeat lines) for this long,
- * abort and show a retryable error so the generating spinner never hangs forever. Server heartbeats
- * are every ~10s by default, so 20s means we missed ~2 beats. Override via NEXT_PUBLIC_CHAT_INACTIVITY_MS.
- */
-const DEFAULT_CHAT_INACTIVITY_MS = 20_000;
-
-function readInactivityMs(): number {
-  const raw = process.env.NEXT_PUBLIC_CHAT_INACTIVITY_MS?.trim();
-  if (!raw) {
-    return DEFAULT_CHAT_INACTIVITY_MS;
-  }
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_CHAT_INACTIVITY_MS;
-}
-
 function newId(): string {
   return globalThis.crypto?.randomUUID?.() ?? String(Date.now() + Math.random());
 }
@@ -99,7 +85,7 @@ function buildHistory(messages: ChatMessage[]): ChatHistoryMessage[] {
     }));
 }
 
-export function useChat(fund?: string) {
+export function useChat(fund?: string, agent: PlaygroundAgent = "cao") {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const streamingRef = useRef(false);
@@ -204,7 +190,7 @@ export function useChat(fund?: string) {
       try {
         const response = await fetch("/api/chat", {
           method: "POST",
-          headers: runtimeApiHeaders(),
+          headers: runtimeApiHeaders(agent),
           body: JSON.stringify({
             question: trimmed,
             history,
@@ -226,7 +212,7 @@ export function useChat(fund?: string) {
         // Inactivity watchdog: reset on every byte (status, heartbeats, text, …). If the stream goes
         // fully silent (server crash mid-buffer, dropped connection without abort), abort and surface
         // a retryable error instead of spinning forever on "Bronvermelding controleren…".
-        const inactivityMs = readInactivityMs();
+        const inactivityMs = readChatInactivityMs();
         let inactivityTimer: ReturnType<typeof setTimeout> | null = null;
         const clearInactivity = () => {
           if (inactivityTimer !== null) {

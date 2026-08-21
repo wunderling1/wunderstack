@@ -31,6 +31,19 @@ export interface KpiWindow {
   tenantId: string;
   /** Only count events at or after this instant. */
   since: Date;
+  /** When set, scope KPIs to a single agent instance. */
+  agentId?: string;
+}
+
+function windowScope(window: KpiWindow) {
+  const parts = [
+    eq(interactionEvents.tenantId, window.tenantId),
+    gte(interactionEvents.occurredAt, window.since),
+  ];
+  if (window.agentId !== undefined) {
+    parts.push(eq(interactionEvents.agentId, window.agentId));
+  }
+  return and(...parts);
 }
 
 export interface KpiSummary {
@@ -50,10 +63,7 @@ function toNumber(value: unknown): number {
 
 /** Aggregate outcome counts for a tenant over a time window. */
 export async function getKpiSummary(window: KpiWindow): Promise<KpiSummary> {
-  const scope = and(
-    eq(interactionEvents.tenantId, window.tenantId),
-    gte(interactionEvents.occurredAt, window.since),
-  );
+  const scope = windowScope(window);
 
   const [row] = await getDb()
     .select({
@@ -90,8 +100,7 @@ export async function getTopThemes(window: KpiWindow, limit = 10): Promise<Theme
     .from(interactionEvents)
     .where(
       and(
-        eq(interactionEvents.tenantId, window.tenantId),
-        gte(interactionEvents.occurredAt, window.since),
+        windowScope(window),
         isNotNull(interactionEvents.theme),
       ),
     )
@@ -124,12 +133,7 @@ export async function getRecentInteractions(
       citationCount: interactionEvents.citationCount,
     })
     .from(interactionEvents)
-    .where(
-      and(
-        eq(interactionEvents.tenantId, window.tenantId),
-        gte(interactionEvents.occurredAt, window.since),
-      ),
-    )
+    .where(windowScope(window))
     .orderBy(desc(interactionEvents.occurredAt))
     .limit(limit);
 
@@ -203,8 +207,7 @@ export async function getUnansweredQuestions(
     .from(interactionEvents)
     .where(
       and(
-        eq(interactionEvents.tenantId, window.tenantId),
-        gte(interactionEvents.occurredAt, window.since),
+        windowScope(window),
         eq(interactionEvents.outcome, "refused"),
         isNotNull(interactionEvents.question),
       ),

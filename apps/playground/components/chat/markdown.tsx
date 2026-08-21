@@ -1,5 +1,6 @@
 "use client";
 
+import { CitationBadge } from "@wunderstack/ui";
 import { memo, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -48,15 +49,12 @@ function splitMarkers(text: string, meta: CitationMarkerMeta, keyPrefix: string)
     }
     if (quote !== undefined) {
       parts.push(
-        <button
+        <CitationBadge
           key={`${keyPrefix}-m${String(idx)}`}
-          type="button"
+          refNumber={ref}
           onClick={() => meta.onMarkerClick(ref)}
-          title={quote}
-          className="mx-0.5 inline-flex items-center rounded bg-primary/10 px-1 font-mono text-[0.75em] font-medium text-primary align-baseline hover:bg-primary/20"
-        >
-          [{ref}]
-        </button>,
+          className="mx-0.5 align-baseline"
+        />,
       );
     } else {
       // Unknown/stripped marker: render as plain text (no clickable source behind it).

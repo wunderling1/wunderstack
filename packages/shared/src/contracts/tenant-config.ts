@@ -73,8 +73,7 @@ export const tenantPublicConfigSchema = z.object({
       retrieved: z.string().min(1).max(80),
       generating: z.string().min(1).max(80),
     })
-    .strict()
-    .optional(),
+    .strict(),
 });
 export type TenantPublicConfig = z.infer<typeof tenantPublicConfigSchema>;
 
