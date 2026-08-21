@@ -99,6 +99,13 @@
       "when": 1787320000000,
       "tag": "0013_control_plane",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1787342000000,
+      "tag": "0014_revoke_public_grants",
+      "breakpoints": true
     }
   ]
 }

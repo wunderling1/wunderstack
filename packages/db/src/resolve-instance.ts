@@ -6,8 +6,9 @@ import { agentInstances, type AgentInstance } from "./schema/control/agent-insta
 /**
  * Control-plane resolution of one embeddable instance (ADR-multitenant-database, track B).
  *
- * Public key → `{ fundKey, agentKey, schemaName, connectionRef }`. Client `fund` / `data-agent`
- * claims are validated against this record and never override it.
+ * Public key → `{ fundKey, agentKey, schemaName, connectionKey }`. Client `fund` / `data-agent`
+ * claims are validated against this record and never override it. `connectionKey` is opaque and
+ * unused on the request path (ADR D2).
  *
  * Isolation remains D15 (one runtime process = one fund). This module does not SET ROLE.
  * `schemaName` is organizational (search_path); a forgotten set is not permission denied.
@@ -17,7 +18,7 @@ export interface ResolvedInstance {
   fundKey: string;
   agentKey: string;
   schemaName: string;
-  connectionRef: string | null;
+  connectionKey: string | null;
   /** Process tenant id. Under D15 this is 1-to-1 with `fundKey`. */
   tenantId: string;
 }
@@ -32,14 +33,14 @@ export type BindClaimsResult =
   | { ok: false; status: 403; error: "fund_mismatch" | "agent_mismatch" };
 
 export function instanceFromRow(
-  row: Pick<AgentInstance, "tenantId" | "agentKey" | "schemaName" | "connectionRef">,
+  row: Pick<AgentInstance, "tenantId" | "agentKey" | "schemaName" | "connectionKey">,
 ): ResolvedInstance {
   return {
     // Track B / D15: tenant id is the fund key (1-to-1). Do not invent a separate mapping here.
     fundKey: row.tenantId,
     agentKey: row.agentKey,
     schemaName: row.schemaName,
-    connectionRef: row.connectionRef,
+    connectionKey: row.connectionKey,
     tenantId: row.tenantId,
   };
 }
@@ -51,7 +52,7 @@ export async function resolveInstanceByPublicKey(publicKey: string): Promise<Res
       tenantId: agentInstances.tenantId,
       agentKey: agentInstances.agentKey,
       schemaName: agentInstances.schemaName,
-      connectionRef: agentInstances.connectionRef,
+      connectionKey: agentInstances.connectionKey,
     })
     .from(agentInstances)
     .where(eq(agentInstances.publicKey, publicKey))
@@ -72,7 +73,7 @@ export async function resolveInstanceByFundAgent(
       tenantId: agentInstances.tenantId,
       agentKey: agentInstances.agentKey,
       schemaName: agentInstances.schemaName,
-      connectionRef: agentInstances.connectionRef,
+      connectionKey: agentInstances.connectionKey,
     })
     .from(agentInstances)
     .where(and(eq(agentInstances.tenantId, fundKey), eq(agentInstances.agentKey, agentKey)))

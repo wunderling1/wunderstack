@@ -324,7 +324,7 @@ async function main(): Promise<void> {
     if (resolved) {
       console.log(
         `control.agent_instances: ${resolved.fundKey}/${resolved.agentKey} → schema ${resolved.schemaName}` +
-          `${resolved.connectionRef ? ` (connection_ref set)` : ""}`,
+          `${resolved.connectionKey ? ` (connection_key set)` : ""}`,
       );
     } else {
       console.log(

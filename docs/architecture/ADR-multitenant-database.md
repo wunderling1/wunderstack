@@ -31,7 +31,7 @@ Vandaag is de afgedwongen isolatie **deployment**, niet de database: D15, één 
 
 - `users` (Auth.js Credentials; geen adaptertabellen)
 - `funds`
-- `agent_instances` — één rij per `(fund_key, agent_key)` (nu: `tenant_config`), `public_key` als **publieke identifier** (geen hash), status, `schema_name`, `connection_ref`
+- `agent_instances` — één rij per `(fund_key, agent_key)` (nu: `tenant_config`), `public_key` als **publieke identifier** (geen hash), status, `schema_name`, `connection_key` (opaque; nooit een URL)
 - `agent_config` — jsonb-knoppen (`minScore`, starters, corpusversie). Prompts en weigerzinnen blijven in code.
 - Gate-uitslagen blijven het file-ledger tot een latere tabel ze verdient
 - Audit log (dun, bij het verwijder-runbook), later usage-tellers zonder brontekst
@@ -58,7 +58,7 @@ Niet drie. De oorspronkelijke ANN-reden is ongeldig en hoort niet in de onderbou
 Fonds stopt → `pg_dump -n fund_<key>` als export, daarna `DROP SCHEMA fund_<key> CASCADE`. Bij optie A is verwijderen een `DELETE` over meerdere tabellen die je nooit bewijsbaar compleet krijgt. Dat raakt de propositie (bewijsbare betrouwbaarheid), de AVG-verwijderplicht en de exit-clausule in de AV.
 
 **b. Het promotiepad naar C blijft open.**
-Een fonds dat contractueel een eigen database eist, verhuis je met een schema-dump naar een eigen addon. Zolang de connectie per fonds uit het control plane komt (`connection_ref`) en niet uit een env-var, is dat een **datawijziging, geen codewijziging**.
+Een fonds dat contractueel een eigen database eist, verhuis je met een schema-dump naar een eigen addon. De DSN komt **niet** in de control-plane-tabel: `connection_key` is opaque; de URL staat in env (`WUNDERSTACK_DB_URL_<KEY>`). Tot er een echt promotiesignaal is, is dit pad niet live (amendement §11).
 
 **Geen pijler: ANN-recall.** Embeddings zijn `qwen3-embedding-8b` @ 4096 dim. pgvector’s HNSW/ivfflat-limiet is 2000, dus retrieval is **exact (flat) search**. Een pre-filter op `(fund, agent_key)` degradeert geen recall: er valt geen ANN-recall te verliezen. HNSW per partitie is fysiek onmogelijk zonder re-embed. Partitioneren van `documents` raakt de vector-scan niet (die loopt over `chunks`).
 
@@ -129,7 +129,7 @@ Vier triggers, nu vastgelegd zodat er later niet over onderhandeld hoeft te word
 3. Een pensioenfonds onder DNB-toezicht;
 4. Aantoonbare noisy-neighbour-latency (p95 op fonds X verslechtert door belasting van fonds Y).
 
-Bij elke trigger: `pg_dump -n fund_<key>` → nieuwe addon → connectiestring wijzigen in `agent_instances.connection_ref`. Datawijziging, geen codewijziging. Dat is precies de eigenschap die deze ADR beschermt.
+Bij elke trigger: `pg_dump -n fund_<key>` → nieuwe addon → opaque `connection_key` + DSN in `WUNDERSTACK_DB_URL_<KEY>` (nooit een URL in de tabel). **Niet live tot een echt signaal** (§11).
 
 Op tak B is dit pad extra belangrijk: het is de weg naar échte DB-scheiding zolang `CREATE ROLE` ontbreekt.
 
@@ -154,3 +154,22 @@ Op tak B is dit pad extra belangrijk: het is de weg naar échte DB-scheiding zol
 - RLS als vervanging van SET ROLE.
 - SQL over fondsschema’s heen.
 - Gedeelde runtime (meerdere fondsen in één proces) op tak B.
+
+---
+
+## 11. Amendement 21 augustus 2026 — grants en promotie
+
+Code review 2026-08-21 20:30. Eigenaar: Wunderstack-maintainers. Datum: 21 augustus 2026.
+
+**Promotie (D2 van die review):** `getDbForConnection` en `lookupConnectionRef` worden niet gebouwd. `connection_ref` is hernoemd naar `connection_key` met CHECK die `://` weigert. `resolveConnection(key)` leest alleen `WUNDERSTACK_DB_URL_<KEY>` en gooit bij onbekende/ontbrekende sleutel — geen terugval op `DATABASE_URL`. Het request-pad blijft de gedeelde pool.
+
+**`TO PUBLIC` (D3 van die review):** `CREATE ROLE` blijft onmogelijk op de addon. Er is geen smallere in-database-rol die we zelf kunnen maken. Daarom:
+
+- `GRANT … TO PUBLIC` op `control` is ingetrokken (migratie `0014_revoke_public_grants`). `control.users` (`password_hash`) en `control.agent_instances` krijgen nooit een PUBLIC-grant.
+- Nieuwe fondsschema's krijgen geen PUBLIC-grant (`fund-ddl.ts`).
+- Bestaande `fund_*`-schema's: eenmalig `scripts/db/revoke-public-fund-grants.ts`.
+- Extra Scalingo-logins krijgen standaard geen SELECT. Een named reader alleen via `scripts/db/grant-reader.ts` (`DB_READER_ROLE`). We maken geen extra login aan zonder dat script.
+- De addon-owner behoudt alle rechten. Isolatie blijft D15, niet de database.
+
+CI: `scripts/check-grants.sh` faalt op nieuwe `TO PUBLIC` in migraties en `fund-ddl.ts`.
+
