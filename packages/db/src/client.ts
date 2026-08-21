@@ -2,7 +2,7 @@ import { env } from "@wunderstack/shared";
 import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
-import * as schema from "./schema.js";
+import * as schema from "./schema/index.js";
 
 export type Database = PostgresJsDatabase<typeof schema>;
 
@@ -33,10 +33,11 @@ export function getDb(): Database {
 }
 
 /**
- * A dedicated writer connection for the tenant_config tables (Fase 4, second DB role). Uses
- * TENANT_CONFIG_WRITER_DATABASE_URL when set (a DB user granted write on tenant_config only), else
- * falls back to DATABASE_URL — so the console can write theming/keys even when the main connection is
- * read-only in deployment, without granting broad write access. Separate pool from getDb().
+ * A dedicated writer connection for control.agent_instances (Fase 4, second DB role). Uses
+ * TENANT_CONFIG_WRITER_DATABASE_URL when set (deploy alias; a DB user granted write on
+ * agent_instances only), else falls back to DATABASE_URL — so the console can write theming/keys
+ * even when the main connection is read-only in deployment, without granting broad write access.
+ * Separate pool from getDb().
  */
 export function getWriterDb(): Database {
   if (writerCached) {

@@ -13,8 +13,9 @@ agents die je één keer bouwt en per fonds via configuratie uitrolt.
 - **Walking skeleton, geen platform.** Bouw primitives; bewijs ze door de CAO-agent
   end-to-end te laten werken. Geen speculatieve abstractie (regel van drie).
 - **Naden, geen systemen.** Elke externe afhankelijkheid achter een dunne eigen interface,
-  zodat hij wisselbaar is — maar bouw geen zware systemen (workflow-engines, multi-tenancy,
-  gateways) voordat een echte usecase ze afdwingt.
+  zodat hij wisselbaar is — maar bouw geen zware systemen (workflow-engines, gedeelde runtime
+  over fondsen, gateways) voordat een echte usecase ze afdwingt. Schema-per-fonds + gedeeld
+  dashboard: `docs/architecture/ADR-multitenant-database.md` (tak B).
 - **Soeverein-by-default.** Het standaard request-pad blijft EU-soeverein. Fondsdata gaat
   nooit by default naar een niet-EU-model.
 - **Airlock voor niet-soevereine bronnen.** Facebook, US-SaaS en andere niet-EU-bronnen
@@ -37,8 +38,10 @@ tenant-zero-demo-UI) · `packages/ai` (model-naad) · `packages/agents`
 Pijl-regel: apps importeren uit packages, nooit andersom (CI-afgedwongen).
 
 ## Bewust NIET in v1
-Temporal · LangGraph · losse agent-runtime · interne gateway · multi-tenancy ·
-Supabase Auth/RLS · Inngest. Wil je iets hiervan toevoegen: motiveer eerst tegen de regels.
+Temporal · LangGraph · losse agent-runtime · interne gateway · gedeelde runtime over
+fondsen (D15-collapse) · Supabase Auth/RLS · Inngest. Schema-per-fonds en een gedeeld
+dashboard wél: zie `docs/architecture/ADR-multitenant-database.md`. Wil je iets van de
+verbodslijst toevoegen: motiveer eerst tegen de regels.
 
 ## Waar te beginnen
 Lees `.cursor/rules/000-core.mdc` eerst. Daarna 100 (stack), 200 (architectuur). De glob-

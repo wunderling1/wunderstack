@@ -55,6 +55,27 @@ export default tseslint.config(
     },
   },
   {
+    files: ["apps/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: [
+                "**/packages/db/src/schema/fund/**",
+                "@wunderstack/db/src/schema/fund",
+                "@wunderstack/db/src/schema/fund/**",
+              ],
+              message:
+                "Apps must not import fund-schema tables directly. Use @wunderstack/rag or @wunderstack/analytics.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ["packages/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-imports": [

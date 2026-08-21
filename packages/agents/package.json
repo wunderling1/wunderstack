@@ -11,6 +11,10 @@
     "./evals/fund-ledger": {
       "types": "./src/evals/fund-ledger.ts",
       "default": "./src/evals/fund-ledger.ts"
+    },
+    "./evals/golden-set": {
+      "types": "./src/evals/golden-set.ts",
+      "default": "./src/evals/golden-set.ts"
     }
   },
   "scripts": {

@@ -109,17 +109,19 @@ jobs:
         if: env.GATE_DB == 'true'
         run: |
           pnpm --filter @wunderstack/db db:migrate
+          pnpm --filter @wunderstack/db-scripts migrate-fund-schemas
           docker exec gate-db psql -U postgres -d wunderstack -tAc \
             "select 'pgvector ' || extversion from pg_extension where extname = 'vector';"
         env:
           DATABASE_URL: ${{ env.GATE_DATABASE_URL }}
 
-      # Ingest every corpus the gates score against, from the repo, into the fresh database. All four
+      # Ingest every corpus the gates score against, from the repo, into the fresh database. All five
       # sources are committed, so the gate's input is fully declared by this commit:
       #   eval-fixtures  <- fixtures/golden-passages.jsonl (base layer + fund set "etd")
       #   demo           <- scripts/ingest/demo-corpus/cao-fictief.md (fund set "demo")
       #   arbo-corpus    <- scripts/ingest/arbo-corpus/arbo-fictief.md (same fund, agent_key arbo;
       #                     G3-isolation needs a second agent on an ingested fund)
+      #   arbo-oomt      <- scripts/ingest/arbo-oomt/arbo_catalogus_oomt.pdf (fund set "arbo.oomt")
       #   elektronische-detailhandel <- scripts/ingest/input/*.pdf (fund set "etd-full", the only set
       #                                 that can catch an ingest regression, so it runs the real parser)
       - name: Ingest gate corpora
@@ -128,6 +130,7 @@ jobs:
           pnpm --filter @wunderstack/ingest ingest:fixtures
           pnpm --filter @wunderstack/ingest ingest demo-corpus --fund demo --agent cao --version 1 --prune
           pnpm --filter @wunderstack/ingest ingest arbo-corpus --fund demo --agent arbo --version 1 --prune
+          pnpm --filter @wunderstack/ingest ingest arbo-oomt --fund oomt --agent arbo --version arbo-oomt-1 --prune
           pnpm --filter @wunderstack/ingest ingest input \
             --fund elektronische-detailhandel --agent cao --version 1 --prune
         env:

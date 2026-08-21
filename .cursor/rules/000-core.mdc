@@ -28,7 +28,10 @@ bewijs ze meteen door de CAO-agent er end-to-end doorheen te draaien: vraag → 
 → (rerank later) → LLM → gestreamd antwoord, met tracing.
 
 - Bouw GEEN abstractie voordat een tweede echte usecase hem afdwingt (regel van drie).
-- De demo is **single-tenant**. Multi-tenancy pas bouwen als een fonds getekend heeft.
+- De demo blijft **één runtime-proces = één fonds** (D15). Schema-per-fonds + een gedeeld
+  dashboard (control plane) zijn in scope — zie `docs/architecture/ADR-multitenant-database.md`
+  (tak B, 21 augustus 2026). Geen gedeelde runtime en geen D15-collapse tot CREATE ROLE op de
+  addon bestaat. Database-per-fonds is een promotiepad, geen default.
 - Klaar = de CAO-agent werkt live in de demo, getraceerd en getest. Niet: "het platform is af".
 
 ## Leidend principe — naden, geen systemen
@@ -49,8 +52,9 @@ of inferentie-pad.
 ## Bewust NIET in v1 (vraag eerst als je dit wilt toevoegen)
 
 Temporal · LangGraph · losse agent-runtime-service · interne AI-gateway-service ·
-multi-tenancy · Supabase Auth/RLS/Realtime · Inngest (Mastra-workflows volstaan) ·
-zware business-logica in Next.js route-handlers.
+gedeelde runtime over fondsen (D15-collapse / tak A) · Supabase Auth/RLS/Realtime ·
+Inngest (Mastra-workflows volstaan) · zware business-logica in Next.js route-handlers.
+Schema-per-fonds + gedeeld dashboard: `docs/architecture/ADR-multitenant-database.md`.
 
 ## Ask-before-adding
 

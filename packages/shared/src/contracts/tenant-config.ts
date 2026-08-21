@@ -1,10 +1,11 @@
 import { z } from "zod";
 
 /**
- * Tenant-config contracts (Fase 4). A tenant-config row lives on the fondsinstance and drives the
+ * Tenant-config contracts (Fase 4). An agent-instance row (tenant × agent_key) drives the
  * embed: the public theme + texts served by `GET /config`, the CORS allowlist, and the public
- * tenant-key. These schemas are pure (no DB, no node deps) so both the runtime and the dashboard
- * console validate against the same shapes.
+ * tenant-key (a public identifier, not a secret). Table moves to `control.agent_instances`
+ * (ADR-multitenant-database). These schemas are pure (no DB, no node deps) so both the runtime
+ * and the dashboard console validate against the same shapes.
  */
 
 /** A curated subset of the design tokens a fund may theme (D17 runtime theming migration). */

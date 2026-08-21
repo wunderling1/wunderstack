@@ -13,7 +13,7 @@ if (existsSync(rootEnv)) {
 
 export default defineConfig({
   dialect: "postgresql",
-  schema: "./src/schema.ts",
+  schema: "./src/schema/index.ts",
   out: "./migrations",
   // drizzle-kit generate works offline; migrate/push read DATABASE_URL and fail with
   // a clear error if it is missing.

@@ -39,6 +39,10 @@ abstraheren — speculatieve abstractie is de vijand van het walking skeleton.
 - **Agent-definities = code**, gehversioneerd, centraal onderhouden. Dit is de moat.
 - **Fonds-configuratie = data**, per fonds. Nooit fonds-specifieke waarden in agent-code
   hardcoden. Een nieuwe agent bouw je één keer; per fonds configureer je hem via data.
+- **Datalaag (21 augustus 2026):** control plane = schema `control` (gedeeld dashboard);
+  data plane = schema per fonds in één Postgres. Isolatie op tak B = D15 (runtime-per-fonds),
+  niet SET ROLE. Geen SQL over fondsschema’s heen. Database-per-fonds = promotiepad.
+  Bron: `docs/architecture/ADR-multitenant-database.md`.
 
 ## Airlock voor niet-soevereine bronnen
 Niet-EU-bronnen (Facebook, US-SaaS, non-EU DB) koppelen via `packages/connectors`: precies

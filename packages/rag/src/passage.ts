@@ -1,4 +1,4 @@
-import { and, asc, chunks, documents, eq, getDb } from "@wunderstack/db";
+import { and, asc, chunks, documents, eq, listActiveFunds, withFundSchema } from "@wunderstack/db";
 import { z } from "zod";
 
 export interface CorpusKey {
@@ -6,14 +6,24 @@ export interface CorpusKey {
   agentKey: string;
 }
 
-/** Distinct (fund, agent_key) pairs present in the corpus (used by the isolation eval gate). */
+/**
+ * Distinct (fund, agent_key) pairs present in the corpus (used by the isolation eval gate).
+ * One query per fund schema — never a UNION across schemas (ADR invariant).
+ */
 export async function listCorpora(): Promise<CorpusKey[]> {
-  const db = getDb();
-  const rows = await db
-    .selectDistinct({ fund: documents.fund, agentKey: documents.agentKey })
-    .from(documents)
-    .orderBy(asc(documents.fund), asc(documents.agentKey));
-  return rows;
+  const funds = await listActiveFunds();
+  const keys: CorpusKey[] = [];
+  for (const fund of funds) {
+    const rows = await withFundSchema(fund.key, (tx) =>
+      tx
+        .selectDistinct({ fund: documents.fund, agentKey: documents.agentKey })
+        .from(documents)
+        .orderBy(asc(documents.fund), asc(documents.agentKey)),
+    );
+    keys.push(...rows);
+  }
+  keys.sort((a, b) => a.fund.localeCompare(b.fund) || a.agentKey.localeCompare(b.agentKey));
+  return keys;
 }
 
 /**
@@ -55,9 +65,9 @@ const ORDINAL_WINDOW = 2;
 
 export async function fetchParentPassage(input: PassageInput): Promise<PassageResult | null> {
   const { chunkId, fund, agentKey } = passageInputSchema.parse(input);
-  const db = getDb();
   const corpusScope = and(eq(documents.fund, fund), eq(documents.agentKey, agentKey));
 
+  return withFundSchema(fund, async (db) => {
   const anchorRows = await db
     .select({
       documentId: chunks.documentId,
@@ -124,6 +134,7 @@ export async function fetchParentPassage(input: PassageInput): Promise<PassageRe
     text: joinPassage(window),
     approximate: true,
   };
+  });
 }
 
 interface PassageChunkRow {

@@ -2,12 +2,14 @@ import { randomUUID } from "node:crypto";
 
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import { recordInteractionEvent, type InteractionOutcome } from "@wunderstack/analytics";
+import { resolveInstanceByFundAgent, retrievalScope } from "@wunderstack/db";
 import { env } from "@wunderstack/shared";
 import { getTenantId } from "@wunderstack/tenant";
 import { z } from "zod";
 
-import { getAgentById, resolveAgentIdFromConfig } from "./agent.js";
+import { getAgentById } from "./agent.js";
 import { resolveFundScope } from "./fund-scope.js";
+import { loadCorpusVersion } from "./instance-scope.js";
 import {
   ASK_ARBO_ERROR_MESSAGE,
   ASK_ARBO_TOOL_DESCRIPTION,
@@ -34,7 +36,24 @@ import { acquireSlot, checkDailyCap, releaseSlot } from "./rate-limit.js";
  * `createMcpHandler` — nothing held between calls.
  */
 
-const MCP_AGENT_ID = "cao";
+async function mcpRequestScope(
+  agentKey: string,
+): Promise<{ ok: true; fund: string; agentKey: string } | { ok: false; error: string }> {
+  const resolved = await resolveInstanceByFundAgent(getTenantId(), agentKey).catch(() => null);
+  if (resolved) {
+    const allowlisted = resolveFundScope(resolved.fundKey);
+    if (!allowlisted.ok) {
+      return { ok: false, error: allowlisted.error };
+    }
+    const scope = retrievalScope(resolved);
+    return { ok: true, fund: scope.fund, agentKey: scope.agentKey };
+  }
+  const fund = resolveFundScope(undefined);
+  if (!fund.ok) {
+    return { ok: false, error: fund.error };
+  }
+  return { ok: true, fund: fund.fund, agentKey };
+}
 const DAILY_CAP = env.RUNTIME_DAILY_CAP ?? 0;
 const WALLET_BUSY_MESSAGE =
   "Het fonds is even druk. Probeer het zo opnieuw; verzin geen antwoord uit eigen kennis.";
@@ -80,8 +99,8 @@ function buildServer(): McpServer {
         return askCaoErrorResult(paid.message);
       }
       try {
-        // Instance-scoped: never take fund from the host/LLM (PLAN-mcp-server single-tenant).
-        const scope = resolveFundScope(undefined);
+        // Instance-scoped: never take fund from the host/LLM. Resolver is fund+agent, not a client claim.
+        const scope = await mcpRequestScope("cao");
         if (!scope.ok) {
           return askCaoErrorResult(
             `Fonds-scope geweigerd (${scope.error}). Verzin geen CAO-antwoord; verwijs naar het fonds.`,
@@ -90,13 +109,18 @@ function buildServer(): McpServer {
 
         const sessionId = randomUUID();
         const tenantId = getTenantId();
-        const agentId = resolveAgentIdFromConfig(null);
+        const agentId = scope.agentKey;
         const agent = getAgentById(agentId);
+        const corpusVersion = await loadCorpusVersion(scope.fund, agentId);
 
         try {
           const result = await agent.answer(
             { question: input.question, fund: scope.fund },
-            { sessionId, channel: "mcp" },
+            {
+              sessionId,
+              channel: "mcp",
+              ...(corpusVersion === undefined ? {} : { corpusVersion }),
+            },
           );
           const output = toAskCaoOutput(result);
 
@@ -108,7 +132,7 @@ function buildServer(): McpServer {
           try {
             await recordInteractionEvent({
               tenantId,
-              agentId: MCP_AGENT_ID,
+              agentId,
               fund: scope.fund,
               sessionId,
               channel: "mcp",
@@ -127,7 +151,7 @@ function buildServer(): McpServer {
           try {
             await recordInteractionEvent({
               tenantId,
-              agentId: MCP_AGENT_ID,
+              agentId,
               fund: scope.fund,
               sessionId,
               channel: "mcp",
@@ -161,7 +185,7 @@ function buildServer(): McpServer {
         return askArboErrorResult(paid.message);
       }
       try {
-        const scope = resolveFundScope(undefined);
+        const scope = await mcpRequestScope("arbo");
         if (!scope.ok) {
           return askArboErrorResult(
             `Fonds-scope geweigerd (${scope.error}). Verzin geen antwoord; verwijs naar het fonds.`,
@@ -169,12 +193,17 @@ function buildServer(): McpServer {
         }
         const sessionId = randomUUID();
         const tenantId = getTenantId();
-        const agentId = "arbo";
+        const agentId = scope.agentKey;
         const agent = getAgentById(agentId);
+        const corpusVersion = await loadCorpusVersion(scope.fund, agentId);
         try {
           const result = await agent.answer(
             { question: input.question, fund: scope.fund },
-            { sessionId, channel: "mcp" },
+            {
+              sessionId,
+              channel: "mcp",
+              ...(corpusVersion === undefined ? {} : { corpusVersion }),
+            },
           );
           const output = toAskArboOutput(result);
           const outcome: InteractionOutcome = result.needsClarification

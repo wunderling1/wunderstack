@@ -1,7 +1,52 @@
-export * from "./schema.js";
+export * from "./schema/index.js";
 export { getDb, getWriterDb, closeDb, type Database } from "./client.js";
+export { assertFundKey, quoteIdent, quoteLiteral, FUND_KEY_RE, SCHEMA_NAME_RE } from "./ident.js";
+export { withSearchPath, withFundContext } from "./search-path.js";
+export {
+  withFundSchema,
+  publicCorpusExists,
+  listActiveFunds,
+  registerFund,
+  ensureFundTables,
+  copyPublicCorpusIntoFund,
+  recordFundMigration,
+  listAppliedFundMigrations,
+  type ActiveFund,
+} from "./fund-schema.js";
+export {
+  FUND_MIGRATION_PROVISION,
+  provisionDdl,
+  dropPublicCorpusSql,
+  publicCorpusTablesSql,
+  appliedMigrationsSql,
+  countTableSql,
+  createSchemaSql,
+  createDocumentsLikeSql,
+  createChunksLikeSql,
+  createEventsLikeSql,
+  addFundCheckSql,
+  addChunksFkSql,
+  truncateFundTablesSql,
+  copyDocumentsSql,
+  copyChunksSql,
+  copyEventsSql,
+  assertNoAnnOrPartitionSql,
+} from "./fund-ddl.js";
+export { canDropPublicCorpus, type FundCopyCheck, type DropPublicDecision } from "./drop-public-corpus.js";
+export {
+  resolveInstanceByPublicKey,
+  resolveInstanceByFundAgent,
+  bindClaimsToInstance,
+  instanceFromRow,
+  retrievalScope,
+  langfuseTagsFromInstance,
+  type ResolvedInstance,
+  type InstanceClaims,
+  type BindClaimsResult,
+} from "./resolve-instance.js";
 export {
   generateTenantKey,
+  fundSchemaName,
   getTenantConfig,
   getInstance,
   getInstanceByPublicKey,
@@ -10,7 +55,8 @@ export {
   upsertTenantConfig,
   rotateTenantKey,
   type TenantConfigInput,
-} from "./tenant-config.js";
+  type TenantConfig,
+} from "./agent-instances.js";
 export { getAgentConfig, parseAgentConfigData } from "./agent-config.js";
 
 // Re-export the query operators consumers need, so the ORM stays behind this seam

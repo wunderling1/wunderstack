@@ -28,9 +28,11 @@ read-only lezen (D4). Auth was nog geen concrete keuze; dit legt hem vast.
    aantoonbaar geweigerd" (`lib/authz.test.ts`). Een fund-sessie op `/admin` wordt geredirect naar `/`;
    anoniem → `/login`.
 
-4. **Tenant-isolatie op query-niveau (v1).** KPI-queries filteren op `tenant_id` uit de sessie
-   (`@wunderstack/analytics`). DB-RLS-per-tenant is een latere hardening; de read-only rol + de
-   bestaande RLS op `interaction_events` (zie DECISION-analytics-retention) blijven de basis.
+4. **Tenant-isolatie op query-niveau (v1), procesgrens D15.** KPI-queries filteren op `tenant_id` uit
+   de sessie (`@wunderstack/analytics`). Geamendeerd 21 augustus 2026: het control plane mag
+   meerdere fondsen kennen; de runtime blijft 1-op-1 ([ADR-multitenant-database.md](../architecture/ADR-multitenant-database.md)
+   tak B). DB-RLS-per-tenant / SET ROLE is geen vervanging in deze reeks; de read-only Scalingo-user
+   + de bestaande RLS op `interaction_events` (zie DECISION-analytics-retention) blijven de basis.
 
 5. **Read-only in deployment.** De dashboard-`DATABASE_URL` wijst naar de read-only DB-user (D4). De
    enige schrijver is het `create-user`-seed-script met de read-write URL (out-of-band). Lokaal

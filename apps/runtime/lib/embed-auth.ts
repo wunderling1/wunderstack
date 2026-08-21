@@ -20,6 +20,9 @@ import { getTenantId } from "@wunderstack/tenant";
  * The embed snippet's `data-agent` attribute is NOT a trust boundary: it is a UI hint for widgets that
  * can show multiple agent instances. The server resolves the agent from the instance row after key
  * validation; a client-supplied agent id in the chat body must never override that choice.
+ *
+ * Track B: D15 is the isolation wall. A key whose `tenantId` is not this process is 403. Do not
+ * collapse this check (ADR-multitenant-database). SET ROLE is not a substitute.
  */
 
 const KEY_HEADER = "x-wunderstack-key";
@@ -28,9 +31,14 @@ export type EmbedAuth =
   | { ok: true; config: TenantConfig | null }
   | { ok: false; status: 401 | 403; error: string };
 
+/** D15 wall: the instance must belong to this runtime process. Cite this in PR4; do not remove. */
+export function instanceBelongsToProcess(instance: { tenantId: string }, tenantId: string): boolean {
+  return instance.tenantId === tenantId;
+}
+
 async function resolveInstanceByKey(publicKey: string, tenantId: string): Promise<TenantConfig | null> {
   const instance = await getInstanceByPublicKey(publicKey).catch(() => null);
-  if (!instance || instance.tenantId !== tenantId) {
+  if (!instance || !instanceBelongsToProcess(instance, tenantId)) {
     return null;
   }
   return instance;

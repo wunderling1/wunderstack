@@ -37,6 +37,8 @@ export interface CaoTraceInput {
    * portal and MCP traffic can be separated (PLAN-mcp-server Fase 1a).
    */
   channel?: string;
+  /** Corpus snapshot tag from the resolved instance (`control.agent_config`). */
+  corpusVersion?: string;
 }
 
 export interface RetrievalHit {
@@ -151,11 +153,15 @@ export function startCaoTrace(mastra: Mastra, input: CaoTraceInput): CaoTrace {
         ...(input.userId === undefined ? {} : { userId: input.userId }),
         ...(input.environment === undefined ? {} : { environment: input.environment }),
         ...(input.channel === undefined ? {} : { channel: input.channel }),
+        ...(input.corpusVersion === undefined ? {} : { corpusVersion: input.corpusVersion }),
         fund: input.fund ?? null,
+        agentKey,
       },
       tags: [
         agentTag,
         ...(input.fund ? [input.fund] : []),
+        agentKey,
+        ...(input.corpusVersion ? [input.corpusVersion] : []),
         ...(input.environment ? [input.environment] : []),
         ...(input.channel ? [input.channel] : []),
       ],

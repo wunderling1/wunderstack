@@ -20,9 +20,9 @@ const envSchema = z.object({
   // public demo can boot without a database; @wunderstack/db asserts its presence
   // at the point of connection.
   DATABASE_URL: optional(z.url()),
-  // Optional dedicated writer connection for the tenant_config tables (Fase 4, second DB role). Falls
-  // back to DATABASE_URL when unset. In deployment this is a DB user granted write on tenant_config
-  // only, so the console can theme/rotate keys without holding broad write access.
+  // Optional dedicated writer connection for control.agent_instances (Fase 4, second DB role). Falls
+  // back to DATABASE_URL when unset. Env name kept as TENANT_CONFIG_WRITER_DATABASE_URL (deploy alias).
+  // In deployment this is a DB user granted write on agent_instances only.
   TENANT_CONFIG_WRITER_DATABASE_URL: optional(z.url()),
   // Provider credentials for the sovereign default path (@wunderstack/ai).
   // Optional at parse time; each is asserted where it is actually used.

@@ -408,6 +408,7 @@ export function createArboAgent(): GroundedAgent {
         ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
         ...(options.userId === undefined ? {} : { userId: options.userId }),
         ...(options.channel === undefined ? {} : { channel: options.channel }),
+        ...(options.corpusVersion === undefined ? {} : { corpusVersion: options.corpusVersion }),
         environment: env.NODE_ENV,
       });
       const traceId = trace.link().traceId ?? null;
@@ -492,6 +493,7 @@ export function createArboAgent(): GroundedAgent {
         ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
         ...(options.userId === undefined ? {} : { userId: options.userId }),
         ...(options.channel === undefined ? {} : { channel: options.channel }),
+        ...(options.corpusVersion === undefined ? {} : { corpusVersion: options.corpusVersion }),
         environment: env.NODE_ENV,
       });
       const traceId = trace.link().traceId ?? null;

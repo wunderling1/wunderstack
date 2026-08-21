@@ -83,8 +83,11 @@ export async function retrieveContext(input: RetrieveContextInput): Promise<Asse
 
 export {
   retrieve,
+  retrieveFromVector,
+  embedQuery,
   retrieveInputSchema,
   type RetrieveInput,
+  type RetrieveFromVectorInput,
   type RetrievedChunk,
   type RetrievedChunkSource,
   type RetrievedChunkStructure,

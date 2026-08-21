@@ -31,3 +31,5 @@ export {
   type InteractionLogRow,
   type AgentActivityRow,
 } from "./kpi.js";
+
+export { getCorpusOverview, type CorpusDocRow } from "./corpus.js";

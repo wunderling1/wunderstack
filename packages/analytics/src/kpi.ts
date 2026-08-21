@@ -2,11 +2,12 @@ import {
   and,
   desc,
   eq,
-  getDb,
   gte,
   interactionEvents,
   isNotNull,
+  listActiveFunds,
   sql,
+  withFundSchema,
 } from "@wunderstack/db";
 
 /**
@@ -15,16 +16,15 @@ import {
  * citations rate, top themes and the unanswered-questions roadmap signal. No latency/token/model
  * metrics (those stay in Langfuse for internal use).
  *
- * TENANT ISOLATION — READ THIS BEFORE GOING MULTI-TENANT.
- * Every fund-scoped query below filters by `tenantId` in the WHERE clause. That per-tenant scoping is
+ * TENANT ISOLATION (D15, track B — ADR-multitenant-database).
+ * Every fund-scoped query below filters by `tenantId` in the WHERE clause. That scoping is
  * enforced ONLY at this application layer (the caller passes `session.user.tenantId`). It is NOT
  * enforced at the database: the RLS policy on `interaction_events` is `FOR SELECT TO PUBLIC USING
  * (true)` (see packages/db/migrations/0007_analytics_reader_policy.sql), which lets the read-only
- * login user read ALL rows. This is acceptable for v1 because one instance = one tenant = one DB
- * (D15) — a fund's DB only contains its own rows. Before any instance serves more than one
- * tenant/fund, add a per-tenant RLS predicate (e.g. keyed off a session GUC) so isolation no longer
- * depends solely on every query remembering to filter. `getAgentActivity` is the deliberate
- * cross-tenant exception and is admin-gated at the route.
+ * login user read ALL rows. That remains acceptable while a runtime process serves one fund (D15)
+ * and this table holds that fund's rows. CREATE ROLE is unavailable on the addon, so do not collapse
+ * D15. Cross-fund aggregation belongs on control-plane counters, never a SQL join across fund
+ * schemas. `getAgentActivity` is the deliberate cross-tenant exception and is admin-gated at the route.
  */
 
 export interface KpiWindow {
@@ -65,16 +65,18 @@ function toNumber(value: unknown): number {
 export async function getKpiSummary(window: KpiWindow): Promise<KpiSummary> {
   const scope = windowScope(window);
 
-  const [row] = await getDb()
-    .select({
-      total: sql<number>`count(*)`,
-      answeredWithCitations: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'answered' and ${interactionEvents.citationCount} > 0)`,
-      refused: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'refused')`,
-      clarified: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'clarified')`,
-      errors: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'error')`,
-    })
-    .from(interactionEvents)
-    .where(scope);
+  const [row] = await withFundSchema(window.tenantId, (db) =>
+    db
+      .select({
+        total: sql<number>`count(*)`,
+        answeredWithCitations: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'answered' and ${interactionEvents.citationCount} > 0)`,
+        refused: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'refused')`,
+        clarified: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'clarified')`,
+        errors: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'error')`,
+      })
+      .from(interactionEvents)
+      .where(scope),
+  );
 
   const total = toNumber(row?.total);
   const answeredWithCitations = toNumber(row?.answeredWithCitations);
@@ -95,18 +97,20 @@ export interface ThemeCount {
 
 /** Top themes by volume (null until a classifier populates `theme`; returns [] meanwhile). */
 export async function getTopThemes(window: KpiWindow, limit = 10): Promise<ThemeCount[]> {
-  const rows = await getDb()
-    .select({ theme: interactionEvents.theme, count: sql<number>`count(*)` })
-    .from(interactionEvents)
-    .where(
-      and(
-        windowScope(window),
-        isNotNull(interactionEvents.theme),
-      ),
-    )
-    .groupBy(interactionEvents.theme)
-    .orderBy(desc(sql`count(*)`))
-    .limit(limit);
+  const rows = await withFundSchema(window.tenantId, (db) =>
+    db
+      .select({ theme: interactionEvents.theme, count: sql<number>`count(*)` })
+      .from(interactionEvents)
+      .where(
+        and(
+          windowScope(window),
+          isNotNull(interactionEvents.theme),
+        ),
+      )
+      .groupBy(interactionEvents.theme)
+      .orderBy(desc(sql`count(*)`))
+      .limit(limit),
+  );
 
   return rows
     .filter((row): row is { theme: string; count: number } => row.theme !== null)
@@ -125,17 +129,19 @@ export async function getRecentInteractions(
   window: KpiWindow,
   limit = 50,
 ): Promise<InteractionLogRow[]> {
-  const rows = await getDb()
-    .select({
-      occurredAt: interactionEvents.occurredAt,
-      question: interactionEvents.question,
-      outcome: interactionEvents.outcome,
-      citationCount: interactionEvents.citationCount,
-    })
-    .from(interactionEvents)
-    .where(windowScope(window))
-    .orderBy(desc(interactionEvents.occurredAt))
-    .limit(limit);
+  const rows = await withFundSchema(window.tenantId, (db) =>
+    db
+      .select({
+        occurredAt: interactionEvents.occurredAt,
+        question: interactionEvents.question,
+        outcome: interactionEvents.outcome,
+        citationCount: interactionEvents.citationCount,
+      })
+      .from(interactionEvents)
+      .where(windowScope(window))
+      .orderBy(desc(interactionEvents.occurredAt))
+      .limit(limit),
+  );
 
   return rows.map((row) => ({
     occurredAt: row.occurredAt,
@@ -159,34 +165,43 @@ export interface AgentActivityRow {
 /**
  * Cross-tenant agent activity since an instant — the admin agent-overview. Grouped by
  * (tenant, agent, fund); ordered by volume. Admin-only data (the dashboard gates the route).
+ * Aggregated in the app, one query per fund schema — never a SQL join across schemas.
  */
 export async function getAgentActivity(since: Date): Promise<AgentActivityRow[]> {
-  const rows = await getDb()
-    .select({
-      tenantId: interactionEvents.tenantId,
-      agentId: interactionEvents.agentId,
-      fund: interactionEvents.fund,
-      total: sql<number>`count(*)`,
-      answeredWithCitations: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'answered' and ${interactionEvents.citationCount} > 0)`,
-      refused: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'refused')`,
-      errors: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'error')`,
-      lastOccurredAt: sql<string>`max(${interactionEvents.occurredAt})`,
-    })
-    .from(interactionEvents)
-    .where(gte(interactionEvents.occurredAt, since))
-    .groupBy(interactionEvents.tenantId, interactionEvents.agentId, interactionEvents.fund)
-    .orderBy(desc(sql`count(*)`));
-
-  return rows.map((row) => ({
-    tenantId: row.tenantId,
-    agentId: row.agentId,
-    fund: row.fund,
-    total: toNumber(row.total),
-    answeredWithCitations: toNumber(row.answeredWithCitations),
-    refused: toNumber(row.refused),
-    errors: toNumber(row.errors),
-    lastOccurredAt: new Date(row.lastOccurredAt),
-  }));
+  const funds = await listActiveFunds();
+  const all: AgentActivityRow[] = [];
+  for (const fund of funds) {
+    const rows = await withFundSchema(fund.key, (db) =>
+      db
+        .select({
+          tenantId: interactionEvents.tenantId,
+          agentId: interactionEvents.agentId,
+          fund: interactionEvents.fund,
+          total: sql<number>`count(*)`,
+          answeredWithCitations: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'answered' and ${interactionEvents.citationCount} > 0)`,
+          refused: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'refused')`,
+          errors: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'error')`,
+          lastOccurredAt: sql<string>`max(${interactionEvents.occurredAt})`,
+        })
+        .from(interactionEvents)
+        .where(gte(interactionEvents.occurredAt, since))
+        .groupBy(interactionEvents.tenantId, interactionEvents.agentId, interactionEvents.fund),
+    );
+    for (const row of rows) {
+      all.push({
+        tenantId: row.tenantId,
+        agentId: row.agentId,
+        fund: row.fund,
+        total: toNumber(row.total),
+        answeredWithCitations: toNumber(row.answeredWithCitations),
+        refused: toNumber(row.refused),
+        errors: toNumber(row.errors),
+        lastOccurredAt: new Date(row.lastOccurredAt),
+      });
+    }
+  }
+  all.sort((a, b) => b.total - a.total);
+  return all;
 }
 
 export interface UnansweredQuestion {
@@ -202,18 +217,20 @@ export async function getUnansweredQuestions(
   window: KpiWindow,
   limit = 50,
 ): Promise<UnansweredQuestion[]> {
-  const rows = await getDb()
-    .select({ question: interactionEvents.question, occurredAt: interactionEvents.occurredAt })
-    .from(interactionEvents)
-    .where(
-      and(
-        windowScope(window),
-        eq(interactionEvents.outcome, "refused"),
-        isNotNull(interactionEvents.question),
-      ),
-    )
-    .orderBy(desc(interactionEvents.occurredAt))
-    .limit(limit);
+  const rows = await withFundSchema(window.tenantId, (db) =>
+    db
+      .select({ question: interactionEvents.question, occurredAt: interactionEvents.occurredAt })
+      .from(interactionEvents)
+      .where(
+        and(
+          windowScope(window),
+          eq(interactionEvents.outcome, "refused"),
+          isNotNull(interactionEvents.question),
+        ),
+      )
+      .orderBy(desc(interactionEvents.occurredAt))
+      .limit(limit),
+  );
 
   return rows
     .filter((row): row is { question: string; occurredAt: Date } => row.question !== null)

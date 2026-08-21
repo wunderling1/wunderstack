@@ -21,7 +21,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
-import { asc, chunks as chunksTable, closeDb, documents, eq, getDb } from "@wunderstack/db";
+import { asc, chunks as chunksTable, closeDb, documents, eq, withFundSchema } from "@wunderstack/db";
 
 import { describeFailure } from "./diagnostics.js";
 
@@ -216,8 +216,7 @@ export interface StructureReport {
 export async function loadFundChunks(
   fund: string,
 ): Promise<{ chunks: ReportChunk[]; documents: ReportDocument[] }> {
-  const db = getDb();
-
+  return withFundSchema(fund, async (db) => {
   const docRows = await db
     .select({
       id: documents.id,
@@ -261,6 +260,7 @@ export async function loadFundChunks(
       chunkCount: perDocument.get(row.id) ?? 0,
     })),
   };
+  });
 }
 
 export function buildReport(input: {

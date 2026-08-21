@@ -8,7 +8,7 @@ import {
 import { getTenantId } from "@wunderstack/tenant";
 import { corsHeaders, preflight } from "@/lib/cors";
 import { resolveEmbedAuth } from "@/lib/embed-auth";
-import { instanceFund } from "@/lib/fund-scope";
+import { resolveRequestScope } from "@/lib/instance-scope";
 import { tenantCorsAllowlist } from "@/lib/tenant-cors";
 
 const DEFAULT_STATUS_LABELS = {
@@ -46,8 +46,12 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   const config = auth.config;
-  const agentKey = config?.agentKey ?? "cao";
-  const fund = instanceFund();
+  const scope = resolveRequestScope(config, undefined);
+  if (!scope.ok) {
+    return Response.json({ error: scope.error }, { status: scope.status, headers: cors });
+  }
+  const agentKey = scope.agentKey;
+  const fund = scope.fund;
   const theme = tenantThemeSchema.parse(config?.theme ?? {});
   const parsedTexts = tenantTextsSchema.parse(config?.texts ?? {});
   const agentRow = await getAgentConfig(agentKey, fund).catch(() => null);

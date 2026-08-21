@@ -130,7 +130,7 @@ Bekende UI-gaten (uit `UI-AUDIT-v1.md`, nog open): `citationVerificationFailed` 
 
 | Onderdeel | Status | Bewijs / zoekpoging |
 |---|---|---|
-| Multi-tenancy / data-plane per fonds | ⚪ Not started (bewust) | `schema.ts:82` comment "multi-tenancy is out of scope"; fund-isolatie is app-laag (`retrieve.ts` filtert op `fund`). `feit` |
+| Multi-tenancy / data-plane per fonds | 🟡 ADR accepted (track B) | `docs/architecture/ADR-multitenant-database.md`; schema-per-fonds + shared dashboard, D15 process boundary kept. `feit` |
 | Postgres RLS (portal-isolatie) | ❓ niet gevonden | Grep `create policy`/`enable row level security` over hele repo → **0 treffers**. Isolatie loopt via app-query + Gate D. `feit` |
 | Auth.js / auth-middleware | ⚪ Not started (bewust) | Grep `next-auth`/`@auth/` → 0 in code; auth is een no-op naad (`apps/demo/proxy.ts`). `feit` |
 | OOMT go-live | ❓ niet in repo verifieerbaar | "OOMT" komt niet voor in code; go-live-config = extern (§8). `feit` |

@@ -16,7 +16,11 @@
     "check-motion": "bash scripts/check-motion.sh",
     "bake-off": "pnpm --filter @wunderstack/bake-off bake-off",
     "promote-check": "pnpm --filter @wunderstack/promote check",
-    "seed:oomt": "pnpm --filter @wunderstack/ingest seed:oomt"
+    "seed:oomt": "pnpm --filter @wunderstack/ingest seed:oomt",
+    "db:provision-fund": "pnpm --filter @wunderstack/db-scripts provision",
+    "db:compare-retrieval": "pnpm --filter @wunderstack/db-scripts compare-retrieval",
+    "db:migrate-fund-schemas": "pnpm --filter @wunderstack/db-scripts migrate-fund-schemas",
+    "db:drop-public-corpus": "pnpm --filter @wunderstack/db-scripts drop-public-corpus"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
