@@ -1,4 +1,5 @@
 import { parseCaoFunds } from "@wunderstack/shared";
+import type { PlaygroundAgent } from "./runtime-config";
 
 /**
  * Server-side authorization of the `fund` scope (security-audit finding #2, BOLA / data-plane
@@ -18,6 +19,12 @@ import { parseCaoFunds } from "@wunderstack/shared";
 /** Dev fallback fund when no allowlist is configured (keeps corpus isolation even locally). */
 const DEV_DEFAULT_FUND = "demo";
 
+/**
+ * Playground arbo corpora exist for OOMT (sample catalog). Intersect with the tenant allowlist so
+ * `?agent=arbo&fund=elektronische-detailhandel` cannot pick an empty CAO-only fund.
+ */
+const ARBO_PLAYGROUND_FUNDS = ["oomt"] as const;
+
 export type FundScopeResult =
   | { ok: true; fund: string }
   | { ok: false; status: 400 | 403; error: string };
@@ -27,9 +34,14 @@ function allowedFunds(): string[] {
 }
 
 /** Funds a client may choose between (for the UI selector). Falls back to a dev default in local. */
-export function availableFunds(): string[] {
+export function availableFunds(agent: PlaygroundAgent = "cao"): string[] {
   const allow = allowedFunds();
-  return allow.length > 0 ? allow : [DEV_DEFAULT_FUND];
+  const all = allow.length > 0 ? allow : [DEV_DEFAULT_FUND];
+  if (agent !== "arbo") {
+    return all;
+  }
+  const scoped = all.filter((fund) => (ARBO_PLAYGROUND_FUNDS as readonly string[]).includes(fund));
+  return scoped.length > 0 ? scoped : [...ARBO_PLAYGROUND_FUNDS];
 }
 
 export function resolveFundScope(requested: string | undefined): FundScopeResult {

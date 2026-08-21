@@ -46,7 +46,10 @@ export interface KnownAgent {
  * never drags the Mastra runtime into a read-only surface. When §7 ships, the manifest becomes the
  * source of the agent list.
  */
-export const KNOWN_AGENTS: KnownAgent[] = [{ id: "cao", label: "CAO-agent" }];
+export const KNOWN_AGENTS: KnownAgent[] = [
+  { id: "cao", label: "CAO-agent" },
+  { id: "arbo", label: "Arbocatalogus-agent" },
+];
 
 export function agentLabel(agentId: string): string {
   return KNOWN_AGENTS.find((agent) => agent.id === agentId)?.label ?? agentId;

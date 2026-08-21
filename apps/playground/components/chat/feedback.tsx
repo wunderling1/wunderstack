@@ -24,7 +24,7 @@ export function Feedback({ submitted, onSubmit }: FeedbackProps) {
   const [reason, setReason] = useState("");
 
   if (submitted !== null && !showReason) {
-    return <p className="mt-2 text-xs text-text-muted">Bedankt voor je feedback.</p>;
+    return <p className="border-t border-border px-8 py-4 text-sm text-text-muted">Bedankt voor je feedback.</p>;
   }
 
   const rate = (rating: FeedbackRating) => {
@@ -47,33 +47,35 @@ export function Feedback({ submitted, onSubmit }: FeedbackProps) {
   };
 
   return (
-    <div className="mt-2">
-      <div className="flex items-center gap-1 text-text-muted">
-        <span className="mr-1 text-xs">Was dit nuttig?</span>
-        <button
-          type="button"
-          aria-label="Nuttig"
-          aria-pressed={submitted === "up"}
-          onClick={() => rate("up")}
-          className={cn(
-            "rounded p-1 transition-colors hover:bg-surface-sunk",
-            submitted === "up" && "text-primary",
-          )}
-        >
-          <ThumbsUp className="h-3.5 w-3.5" />
-        </button>
-        <button
-          type="button"
-          aria-label="Niet nuttig"
-          aria-pressed={submitted === "down"}
-          onClick={() => rate("down")}
-          className={cn(
-            "rounded p-1 transition-colors hover:bg-surface-sunk",
-            submitted === "down" && "text-primary",
-          )}
-        >
-          <ThumbsDown className="h-3.5 w-3.5" />
-        </button>
+    <div className="border-t border-border px-8 py-4">
+      <div className="flex items-center justify-between text-text-muted">
+        <span className="text-sm">Klopt dit antwoord?</span>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            aria-label="Nuttig"
+            aria-pressed={submitted === "up"}
+            onClick={() => rate("up")}
+            className={cn(
+              "rounded p-1 hover:bg-surface-sunk",
+              submitted === "up" && "text-primary",
+            )}
+          >
+            <ThumbsUp className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            aria-label="Niet nuttig"
+            aria-pressed={submitted === "down"}
+            onClick={() => rate("down")}
+            className={cn(
+              "rounded p-1 hover:bg-surface-sunk",
+              submitted === "down" && "text-primary",
+            )}
+          >
+            <ThumbsDown className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       {showReason ? (
@@ -84,7 +86,7 @@ export function Feedback({ submitted, onSubmit }: FeedbackProps) {
                 key={chip}
                 type="button"
                 onClick={() => submitChip(chip)}
-                className="rounded-full border border-border px-2 py-0.5 text-[11px] text-text-muted transition-colors hover:bg-surface-sunk hover:text-text"
+                className="rounded-full border border-border px-2 py-0.5 text-[11px] text-text-muted hover:bg-surface-sunk hover:text-text"
               >
                 {chip}
               </button>

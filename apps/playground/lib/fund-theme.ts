@@ -15,8 +15,10 @@ export interface FundTheme {
   key: string;
   /** Short badge text (logo placeholder). */
   logoText: string;
-  /** Product label shown in the header. */
+  /** Product label shown in the empty-state fallback. */
   label: string;
+  /** Human-readable corpus name in the source picker. */
+  sourceLabel: string;
   /** Starter question categories shown on the empty chat. */
   starterCategories: StarterCategory[];
 }
@@ -73,13 +75,18 @@ export const DEFAULT_THEME: FundTheme = {
   key: "default",
   logoText: "W",
   label: "Wunderstack — CAO-agent",
+  sourceLabel: "Demo",
   starterCategories: DEFAULT_STARTER_CATEGORIES,
 };
 
 const FUND_THEMES: Record<string, Partial<FundTheme>> = {
+  demo: {
+    sourceLabel: "Demo",
+  },
   "elektronische-detailhandel": {
     logoText: "ED",
     label: "CAO-assistent — Elektronische Detailhandel",
+    sourceLabel: "Elektronische Detailhandel",
     starterCategories: [
       {
         label: "Veelgestelde vragen",
@@ -95,6 +102,7 @@ const FUND_THEMES: Record<string, Partial<FundTheme>> = {
   oomt: {
     logoText: "OOMT",
     label: "CAO-assistent — OOMT",
+    sourceLabel: "Mobiliteitsbranche (OOMT)",
     starterCategories: [
       {
         label: "Veelgestelde vragen",
@@ -116,7 +124,12 @@ export function getFundTheme(fund: string | undefined): FundTheme {
   }
   const override = FUND_THEMES[fund];
   if (!override) {
-    return { ...DEFAULT_THEME, key: fund };
+    return { ...DEFAULT_THEME, key: fund, sourceLabel: fund };
   }
   return { ...DEFAULT_THEME, ...override, key: fund };
+}
+
+/** Corpus name for the playground source picker. */
+export function fundSourceLabel(fund: string): string {
+  return getFundTheme(fund).sourceLabel;
 }

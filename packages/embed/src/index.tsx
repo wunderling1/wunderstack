@@ -9,6 +9,9 @@ import { EmbedApp } from "./embed-app";
  * from the script tag's `data-*` (the stable snippet: script-src + key + agent); everything variable
  * is fetched at runtime from `GET /config`.
  *
+ * `data-agent` is a UI hint only — never a trust boundary. After `GET /config`, a mismatched hint is
+ * ignored; the instance key decides the agent.
+ *
  * `data-mode="inline"` mounts into `[data-wunderstack-embed-slot]` as an always-open panel (marketing
  * demo / dedicated fund page). Default is the launcher a fund pastes on an existing site.
  *
@@ -43,7 +46,7 @@ function readSnippet(): Snippet {
   return {
     endpoint: endpoint.replace(/\/$/, ""),
     agentKey: data.key ?? null,
-    agentId: data.agent ?? "cao",
+    agentId: data.agent ?? "",
     layout: data.mode === "inline" ? "inline" : "launcher",
   };
 }

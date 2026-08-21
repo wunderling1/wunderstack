@@ -4,8 +4,13 @@
  * header the embed widget uses (`x-wunderstack-key`). The key is a public identifier (see
  * DECISION-embed-api.md), so exposing it via NEXT_PUBLIC_* matches the embed snippet model.
  */
-export function runtimeApiHeaders(extra?: HeadersInit): HeadersInit {
-  const key = process.env.NEXT_PUBLIC_WUNDERSTACK_TENANT_KEY?.trim();
+import type { PlaygroundAgent } from "./runtime-config";
+
+export function runtimeApiHeaders(agent?: PlaygroundAgent, extra?: HeadersInit): HeadersInit {
+  const key =
+    agent === "arbo"
+      ? process.env.NEXT_PUBLIC_WUNDERSTACK_TENANT_KEY_ARBO?.trim()
+      : process.env.NEXT_PUBLIC_WUNDERSTACK_TENANT_KEY?.trim();
   return {
     "content-type": "application/json",
     ...(key ? { "x-wunderstack-key": key } : {}),

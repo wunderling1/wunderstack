@@ -1,7 +1,7 @@
 "use client";
 
 import { IconButton } from "@wunderstack/ui";
-import { SendHorizontal } from "lucide-react";
+import { ArrowUp } from "lucide-react";
 import { useState, type FormEvent, type KeyboardEvent } from "react";
 import { cn } from "@/lib/utils";
 
@@ -47,7 +47,7 @@ export function Composer({
     <form
       onSubmit={onSubmit}
       className={cn(
-        "flex items-end gap-2 rounded-[var(--radius-pill)] border border-border bg-surface p-2 shadow-sm",
+        "flex items-end gap-2 rounded-[var(--radius-pill)] bg-surface p-2.5 shadow-[var(--elevation-raised)]",
         className,
       )}
     >
@@ -59,7 +59,7 @@ export function Composer({
         placeholder={placeholder}
         disabled={disabled}
         className={cn(
-          "max-h-40 min-h-10 flex-1 resize-none bg-transparent px-3 py-2 text-sm text-text outline-none",
+          "max-h-40 min-h-12 flex-1 resize-none bg-transparent px-4 py-3 text-base text-text outline-none",
           "placeholder:text-text-subtle disabled:opacity-50",
         )}
       />
@@ -67,9 +67,9 @@ export function Composer({
         type="submit"
         label="Verstuur"
         disabled={disabled || value.trim().length === 0}
-        className="h-9 w-9"
+        className="h-12 w-12"
       >
-        <SendHorizontal className="h-4 w-4" />
+        <ArrowUp className="h-5 w-5" />
       </IconButton>
     </form>
   );

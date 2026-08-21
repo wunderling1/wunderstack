@@ -19,9 +19,9 @@ export function FollowUps({ questions, onPick, disabled = false }: FollowUpsProp
   }
 
   return (
-    <div className="mt-3 flex flex-col gap-2">
-      <p className="flex items-center gap-1.5 text-xs font-medium text-text-muted">
-        <CornerDownRight className="h-3.5 w-3.5" aria-hidden />
+    <div className="border-t border-border px-8 py-5">
+      <p className="mb-2 flex items-center gap-1.5 text-sm text-text-muted">
+        <CornerDownRight className="h-4 w-4" aria-hidden />
         Handige vervolgvragen
       </p>
       <div className="flex flex-wrap gap-2">
@@ -31,7 +31,7 @@ export function FollowUps({ questions, onPick, disabled = false }: FollowUpsProp
             type="button"
             disabled={disabled}
             onClick={() => onPick(question)}
-            className="inline-flex items-center rounded-[var(--radius-pill)] border border-primary/30 bg-primary-tint px-3 py-1.5 text-left text-sm text-primary transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-fit max-w-full rounded-[var(--radius-pill)] bg-primary-tint px-4 py-2.5 text-left text-base text-text hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {question}
           </button>

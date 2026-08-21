@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import { DEFAULT_THEME, type StarterCategory } from "@/lib/fund-theme";
+import type { TenantPublicConfig } from "@wunderstack/shared";
+import type { PlaygroundAgent } from "@/lib/runtime-config";
 import { Composer } from "./composer";
 import { MessageList } from "./message-list";
 import { Starters } from "./starters";
@@ -9,19 +11,35 @@ import { ChatThread } from "./thread";
 import { useChat } from "./use-chat";
 
 interface ChatProps {
-  /** Restrict answers to one O&O fund's CAO. */
+  /** Restrict answers to one O&O fund's corpus. */
   fund?: string;
+  /** Catalog agent instance (drives tenant-key header). */
+  agent?: PlaygroundAgent;
   /** Compact chrome for the embeddable widget (no outer max-width / padding). */
   embedded?: boolean;
   /** Fund-configurable starter question categories (see lib/fund-theme.ts). */
   starterCategories?: StarterCategory[];
+  /** Empty-state heading from GET /api/config. */
+  starterTitle?: string;
+  /** Empty-state supporting sentence from GET /api/config. */
+  starterIntro?: string;
+  /** Progress phase labels from GET /api/config. */
+  statusLabels?: TenantPublicConfig["statusLabels"];
 }
 
 /** Distance from the bottom (px) within which we consider the user "pinned" to the latest message. */
 const NEAR_BOTTOM_THRESHOLD = 80;
 
-export function Chat({ fund, embedded = false, starterCategories }: ChatProps) {
-  const { messages, isStreaming, send, sendFeedback } = useChat(fund);
+export function Chat({
+  fund,
+  agent = "cao",
+  embedded = false,
+  starterCategories,
+  starterTitle,
+  starterIntro,
+  statusLabels,
+}: ChatProps) {
+  const { messages, isStreaming, send, sendFeedback } = useChat(fund, agent);
   const scrollRef = useRef<HTMLDivElement>(null);
   // Whether the user was at the bottom before the latest update. Only then do we auto-scroll, so
   // streaming text does not yank the viewport away from someone reading earlier content.
@@ -42,7 +60,7 @@ export function Chat({ fund, embedded = false, starterCategories }: ChatProps) {
 
   return (
     <ChatThread
-      className={embedded ? "" : "mx-auto w-full max-w-2xl"}
+      className={embedded ? "" : "mx-auto w-full max-w-3xl"}
       scrollRef={scrollRef}
       onScroll={onScroll}
       composer={
@@ -55,11 +73,18 @@ export function Chat({ fund, embedded = false, starterCategories }: ChatProps) {
       }
     >
       {empty ? (
-        <Starters categories={starterCategories ?? DEFAULT_THEME.starterCategories} onPick={send} />
+        <Starters
+          categories={starterCategories ?? DEFAULT_THEME.starterCategories}
+          onPick={send}
+          {...(starterTitle ? { title: starterTitle } : {})}
+          {...(starterIntro ? { intro: starterIntro } : {})}
+        />
       ) : (
         <MessageList
           messages={messages}
           {...(fund ? { fund } : {})}
+          agent={agent}
+          {...(statusLabels ? { statusLabels } : {})}
           onFeedback={sendFeedback}
           onFollowUp={send}
           followUpsDisabled={isStreaming}

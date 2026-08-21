@@ -18,10 +18,14 @@ export interface ChatThreadProps {
 export function ChatThread({ children, composer, scrollRef, onScroll, className }: ChatThreadProps) {
   return (
     <div className={cn("flex h-full flex-col", className)}>
-      <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto px-4 py-6">
+      <div
+        ref={scrollRef}
+        onScroll={onScroll}
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-6"
+      >
         {children}
       </div>
-      <div className="border-t border-border bg-page px-4 py-3">{composer}</div>
+      <div className="bg-page px-4 py-4">{composer}</div>
     </div>
   );
 }
