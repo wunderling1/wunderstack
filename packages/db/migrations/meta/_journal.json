@@ -106,6 +106,13 @@
       "when": 1787342000000,
       "tag": "0014_revoke_public_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1787345000000,
+      "tag": "0015_audit_events",
+      "breakpoints": true
     }
   ]
 }

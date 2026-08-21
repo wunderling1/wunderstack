@@ -9,7 +9,6 @@ export {
 export { withSearchPath, withFundContext } from "./search-path.js";
 export {
   withFundSchema,
-  publicCorpusExists,
   listActiveFunds,
   registerFund,
   ensureFundTables,
@@ -39,6 +38,7 @@ export {
   assertNoAnnOrPartitionSql,
 } from "./fund-ddl.js";
 export { canDropPublicCorpus, type FundCopyCheck, type DropPublicDecision } from "./drop-public-corpus.js";
+export { recordAuditEvent, AUDIT_ACTIONS, type AuditAction } from "./audit-events.js";
 export {
   resolveInstanceByPublicKey,
   resolveInstanceByFundAgent,

@@ -15,6 +15,9 @@ export {
   type NewAgentInstance,
   type Fund,
   type NewFund,
+  auditEvents,
+  type AuditEvent,
+  type NewAuditEvent,
 } from "./control/index.js";
 
 export {
