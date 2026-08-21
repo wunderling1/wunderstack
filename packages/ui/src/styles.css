@@ -30,7 +30,11 @@
   --radius-input: var(--radius-input);
   --radius-control: var(--radius-control);
   --radius-card: var(--radius-card);
+  --radius-badge: var(--radius-badge);
   --radius-pill: var(--radius-pill);
+  --shadow-card: var(--elevation-card);
+  --shadow-raised: var(--elevation-raised);
+  --shadow-glow: var(--elevation-glow);
   --font-sans: var(--font-body);
   --font-display: var(--font-display);
   --text-xs: var(--text-xs);
@@ -40,6 +44,25 @@
   --text-xl: var(--text-xl);
   --text-2xl: var(--text-2xl);
   --text-3xl: var(--text-3xl);
+
+  /* Motion — map our duration/ease tokens onto Tailwind's duration-* and ease-* utilities.
+   * Tailwind's built-in defaults (75, 200, 300, 500, 700, 1000) are removed so that only
+   * the values declared in primitive.css exist on the duration scale. */
+  --duration-50: var(--duration-50);
+  --duration-100: var(--duration-100);
+  --duration-150: var(--duration-150);
+  --duration-250: var(--duration-250);
+  --duration-400: var(--duration-400);
+  --duration-75: initial;
+  --duration-200: initial;
+  --duration-300: initial;
+  --duration-500: initial;
+  --duration-700: initial;
+  --duration-1000: initial;
+
+  --ease-out-soft: var(--ease-out-soft);
+  --ease-standard: var(--ease-standard);
+  --ease-linear: var(--ease-linear);
 }
 
 * {
@@ -50,4 +73,100 @@ body {
   background-color: var(--color-page);
   color: var(--color-text);
   font-family: var(--font-body);
+}
+
+/*
+ * Motion component layer — semantic CSS classes referenced by packages/ui primitives.
+ * Only transform and opacity for enter/exit; background-color and box-shadow on state timing.
+ * No transitions on layout properties (height, width, top, left, margin, padding).
+ */
+@layer components {
+  /* Button / IconButton press + state */
+  .motion-control {
+    transition:
+      transform var(--motion-press),
+      background-color var(--motion-state),
+      box-shadow var(--motion-state);
+  }
+  .motion-control:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  /* Dialog overlay */
+  .motion-overlay {
+    transition: opacity var(--motion-enter);
+  }
+  .motion-overlay[data-state="open"] {
+    opacity: 1;
+    transition-duration: var(--duration-250);
+    transition-timing-function: var(--ease-out-soft);
+  }
+  .motion-overlay[data-state="closed"] {
+    opacity: 0;
+    transition-duration: var(--duration-150);
+    transition-timing-function: var(--ease-standard);
+  }
+
+  /* Dialog content */
+  .motion-dialog-content {
+    transition:
+      opacity var(--motion-enter),
+      transform var(--motion-enter);
+  }
+  .motion-dialog-content[data-state="open"] {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+    transition-duration: var(--duration-250);
+    transition-timing-function: var(--ease-out-soft);
+  }
+  .motion-dialog-content[data-state="closed"] {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + var(--motion-offset-enter)));
+    transition-duration: var(--duration-150);
+    transition-timing-function: var(--ease-standard);
+  }
+
+  /*
+   * Empty-state enter (fase 2). Stagger via --i on the element.
+   * Reduced motion zeros --duration-* and --motion-offset-enter, so this is a no-op there.
+   */
+  @keyframes motion-enter-fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes motion-enter-up {
+    from {
+      transform: translateY(var(--motion-offset-enter));
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+
+  .motion-enter {
+    /* Fade on the slow/standard curve so opacity is visible; rise can stay soft. */
+    animation:
+      motion-enter-fade var(--motion-enter-slow) both,
+      motion-enter-up var(--motion-enter-slow) both;
+    animation-delay: calc(var(--i, 0) * var(--motion-stagger));
+  }
+
+  /*
+   * Progress loop (state-bound). Apply while work is in flight; unmount to stop.
+   * Reduced motion sets --motion-spin to a single 0.01ms tick (no hyper-spin).
+   */
+  @keyframes motion-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .motion-spin {
+    animation: motion-spin var(--motion-spin);
+  }
 }

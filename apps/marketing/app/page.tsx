@@ -49,7 +49,7 @@ export default function Home() {
         <div className="grid gap-4 md:grid-cols-3">
           {AGENTS.map((agent) => (
             <Link key={agent.slug} href={`/agents/${agent.slug}`} className="group">
-              <Card className="flex h-full flex-col gap-3 p-5 transition-colors group-hover:border-primary">
+              <Card className="flex h-full flex-col gap-3 p-5 group-hover:border-primary">
                 <div className="flex items-center gap-2">
                   <h3 className="font-display text-base font-semibold">{agent.name}</h3>
                   <span className="ml-auto">

@@ -1,3 +1,4 @@
+import { Pill } from "@wunderstack/ui";
 import { useState } from "react";
 import type { EmbedTexts, StarterCategory } from "./types";
 
@@ -65,12 +66,20 @@ export function resolveStarterCategories(texts: EmbedTexts | undefined): Starter
   return DEFAULT_STARTER_CATEGORIES;
 }
 
+const DEFAULT_TITLE = "Heb je een vraag over de CAO?";
+const DEFAULT_INTRO =
+  "Antwoorden komen uit de CAO, met het artikel erbij. Staat het er niet in? Dan hoor je dat eerlijk.";
+
 export function Starters({
   categories,
   onPick,
+  title = DEFAULT_TITLE,
+  intro = DEFAULT_INTRO,
 }: {
   categories: StarterCategory[];
   onPick: (question: string) => void;
+  title?: string;
+  intro?: string;
 }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const active = categories[activeIndex] ?? categories[0];
@@ -78,30 +87,26 @@ export function Starters({
   return (
     <div className="flex flex-col gap-4 py-2">
       <div className="flex flex-col gap-1">
-        <p className="text-sm font-semibold text-text">Heb je een vraag over de CAO?</p>
-        <p className="text-xs text-text-muted">
-          Antwoorden komen uit de CAO, met het artikel erbij. Staat het er niet in? Dan hoor je dat
-          eerlijk.
-        </p>
+        <p className="text-sm font-semibold text-text">{title}</p>
+        <p className="text-xs text-text-muted">{intro}</p>
       </div>
 
       <div className="flex flex-wrap gap-1.5">
         {categories.map((category, index) => {
           const isActive = index === activeIndex;
           return (
-            <button
+            <Pill
               key={category.label}
-              type="button"
+              role="button"
+              tabIndex={0}
               aria-pressed={isActive}
               onClick={() => setActiveIndex(index)}
-              className={
-                isActive
-                  ? "inline-flex items-center rounded-pill bg-primary-tint px-3 py-1 text-xs font-medium text-primary"
-                  : "inline-flex items-center rounded-pill border border-border bg-surface px-3 py-1 text-xs font-medium text-text hover:bg-surface-sunk"
-              }
+              onKeyDown={(e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setActiveIndex(index); } }}
+              variant={isActive ? "selected" : "outline"}
+              className="cursor-pointer shadow-[var(--elevation-card)]"
             >
               {category.label}
-            </button>
+            </Pill>
           );
         })}
       </div>
@@ -113,7 +118,7 @@ export function Starters({
               key={question}
               type="button"
               onClick={() => onPick(question)}
-              className="group flex items-center justify-between gap-3 rounded-[var(--radius-card)] border border-border bg-surface px-3 py-2.5 text-left text-xs text-text hover:bg-surface-sunk"
+              className="group flex items-center justify-between gap-3 rounded-[var(--radius-card)] bg-surface px-3 py-2.5 text-left text-xs text-text shadow-[var(--elevation-card)] hover:shadow-[var(--elevation-raised)]"
             >
               <span>{question}</span>
               <span aria-hidden className="shrink-0 text-text-subtle group-hover:text-text-muted">

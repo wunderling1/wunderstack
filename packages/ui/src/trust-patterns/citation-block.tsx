@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { cn } from "../lib/cn.js";
 import { Chip } from "../primitives/chip.js";
 
-/** Verification status of a cited source — drives the trust tint. */
+/** Verification status of a cited source — drives the trust accent. */
 export type CitationVerification = "verified" | "caution";
 
 export interface CitationBadgeProps {
@@ -11,10 +11,13 @@ export interface CitationBadgeProps {
   onClick?: () => void;
 }
 
-/** Inline `[n]` marker linking body text to its CitationBlock. */
+/**
+ * Inline reference marker linking body text to its CitationBlock.
+ * Rendered as a small rounded square with the citation number — no brackets.
+ */
 export function CitationBadge({ refNumber, className, onClick }: CitationBadgeProps) {
   const shared = cn(
-    "inline-flex shrink-0 items-center rounded bg-surface-sunk px-1.5 py-0.5 font-mono text-[10px] text-text-muted",
+    "inline-flex shrink-0 items-center justify-center rounded-[var(--radius-badge)] bg-primary-tint px-1.5 py-0.5 font-mono text-[10px] font-semibold text-primary",
     className,
   );
 
@@ -23,14 +26,14 @@ export function CitationBadge({ refNumber, className, onClick }: CitationBadgePr
       <button
         type="button"
         onClick={onClick}
-        className={cn(shared, "hover:bg-primary-tint hover:text-primary")}
+        className={cn(shared, "hover:bg-primary/20")}
       >
-        [{refNumber}]
+        {refNumber}
       </button>
     );
   }
 
-  return <span className={shared}>[{refNumber}]</span>;
+  return <span className={shared}>{refNumber}</span>;
 }
 
 export interface CitationBlockProps {
@@ -40,7 +43,7 @@ export interface CitationBlockProps {
   label: string;
   /** The quoted source fragment. */
   quote: ReactNode;
-  /** Optional citation index, rendered as a leading `[n]` badge. */
+  /** Optional citation index, rendered as a leading badge. */
   refNumber?: number;
   className?: string;
 }
@@ -61,8 +64,9 @@ export function CitationBlock({
   return (
     <div
       className={cn(
-        "rounded-[var(--radius-control)] border border-border p-3",
-        verified ? "bg-state-verified-bg" : "bg-state-caution-bg",
+        "rounded-[var(--radius-control)] bg-surface px-3 py-3 shadow-[var(--elevation-card)]",
+        "border-l-2",
+        verified ? "border-state-verified-fg" : "border-state-caution-fg",
         className,
       )}
     >
@@ -70,12 +74,7 @@ export function CitationBlock({
         {refNumber !== undefined ? <CitationBadge refNumber={refNumber} /> : null}
         <Chip variant={verification}>{label}</Chip>
       </div>
-      <blockquote
-        className={cn(
-          "border-l-2 pl-3 text-sm leading-relaxed text-text",
-          verified ? "border-state-verified-fg" : "border-state-caution-fg",
-        )}
-      >
+      <blockquote className="text-sm leading-relaxed text-text-muted">
         {quote}
       </blockquote>
     </div>

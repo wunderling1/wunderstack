@@ -1,0 +1,6 @@
+# Motion allowlist — grandfathered violations.
+# Each entry is a file path relative to the repo root.
+# Add entries here when a violation must be grandfathered; include a TODO comment explaining why.
+# Remove entries once the violation is fixed.
+#
+# After fase 1, this file is intentionally empty: all apps/** motion has been moved to packages/ui.

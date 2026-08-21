@@ -119,7 +119,7 @@ export function TabsTrigger({ value, className, onClick, ...props }: TabsTrigger
       className={cn(
         "rounded-[var(--radius-input)] px-3 py-1.5 text-sm font-medium transition-colors",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface-sunk",
-        selected ? "bg-surface text-text shadow-sm" : "text-text-muted hover:text-text",
+        selected ? "bg-surface text-text shadow-[var(--elevation-card)]" : "text-text-muted hover:text-text",
         className,
       )}
       {...props}

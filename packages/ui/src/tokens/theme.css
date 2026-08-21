@@ -14,6 +14,15 @@
 }
 
 /* Dark mode seam — flips core neutrals/text; full polish deferred */
+[data-mode="dark"],
+[data-mode="dark"] * {
+  /* Remap elevation primitives to subtler dark-mode equivalents */
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.20);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.30), 0 1px 2px -1px rgb(0 0 0 / 0.20);
+  --shadow-md: 0 4px 10px -1px rgb(0 0 0 / 0.40), 0 2px 4px -2px rgb(0 0 0 / 0.25);
+  --shadow-lg: 0 10px 24px -3px rgb(0 0 0 / 0.50), 0 4px 8px -4px rgb(0 0 0 / 0.30);
+}
+
 [data-mode="dark"] {
   --color-page: var(--neutral-900);
   --color-surface: #1a1f2e;

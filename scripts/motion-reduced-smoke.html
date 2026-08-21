@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<!--
+  Reduced-motion smoke test — manual verification until Playwright is added.
+
+  Steps:
+  1. Open this file in a Chromium-based browser (file:// is fine).
+  2. Open DevTools → Rendering tab → check "Emulate CSS media feature: prefers-reduced-motion: reduce".
+  3. Press the Button: the scale animation should be imperceptible (< 1ms effective duration).
+  4. Open the Dialog via the button: overlay and content should appear without visible fade or slide.
+  5. Dismiss the Dialog: same — no visible exit animation.
+  6. The spinner should freeze (no continuous rotation). Without reduced motion it rotates once per second.
+
+  Expected computed transition-duration with reduced motion: 0.01ms (displayed as "0.00001s" in DevTools).
+  Without reduced motion: Button 100ms (press), Dialog overlay/content 250ms (enter) / 150ms (exit),
+  spinner 1000ms linear infinite.
+-->
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Motion reduced-motion smoke test</title>
+  <style>
+    /* Inline copies of the motion tokens — mirrors packages/ui/src/tokens/primitive.css + semantic.css */
+    :root {
+      --duration-100: 100ms;
+      --duration-150: 150ms;
+      --duration-250: 250ms;
+      --duration-400: 400ms;
+      --duration-spin: 1000ms;
+      --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+      --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+      --ease-linear: linear;
+      --distance-sm: 12px;
+
+      --motion-press:  var(--duration-100) var(--ease-standard);
+      --motion-state:  var(--duration-150) var(--ease-standard);
+      --motion-enter:  var(--duration-250) var(--ease-out-soft);
+      --motion-exit:   var(--duration-150) var(--ease-standard);
+      --motion-offset-enter: var(--distance-sm);
+      --motion-spin: var(--duration-spin) var(--ease-linear) infinite;
+
+      --color-primary: #3135c9;
+      --color-on-primary: #ffffff;
+      --color-page: #f6f6f7;
+      --color-surface: #ffffff;
+      --color-text: #0e1220;
+      --color-border: #e7e8eb;
+    }
+
+    /* Reduced motion — mirrors semantic.css */
+    @media (prefers-reduced-motion: reduce) {
+      :root {
+        --duration-100: 0.01ms;
+        --duration-150: 0.01ms;
+        --duration-250: 0.01ms;
+        --duration-400: 0.01ms;
+        --duration-spin: 0.01ms;
+        --motion-offset-enter: 0px;
+        --motion-spin: var(--duration-spin) var(--ease-linear) 1;
+      }
+      *, *::before, *::after {
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+      }
+    }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: var(--color-page);
+      color: var(--color-text);
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+
+    /* Button — mirrors .motion-control */
+    .btn {
+      background: var(--color-primary);
+      color: var(--color-on-primary);
+      border: none;
+      border-radius: 10px;
+      padding: 0.5rem 1.25rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition:
+        transform var(--motion-press),
+        background-color var(--motion-state),
+        box-shadow var(--motion-state);
+    }
+    .btn:active { transform: scale(0.98); }
+
+    /* Dialog overlay — mirrors .motion-overlay */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(14,18,32,0.5);
+      transition: opacity var(--motion-enter);
+    }
+    .overlay[data-state="open"] {
+      opacity: 1;
+      transition-duration: var(--duration-250);
+      transition-timing-function: var(--ease-out-soft);
+    }
+    .overlay[data-state="closed"] {
+      opacity: 0;
+      transition-duration: var(--duration-150);
+      transition-timing-function: var(--ease-standard);
+    }
+
+    /* Dialog content — mirrors .motion-dialog-content */
+    .dialog {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      width: min(400px, 90vw);
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: 16px;
+      padding: 1.5rem;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+      transition:
+        opacity var(--motion-enter),
+        transform var(--motion-enter);
+    }
+    .dialog[data-state="open"] {
+      opacity: 1;
+      transform: translate(-50%, -50%);
+      transition-duration: var(--duration-250);
+      transition-timing-function: var(--ease-out-soft);
+    }
+    .dialog[data-state="closed"] {
+      opacity: 0;
+      transform: translate(-50%, calc(-50% + var(--motion-offset-enter)));
+      transition-duration: var(--duration-150);
+      transition-timing-function: var(--ease-standard);
+    }
+
+    .dialog h2 { margin: 0 0 0.75rem; font-size: 1rem; font-weight: 600; }
+    .dialog p  { margin: 0 0 1rem; font-size: 0.875rem; }
+
+    /* Spinner — mirrors .motion-spin */
+    @keyframes motion-spin {
+      to { transform: rotate(360deg); }
+    }
+    .spinner {
+      width: 1rem;
+      height: 1rem;
+      border: 2px solid var(--color-border);
+      border-top-color: var(--color-primary);
+      border-radius: 999px;
+      animation: motion-spin var(--motion-spin);
+    }
+    .row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; }
+  </style>
+</head>
+<body>
+  <h1 style="font-size:1.1rem;font-weight:600;margin:0">Motion reduced-motion smoke test</h1>
+  <p style="font-size:0.875rem;margin:0;color:#5c6470">
+    Enable <strong>prefers-reduced-motion: reduce</strong> in DevTools → Rendering, then interact.
+  </p>
+
+  <div class="row">
+    <span class="spinner" aria-hidden="true"></span>
+    <span>Progress loop (spins until reduced motion freezes it)</span>
+  </div>
+
+  <button class="btn" id="open-btn">Open dialog</button>
+
+  <div class="overlay" id="overlay" data-state="closed" style="pointer-events:none;"></div>
+  <div class="dialog" id="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title" data-state="closed">
+    <h2 id="dialog-title">Voorbeeld dialoogvenster</h2>
+    <p>Met reduced motion: verschijnt en verdwijnt onmiddellijk (0.01ms).<br>
+       Zonder: fade + slide over 250ms (enter) / 150ms (exit).</p>
+    <button class="btn" id="close-btn">Sluiten</button>
+  </div>
+
+  <script>
+    const overlay = document.getElementById('overlay');
+    const dialog  = document.getElementById('dialog');
+    const openBtn = document.getElementById('open-btn');
+    const closeBtn = document.getElementById('close-btn');
+
+    function open() {
+      overlay.style.pointerEvents = 'auto';
+      overlay.dataset.state = 'open';
+      dialog.dataset.state  = 'open';
+    }
+
+    function close() {
+      overlay.dataset.state = 'closed';
+      dialog.dataset.state  = 'closed';
+      dialog.addEventListener('transitionend', () => {
+        overlay.style.pointerEvents = 'none';
+      }, { once: true });
+    }
+
+    openBtn.addEventListener('click', open);
+    closeBtn.addEventListener('click', close);
+    overlay.addEventListener('click', close);
+  </script>
+</body>
+</html>

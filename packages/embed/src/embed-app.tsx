@@ -1,9 +1,9 @@
 import {
   AnswerCard,
-  Button,
   Card,
   CitationBlock,
   Field,
+  IconButton,
   RefusalNotice,
 } from "@wunderstack/ui";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
@@ -29,6 +29,7 @@ interface Turn {
 interface Props {
   endpoint: string;
   agentKey: string | null;
+  /** Snippet `data-agent` hint. After GET /config, a mismatch is ignored (key decides the agent). */
   agentId: string;
   /** `inline` = in-page panel (marketing / dedicated page). Default is the fund-site launcher. */
   layout?: EmbedLayout;
@@ -91,8 +92,18 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
   }, [turns, open]);
 
   const article50 = config?.article50 ?? DEFAULT_ARTICLE_50;
-  const tagline = config?.texts.tagline ?? "Stel je vraag over de CAO";
+  const tagline = config?.texts.tagline ?? "Stel je vraag";
   const logo = config?.theme.logo;
+  const snippetHint = agentId.trim();
+  const resolvedAgentId = config?.agentId ?? (snippetHint || "cao");
+
+  useEffect(() => {
+    if (!config || snippetHint.length === 0) return;
+    if (snippetHint === config.agentId) return;
+    console.warn(
+      `[wunderstack-embed] data-agent="${snippetHint}" does not match this key's agent "${config.agentId}"; ignoring hint.`,
+    );
+  }, [config, snippetHint]);
 
   function updateLast(fn: (turn: Turn) => Turn): void {
     setTurns((prev) => {
@@ -182,10 +193,11 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
 
   const panel = (
     <Card
+      variant={inline ? "flush" : "elevated"}
       className={
         inline
           ? "flex h-full w-full flex-col overflow-hidden p-0"
-          : "flex h-[70vh] max-h-[600px] w-[min(92vw,380px)] flex-col overflow-hidden p-0 shadow-xl"
+          : "flex h-[70vh] max-h-[600px] w-[min(92vw,380px)] flex-col overflow-hidden p-0"
       }
     >
       <div className="flex items-center gap-2 border-b border-border bg-surface px-4 py-3">
@@ -208,6 +220,8 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
           <Starters
             categories={resolveStarterCategories(config?.texts)}
             onPick={(question) => void send(question)}
+            {...(config?.texts.tagline ? { title: config.texts.tagline } : {})}
+            {...(config?.texts.intro ? { intro: config.texts.intro } : {})}
           />
         ) : null}
         {turns.map((turn, index) => (
@@ -215,7 +229,12 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
             {turn.refused ? (
               <RefusalNotice>{turn.text}</RefusalNotice>
             ) : (
-              <AnswerCard role={turn.role}>
+              <AnswerCard
+                role={turn.role}
+                {...(turn.role === "agent"
+                  ? { agentLabel: "AI-assistent", agentSubLabel: resolvedAgentId }
+                  : {})}
+              >
                 {turn.text || (turn.role === "agent" ? "…" : "")}
               </AnswerCard>
             )}
@@ -245,7 +264,7 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
                       type="button"
                       disabled={busy}
                       onClick={() => void send(question)}
-                      className="rounded-pill border border-primary/30 bg-primary-tint px-2.5 py-1 text-left text-xs text-primary disabled:opacity-50"
+                      className="w-fit max-w-full rounded-pill bg-primary-tint px-2.5 py-1 text-left text-xs text-text hover:bg-primary/10 disabled:opacity-50"
                     >
                       {question}
                     </button>
@@ -258,22 +277,32 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
       </div>
 
       <form
-        className="flex items-end gap-2 border-t border-border bg-surface px-3 py-3"
+        className="bg-page px-3 py-3"
         onSubmit={(event) => {
           event.preventDefault();
           void send();
         }}
       >
-        <Field
-          value={input}
-          onChange={(event) => setInput(event.target.value)}
-          placeholder="Typ je vraag…"
-          disabled={busy}
-          className="flex-1"
-        />
-        <Button type="submit" disabled={busy || input.trim().length === 0}>
-          {busy ? "…" : "Stuur"}
-        </Button>
+        <div className="flex items-end gap-2 rounded-pill bg-surface p-2 shadow-[var(--elevation-raised)]">
+          <Field
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            placeholder="Typ je vraag…"
+            disabled={busy}
+            className="flex-1 border-none bg-transparent shadow-none focus-visible:ring-0"
+          />
+          <IconButton
+            type="submit"
+            label="Verstuur"
+            disabled={busy || input.trim().length === 0}
+            className="h-8 w-8 shrink-0"
+          >
+            {/* Inline arrow-up — embed has no lucide dep */}
+            <svg aria-hidden viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4">
+              <path d="M8 13V3m0 0L4 7m4-4 4 4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </IconButton>
+        </div>
       </form>
 
       <p className="border-t border-border bg-surface px-4 py-2 text-[11px] leading-snug text-text-subtle">
@@ -284,7 +313,7 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
 
   return (
     <div
-      data-agent={agentId}
+      data-agent={resolvedAgentId}
       style={themeStyle(config?.theme)}
       className={inline ? "h-full w-full font-sans" : "fixed bottom-4 right-4 z-[2147483647] font-sans"}
     >
@@ -294,9 +323,9 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="rounded-pill bg-primary px-5 py-3 text-sm font-medium text-on-primary shadow-lg hover:bg-primary-hover"
+          className="rounded-pill bg-primary px-5 py-3 text-sm font-medium text-on-primary shadow-[var(--elevation-glow)] hover:bg-primary-hover"
         >
-          Vraag de CAO-agent
+          {tagline}
         </button>
       )}
     </div>

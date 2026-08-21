@@ -32,6 +32,30 @@
   --danger-bg: #fbe9ef;
   --danger-fg: #b03a63;
 
+  /* Elevation — raw shadow values. Only semantic.css may bind these to elevation tokens. */
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.07), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+  --shadow-md: 0 4px 10px -1px rgb(0 0 0 / 0.09), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+  --shadow-lg: 0 10px 24px -3px rgb(0 0 0 / 0.10), 0 4px 8px -4px rgb(0 0 0 / 0.06);
+
   /* Aurora (decorative surface, hero only) */
   --aurora: linear-gradient(105deg, #e9e4f7, #dce7f6, #f6e6df);
+
+  /* Motion — duration */
+  --duration-50: 50ms;
+  --duration-100: 100ms;
+  --duration-150: 150ms;
+  --duration-250: 250ms;
+  --duration-400: 400ms;
+  /* Loop period — not on the enter/press scale; do not map to a Tailwind duration-* utility. */
+  --duration-spin: 1000ms;
+
+  /* Motion — easing */
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-linear: linear;
+
+  /* Motion — distance */
+  --distance-xs: 4px;
+  --distance-sm: 12px;
 }

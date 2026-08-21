@@ -13,6 +13,7 @@
     "lint": "turbo run lint",
     "depcruise": "depcruise apps packages scripts",
     "check-ui-boundaries": "bash scripts/check-ui-boundaries.sh",
+    "check-motion": "bash scripts/check-motion.sh",
     "bake-off": "pnpm --filter @wunderstack/bake-off bake-off",
     "promote-check": "pnpm --filter @wunderstack/promote check",
     "seed:oomt": "pnpm --filter @wunderstack/ingest seed:oomt"

@@ -2,8 +2,16 @@ import { cva, type VariantProps } from "class-variance-authority";
 import type { HTMLAttributes } from "react";
 import { cn } from "../lib/cn.js";
 
+/*
+ * Product rule (decision D) — the trust layer does not animate.
+ * A chip appears in the same frame as the answer it belongs to: no enter animation,
+ * no opacity fade, no translate. Only a colour transition is allowed, and only when
+ * the chip's state *changes* after initial render. This is not a style choice;
+ * animating the chip in suggests the information is being constructed for effect.
+ * The agent's answer is real and immediate. Do not add opacity or transform transitions here.
+ */
 const chipVariants = cva(
-  "inline-flex items-center rounded-[var(--radius-pill)] px-2.5 py-0.5 text-xs font-medium",
+  "inline-flex items-center rounded-[var(--radius-pill)] px-2.5 py-0.5 text-xs font-medium [transition:background-color_var(--motion-state),color_var(--motion-state)]",
   {
     variants: {
       variant: {

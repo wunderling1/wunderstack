@@ -26,6 +26,7 @@ export const embedCitationSchema = z.object({
 });
 export type EmbedCitation = z.infer<typeof embedCitationSchema>;
 
+/** Discriminators must match `@wunderstack/shared` `chatEventSchema`: status|text|citations|followups|done|error. */
 export const chatEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("status"), phase: z.string(), count: z.number().optional() }),
   z.object({ type: z.literal("text"), delta: z.string() }),
@@ -62,6 +63,7 @@ export type StarterCategory = z.infer<typeof starterCategorySchema>;
 
 export const embedTextsSchema = z.object({
   tagline: z.string().optional(),
+  intro: z.string().optional(),
   article50: z.string().optional(),
   /** Flat starter list (legacy). Used only when `starterCategories` is absent. */
   starters: z.array(z.string().min(1).max(200)).max(6).optional(),
