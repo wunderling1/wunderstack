@@ -49,6 +49,41 @@ describe("parseFollowUpQuestions", () => {
     assert.deepEqual(parseFollowUpQuestions("", "Vraag?"), []);
     assert.deepEqual(parseFollowUpQuestions("[]", "Vraag?"), []);
   });
+
+  it("splits a truncated JSON array that is missing the closing bracket", () => {
+    const raw =
+      '["Mag je onder spanning werken aan een elektrische auto volgens deze passages?","Wat moet je doen met je PBM\'s voordat je begint met werkzaamheden aan een e-voertuig?","Welke handschoenen moet je dragen';
+    assert.deepEqual(parseFollowUpQuestions(raw, "Welke PBM gelden bij HV-werk?"), [
+      "Mag je onder spanning werken aan een elektrische auto volgens deze passages?",
+      "Wat moet je doen met je PBM's voordat je begint met werkzaamheden aan een e-voertuig?",
+      "Welke handschoenen moet je dragen",
+    ]);
+  });
+
+  it("splits packed quoted questions without wrapping brackets", () => {
+    const raw = '"Hoe lang mag mijn proeftijd duren?","Wat gebeurt er met vakantiedagen?"';
+    assert.deepEqual(parseFollowUpQuestions(raw, "Opzegtermijn?"), [
+      "Hoe lang mag mijn proeftijd duren?",
+      "Wat gebeurt er met vakantiedagen?",
+    ]);
+  });
+
+  it("splits a single chip that still contains packed quotes (the rendered-as-one-button form)", () => {
+    const raw =
+      'Mag je onder spanning werken aan een elektrische auto volgens deze passages?","Wat moet je doen met je PBM\'s voordat je begint met werkzaamheden aan een e-voertuig?","Welke handschoenen moet je dragen';
+    assert.deepEqual(parseFollowUpQuestions(raw, "Welke PBM gelden bij HV-werk?"), [
+      "Mag je onder spanning werken aan een elektrische auto volgens deze passages?",
+      "Wat moet je doen met je PBM's voordat je begint met werkzaamheden aan een e-voertuig?",
+      "Welke handschoenen moet je dragen",
+    ]);
+  });
+
+  it("does not split a single question that contains a comma", () => {
+    const raw = '["Wat gebeurt er met loon, vakantiedagen en toeslagen?"]';
+    assert.deepEqual(parseFollowUpQuestions(raw, "Opzegtermijn?"), [
+      "Wat gebeurt er met loon, vakantiedagen en toeslagen?",
+    ]);
+  });
 });
 
 describe("addUsage", () => {

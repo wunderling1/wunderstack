@@ -194,7 +194,7 @@ function buildRepairMessages(previous: string, reason: string, strippedQuotes: s
         // for-character copy of both so the repair turn cannot "fix" the contract by rewording.
         "Kopieer elk citaat KARAKTER VOOR KARAKTER uit de context — geen herformulering, geen synoniemen,",
         "geen weglating van woorden. Gebruik exact de chunk_id zoals die in de context staat (geen koppeltekens",
-        "of spaties toevoegen of weglaten).",
+        "of spaties toevoegen of weglaten). Zet chunk_id NOOIT in de lopende tekst — alleen in de JSON na de sentinel.",
         // Long verbatim spans are where the copy breaks; a short exact fragment is far more reliable.
         "Houd elk citaat ZO KORT MOGELIJK: kies het kortste aaneengesloten fragment dat het feit dekt (een",
         "paar woorden of één deelzin), en begin het bij een woord dat letterlijk in de passage staat —",

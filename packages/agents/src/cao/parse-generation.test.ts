@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { CITATIONS_SENTINEL } from "./generation-schema.js";
-import { parseGenerationOutput } from "./parse-generation.js";
+import { parseGenerationOutput, stripChunkIdsFromProse } from "./parse-generation.js";
 
 function withCitations(prose: string, block: string): string {
   return `${prose}\n${CITATIONS_SENTINEL}\n${block}`;
@@ -117,5 +117,40 @@ describe("parseGenerationOutput citation block", () => {
     const parsed = parseGenerationOutput(raw);
     assert.equal(parsed.citationParseFailed, true);
     assert.equal(parsed.modelCitations.length, 0);
+  });
+});
+
+describe("stripChunkIdsFromProse", () => {
+  it("removes bracketed chunk_id copied into running text", () => {
+    const prose =
+      '**Zet de parkeerrem vast** [1] [2]. Citaat: "Zet de parkeerrem vast" [chunk_id=07950b16-657b-46f6-9224-2af7d36e47f7].';
+    const stripped = stripChunkIdsFromProse(prose);
+    assert.equal(stripped.includes("chunk_id"), false);
+    assert.equal(stripped.includes("07950b16"), false);
+    assert.equal(stripped.includes("Citaat:"), false);
+    assert.match(stripped, /\[1\].*\[2\]/);
+    assert.match(stripped, /\*\*Zet de parkeerrem vast\*\*/);
+  });
+
+  it("removes a bare chunk_id= anchor without touching JSON-style chunk_id keys", () => {
+    const stripped = stripChunkIdsFromProse("Maatregel [1] chunk_id=abc-123 extra.");
+    assert.equal(stripped, "Maatregel [1] extra.");
+    const jsonShape = '{"marker":1,"chunk_id":"abc-123","quote":"x"}';
+    assert.equal(stripChunkIdsFromProse(jsonShape), jsonShape);
+  });
+});
+
+describe("parseGenerationOutput strips leaked chunk_id from answer prose", () => {
+  it("keeps [n] markers and drops chunk_id before the sentinel", () => {
+    const raw = withCitations(
+      'Zet de parkeerrem vast [1]. Citaat: "Zet de parkeerrem vast" [chunk_id=07950b16-657b-46f6-9224-2af7d36e47f7]',
+      '[{"marker":1,"chunk_id":"07950b16-657b-46f6-9224-2af7d36e47f7","quote":"Zet de parkeerrem vast"}]',
+    );
+    const parsed = parseGenerationOutput(raw);
+    assert.equal(parsed.citationParseFailed, false);
+    assert.equal(parsed.modelCitations[0]?.chunkId, "07950b16-657b-46f6-9224-2af7d36e47f7");
+    assert.equal(parsed.answerMarkdown.includes("chunk_id"), false);
+    assert.equal(parsed.answerMarkdown.includes("Citaat:"), false);
+    assert.match(parsed.answerMarkdown, /Zet de parkeerrem vast \[1\]/);
   });
 });

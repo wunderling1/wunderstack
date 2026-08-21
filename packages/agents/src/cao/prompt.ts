@@ -53,6 +53,8 @@ export const CAO_SYSTEM_INSTRUCTIONS = [
   "  waarbij n het bronnummer uit de context is. De [n] hoort ín het antwoord te staan, niet alleen",
   "  in de JSON. Een bron zonder [n] in de tekst is fout; een [n] in de tekst zonder bijbehorende",
   "  JSON-citatie is ook fout.",
+  "- In de lopende tekst ALLEEN [n]. Zet nooit `chunk_id`, de uuid, of het label \"Citaat:\" in het",
+  "  antwoord. Die horen uitsluitend in het JSON-blok na de sentinel.",
   `- Sluit je antwoord af met exact deze regel op een nieuwe regel: ${CITATIONS_SENTINEL}`,
   "- Direct daaronder: een JSON-array met je citaties. Geen andere tekst na de JSON.",
   "",
