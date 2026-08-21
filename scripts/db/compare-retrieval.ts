@@ -42,6 +42,15 @@ function idsOf(hits: RetrievedChunk[]): string[] {
   return hits.map((hit) => hit.chunkId);
 }
 
+function assertReportedSchema(hits: RetrievedChunk[], expected: string, label: string): void {
+  const wrong = hits.filter((hit) => hit.source.schemaName !== expected);
+  if (wrong.length > 0) {
+    throw new Error(
+      `${label}: ${String(wrong.length)} hit(s) reported schemaName !== ${expected} (copy-identity evidence)`,
+    );
+  }
+}
+
 function maxAbsScoreDelta(publicHits: RetrievedChunk[], schemaHits: RetrievedChunk[]): number {
   const schemaById = new Map(schemaHits.map((hit) => [hit.chunkId, hit.score]));
   let max = 0;
@@ -149,8 +158,10 @@ async function main(): Promise<void> {
     for (const fundCase of set.cases) {
       const queryVector = await embedQuery(fundCase.question);
       const scoped = { fund: fundKey, agentKey: set.agentKey, minScore, candidateK };
-      const publicHits = (await retrieveFromVector(queryVector, scoped)).chunks;
+      const publicHits = (await retrieveFromVector(queryVector, { ...scoped, searchPath: "public" })).chunks;
       const schemaHits = (await retrieveFromVector(queryVector, { ...scoped, searchPath: schemaName })).chunks;
+      assertReportedSchema(publicHits, "public", fundCase.id);
+      assertReportedSchema(schemaHits, schemaName, fundCase.id);
       const publicIds = idsOf(publicHits);
       const schemaIds = idsOf(schemaHits);
       const publicSet = new Set(publicIds);

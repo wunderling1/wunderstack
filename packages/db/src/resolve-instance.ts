@@ -14,6 +14,28 @@ import { agentInstances, type AgentInstance } from "./schema/control/agent-insta
  * `schemaName` is organizational (search_path); a forgotten set is not permission denied.
  */
 
+export type UnkeyedInstancePick<T> =
+  | { ok: true; instance: T | null }
+  | { ok: false; status: 401; error: "key_required" };
+
+/**
+ * Tenant with no public key: exactly one active instance may resolve (public demo, D1).
+ * Zero active → unconfigured (open). Two or more → 401, no default, no "first row wins".
+ */
+export function pickUnkeyedInstance<T extends { status: string }>(
+  instances: readonly T[],
+): UnkeyedInstancePick<T> {
+  const active = instances.filter((row) => row.status === "active");
+  if (active.length === 0) {
+    return { ok: true, instance: null };
+  }
+  const only = active[0];
+  if (active.length === 1 && only !== undefined) {
+    return { ok: true, instance: only };
+  }
+  return { ok: false, status: 401, error: "key_required" };
+}
+
 export interface ResolvedInstance {
   fundKey: string;
   agentKey: string;

@@ -17,3 +17,19 @@ export function readChatInactivityMs(): number {
   const parsed = inactivityMsSchema.safeParse(raw);
   return parsed.success ? parsed.data : DEFAULT_CHAT_INACTIVITY_MS;
 }
+
+/**
+ * Public key for the arbocatalogus playground surface. Missing while that surface is on must not
+ * silently fall through to CAO (review W4 / PR-B).
+ */
+export function readArboTenantKey(): string | undefined {
+  const value = process.env.NEXT_PUBLIC_WUNDERSTACK_TENANT_KEY_ARBO?.trim();
+  return value ? value : undefined;
+}
+
+export const ARBO_KEY_MISSING_MESSAGE =
+  "De arbocatalogus-demo is niet geconfigureerd: NEXT_PUBLIC_WUNDERSTACK_TENANT_KEY_ARBO ontbreekt. De CAO-demo blijft beschikbaar.";
+
+export function arboSurfaceError(): string | null {
+  return readArboTenantKey() ? null : ARBO_KEY_MISSING_MESSAGE;
+}

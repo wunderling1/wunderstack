@@ -44,11 +44,13 @@ export {
   resolveInstanceByFundAgent,
   bindClaimsToInstance,
   instanceFromRow,
+  pickUnkeyedInstance,
   retrievalScope,
   langfuseTagsFromInstance,
   type ResolvedInstance,
   type InstanceClaims,
   type BindClaimsResult,
+  type UnkeyedInstancePick,
 } from "./resolve-instance.js";
 export {
   generateTenantKey,

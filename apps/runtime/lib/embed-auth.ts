@@ -1,4 +1,4 @@
-import { getInstance, getInstanceByPublicKey, type TenantConfig } from "@wunderstack/db";
+import { getInstanceByPublicKey, listInstances, pickUnkeyedInstance, type TenantConfig } from "@wunderstack/db";
 import { isTenantKeyFormat } from "@wunderstack/shared";
 import { getTenantId } from "@wunderstack/tenant";
 
@@ -20,6 +20,9 @@ import { getTenantId } from "@wunderstack/tenant";
  * The embed snippet's `data-agent` attribute is NOT a trust boundary: it is a UI hint for widgets that
  * can show multiple agent instances. The server resolves the agent from the instance row after key
  * validation; a client-supplied agent id in the chat body must never override that choice.
+ *
+ * No public key, non-browser: exactly one active instance may resolve (D1, public demo). Two or more
+ * active instances without a key is 401 — never default to cao and never pick the first row.
  *
  * Track B: D15 is the isolation wall. A key whose `tenantId` is not this process is 403. Do not
  * collapse this check (ADR-multitenant-database). SET ROLE is not a substitute.
@@ -70,6 +73,9 @@ export async function resolveEmbedAuth(request: Request): Promise<EmbedAuth> {
     return { ok: true, config: instance };
   }
 
-  const defaultInstance = await getInstance(tenantId, "cao").catch(() => null);
-  return { ok: true, config: defaultInstance };
+  const unkeyed = pickUnkeyedInstance(await listInstances(tenantId).catch(() => []));
+  if (!unkeyed.ok) {
+    return { ok: false, status: 401, error: unkeyed.error };
+  }
+  return { ok: true, config: unkeyed.instance };
 }

@@ -60,6 +60,8 @@ export interface RetrievedChunkSource {
   sourceUri: string;
   fund: string;
   agentKey: string;
+  /** Physical schema SET LOCAL used for this search. Evidence, not a caller-supplied label. */
+  schemaName: string;
   version: string;
 }
 
@@ -135,6 +137,14 @@ export interface RetrieveFromVectorInput {
 }
 
 /**
+ * Physical schema SET LOCAL will use. Hits report this as `source.schemaName` — callers cannot
+ * assign a different label than the path that was searched.
+ */
+export function searchPathForRetrieve(input: { fund: string; searchPath?: string }): string {
+  return input.searchPath ?? fundSchemaName(input.fund);
+}
+
+/**
  * Exact (flat) pgvector search with a precomputed query vector. Used by the PR3
  * copy-identity measurement so `public` and `fund_<key>` see the same embedding.
  * No rewrite, no rerank, no sibling expansion.
@@ -146,10 +156,10 @@ export async function retrieveFromVector(
   const config = requireRerankConfig();
   const candidateK = input.candidateK ?? config.candidateK;
   const minScore = input.minScore ?? 0;
-  const params = { ...input, candidateK, minScore };
+  const schemaName = searchPathForRetrieve(input);
+  const params = { fund: input.fund, agentKey: input.agentKey, candidateK, minScore, schemaName };
 
-  const searchPath = input.searchPath ?? fundSchemaName(input.fund);
-  return withSearchPath(searchPath, (tx) => searchByVector(tx, queryVector, params));
+  return withSearchPath(schemaName, (tx) => searchByVector(tx, queryVector, params));
 }
 
 /** Retrieval with per-phase timings for Langfuse latency budgets. */
@@ -167,9 +177,9 @@ export async function retrieveValidatedTimed(
 async function searchByVector(
   db: Pick<Database, "select">,
   queryVector: number[],
-  input: { fund: string; agentKey: string; minScore: number; candidateK: number },
+  input: { fund: string; agentKey: string; minScore: number; candidateK: number; schemaName: string },
 ): Promise<{ chunks: RetrievedChunk[]; searchMs: number }> {
-  const { fund, agentKey, minScore, candidateK } = input;
+  const { fund, agentKey, minScore, candidateK, schemaName } = input;
   const distance = cosineDistance(chunks.embedding, queryVector);
 
   const searchStart = performance.now();
@@ -211,6 +221,7 @@ async function searchByVector(
         sourceUri: row.sourceUri,
         fund: row.fund,
         agentKey: row.agentKey,
+        schemaName,
         version: row.version,
       },
       structure: {
