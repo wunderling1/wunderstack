@@ -1,4 +1,4 @@
 # Drop CAO / arbocatalogus source files here (.pdf, .txt, .md) and run:
 #   pnpm --filter @wunderstack/ingest ingest -- --fund <fund> --agent <key> --version <v>
 # This directory is the default ingestion source.
-# OOMT arbocatalogus: arbo_catalogus_oomt.pdf  (--fund oomt --agent arbo)
+# OOMT arbocatalogus lives in ../arbo-oomt/ (not here — this dir is the ETD CAO ingest).
