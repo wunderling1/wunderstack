@@ -23,7 +23,8 @@
     "db:migrate-fund-schemas": "pnpm --filter @wunderstack/db-scripts migrate-fund-schemas",
     "db:drop-public-corpus": "pnpm --filter @wunderstack/db-scripts drop-public-corpus",
     "db:revoke-public-fund-grants": "pnpm --filter @wunderstack/db-scripts revoke-public-fund-grants",
-    "db:grant-reader": "pnpm --filter @wunderstack/db-scripts grant-reader"
+    "db:grant-reader": "pnpm --filter @wunderstack/db-scripts grant-reader",
+    "db:inspect-grants": "pnpm --filter @wunderstack/db-scripts inspect-grants"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

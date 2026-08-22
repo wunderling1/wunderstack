@@ -10,6 +10,7 @@
     "drop-public-corpus": "tsx --env-file-if-exists=../../.env drop-public-corpus.ts",
     "revoke-public-fund-grants": "tsx --env-file-if-exists=../../.env revoke-public-fund-grants.ts",
     "grant-reader": "tsx --env-file-if-exists=../../.env grant-reader.ts",
+    "inspect-grants": "tsx --env-file-if-exists=../../.env inspect-grants.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test:unit": "tsx --test *.test.ts"
