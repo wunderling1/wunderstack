@@ -37,7 +37,7 @@ function retrievalWithChunk(chunkId: string, content: string): RetrievalOutput {
     ordinal: 0,
     content,
     score: 1,
-    source: { documentId: "doc", title: "CAO", sourceUri: "", fund: "eval", agentKey: "cao", version: "1" },
+    source: { documentId: "doc", title: "CAO", sourceUri: "", fund: "eval", agentKey: "cao", schemaName: "fund_eval", version: "1" },
     structure: { chapter: null, article: null, lid: null, sourceRef: null, chunkType: "text" },
     metadata: {},
   };

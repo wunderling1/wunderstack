@@ -16,6 +16,7 @@ function makeChunk(id: string, score: number): RetrievedChunk {
       sourceUri: "",
       fund: "test",
       agentKey: "cao",
+      schemaName: "fund_test",
       version: "1",
     },
     structure: {

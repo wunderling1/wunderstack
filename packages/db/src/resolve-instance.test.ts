@@ -5,6 +5,7 @@ import {
   bindClaimsToInstance,
   instanceFromRow,
   langfuseTagsFromInstance,
+  pickUnkeyedInstance,
   retrievalScope,
   type ResolvedInstance,
 } from "./resolve-instance.js";
@@ -90,3 +91,42 @@ describe("langfuseTagsFromInstance", () => {
 
 // Track B: test (a) "query without SET ROLE → permission denied" does not apply.
 // Isolation is D15 (embed-auth tenantId check). Do not report that test green.
+
+describe("pickUnkeyedInstance (D1)", () => {
+  it("tenant with cao+arbo and no key is 4xx, no answer", () => {
+    const result = pickUnkeyedInstance([
+      { status: "active", agentKey: "cao" },
+      { status: "active", agentKey: "arbo" },
+    ]);
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.equal(result.status, 401);
+      assert.equal(result.error, "key_required");
+    }
+  });
+
+  it("resolves the single active instance without a key", () => {
+    const result = pickUnkeyedInstance([{ status: "active", agentKey: "arbo" }]);
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      assert.equal(result.instance?.agentKey, "arbo");
+    }
+  });
+});
+
+describe("data-agent is not a trust boundary", () => {
+  it("arbo key + data-agent=cao is arbo or 4xx, never cao", () => {
+    const result = bindClaimsToInstance(oomtArbo(), { agentKey: "cao" });
+    assert.equal(result.ok, false);
+    assert.equal(retrievalScope(oomtArbo()).agentKey, "arbo");
+    assert.notEqual(retrievalScope(oomtArbo()).agentKey, "cao");
+  });
+
+  it("cao key + data-agent=arbo is cao or 4xx, never arbo", () => {
+    const result = bindClaimsToInstance(oomtCao(), { agentKey: "arbo" });
+    assert.equal(result.ok, false);
+    assert.equal(retrievalScope(oomtCao()).agentKey, "cao");
+    assert.notEqual(retrievalScope(oomtCao()).agentKey, "arbo");
+  });
+});
+

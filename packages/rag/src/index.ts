@@ -85,6 +85,7 @@ export {
   retrieve,
   retrieveFromVector,
   embedQuery,
+  searchPathForRetrieve,
   retrieveInputSchema,
   type RetrieveInput,
   type RetrieveFromVectorInput,

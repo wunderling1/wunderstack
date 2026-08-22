@@ -39,6 +39,7 @@
     "@mastra/langfuse": "^1.4.2",
     "@mastra/observability": "^1.15.2",
     "@wunderstack/ai": "workspace:*",
+    "@wunderstack/db": "workspace:*",
     "@wunderstack/rag": "workspace:*",
     "@wunderstack/shared": "workspace:*",
     "zod": "4.4.3"

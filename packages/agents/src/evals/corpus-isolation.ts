@@ -2,6 +2,7 @@
  * Corpus-isolation checks shared across agent eval entries (CAO + arbo).
  * Contract layer is offline; live layer needs DATABASE_URL + SCALEWAY_API_KEY.
  */
+import { bindClaimsToInstance, instanceFromRow, pickUnkeyedInstance, retrievalScope } from "@wunderstack/db";
 import { listCorpora, retrieveContext, retrieveInputSchema } from "@wunderstack/rag";
 
 import type { EvalCheck } from "./harness.js";
@@ -14,6 +15,24 @@ export function corpusIsolationContractChecks(): EvalCheck[] {
     fund: "demo",
     agentKey: "cao",
   });
+  const twoActive = pickUnkeyedInstance([
+    { status: "active", agentKey: "cao" },
+    { status: "active", agentKey: "arbo" },
+  ]);
+  const arboRow = instanceFromRow({
+    tenantId: "oomt",
+    agentKey: "arbo",
+    schemaName: "fund_oomt",
+    connectionKey: null,
+  });
+  const caoRow = instanceFromRow({
+    tenantId: "oomt",
+    agentKey: "cao",
+    schemaName: "fund_oomt",
+    connectionKey: null,
+  });
+  const arboKeyCaoClaim = bindClaimsToInstance(arboRow, { agentKey: "cao" });
+  const caoKeyArboClaim = bindClaimsToInstance(caoRow, { agentKey: "arbo" });
   return [
     {
       name: "corpus-isolation: retrieval seam rejects an unscoped (no-fund) query",
@@ -26,6 +45,18 @@ export function corpusIsolationContractChecks(): EvalCheck[] {
     {
       name: "corpus-isolation: retrieval seam accepts a fund- and agent-scoped query",
       ok: scoped.success,
+    },
+    {
+      name: "corpus-isolation: tenant with cao+arbo and no key is 4xx, no answer",
+      ok: !twoActive.ok && twoActive.status === 401,
+    },
+    {
+      name: "corpus-isolation: arbo key + data-agent=cao is arbo or 4xx, never cao",
+      ok: !arboKeyCaoClaim.ok && retrievalScope(arboRow).agentKey === "arbo",
+    },
+    {
+      name: "corpus-isolation: cao key + data-agent=arbo is cao or 4xx, never arbo",
+      ok: !caoKeyArboClaim.ok && retrievalScope(caoRow).agentKey === "cao",
     },
   ];
 }
@@ -61,6 +92,8 @@ export async function corpusIsolationLiveChecks(): Promise<EvalCheck[]> {
     const leaked = result.chunks.filter(
       (chunk) => chunk.source.fund !== fund || chunk.source.agentKey !== agentKey,
     );
+    const expectedSchema = `fund_${fund}`;
+    const wrongSchema = result.chunks.filter((chunk) => chunk.source.schemaName !== expectedSchema);
     checks.push({
       name: `corpus-isolation: fund "${fund}" agent "${agentKey}" returns only its own chunks`,
       ok: leaked.length === 0,
@@ -68,6 +101,14 @@ export async function corpusIsolationLiveChecks(): Promise<EvalCheck[]> {
         leaked.length === 0
           ? `${String(result.chunks.length)} chunks, 0 cross-corpus`
           : `${String(leaked.length)} chunk(s) leaked from other fund/agent pairs`,
+    });
+    checks.push({
+      name: `corpus-isolation: fund "${fund}" agent "${agentKey}" reports the SET LOCAL schema`,
+      ok: wrongSchema.length === 0,
+      detail:
+        wrongSchema.length === 0
+          ? `schemaName=${expectedSchema}`
+          : `${String(wrongSchema.length)} chunk(s) reported a different schema than ${expectedSchema}`,
     });
   }
 

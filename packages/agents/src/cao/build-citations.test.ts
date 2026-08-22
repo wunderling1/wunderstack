@@ -18,6 +18,7 @@ function chunk(chunkId: string, content: string): RetrievedChunk {
       sourceUri: "https://example.test/cao.pdf",
       fund: "voorbeeld",
       agentKey: "cao",
+      schemaName: "fund_voorbeeld",
       version: "2026",
     },
     structure: {
