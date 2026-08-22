@@ -130,6 +130,14 @@ export interface CaseScores {
 
 export interface AggregateScores {
   hardHallucination: number;
+  /**
+   * Soft faithfulness / relevance / completeness: mean over ANSWERABLE cases only.
+   * Refusal cases copy `refusalCalibration` onto those fields per-case (nothing substantive
+   * to judge), so including them in the mean lets one allowed under-refusal (count ≤ 1) zero
+   * three regression metrics against a baseline recorded at underRefusal=0. Refusal quality
+   * is already `refusalCalibration` + under-refusal count. Same exclusion as citationCorrectness
+   * (Fase 4 actie 6).
+   */
   faithfulness: number;
   relevance: number;
   citationCorrectness: number;
@@ -520,9 +528,6 @@ export function aggregateScores(scores: CaseScores[]): AggregateScores {
   const sum = scores.reduce(
     (acc, score) => ({
       hardHallucination: acc.hardHallucination + score.hardHallucination,
-      faithfulness: acc.faithfulness + score.faithfulness,
-      relevance: acc.relevance + score.relevance,
-      completeness: acc.completeness + score.completeness,
       refusalCalibration: acc.refusalCalibration + score.refusalCalibration,
       citationVerification: acc.citationVerification + score.citationVerification,
       orphanRate: acc.orphanRate + score.orphanRate,
@@ -530,9 +535,6 @@ export function aggregateScores(scores: CaseScores[]): AggregateScores {
     }),
     {
       hardHallucination: 0,
-      faithfulness: 0,
-      relevance: 0,
-      completeness: 0,
       refusalCalibration: 0,
       citationVerification: 0,
       orphanRate: 0,
@@ -547,21 +549,23 @@ export function aggregateScores(scores: CaseScores[]): AggregateScores {
   const unverifiedCitationCount = scores.filter((score) => score.citationVerification === 0).length;
   const danglingCaseCount = scores.filter((score) => score.danglingMarkerRate > 0).length;
 
-  // citationCorrectness is averaged over ANSWERABLE cases only. A refusal has no article to cite, so
-  // the scorer returns a vacuous 1.0 for it — including those in the mean would flatter the metric and
-  // hide answerable-case citation errors. Refusal correctness is already measured by refusalCalibration
-  // + under-refusal, so citationCorrectness stays a pure answerable-case signal. (Fase 4 actie 6:
-  // requires a baseline re-record — the value shifts vs a baseline recorded over all cases.)
-  const answerableCitationCorrectness =
-    answerable.length === 0 ? 0 : answerable.reduce((acc, score) => acc + score.citationCorrectness, 0) / answerable.length;
+  // Soft quality + citationCorrectness: answerable cases only. Refusal cases copy
+  // refusalCalibration onto faith/rel/complete per-case (nothing to judge) and score a
+  // vacuous 1.0 on citationCorrectness. Including them in the mean either flatters the
+  // metric (correct refusal) or lets one allowed under-refusal (count ≤ 1) zero three
+  // regression checks against a baseline recorded at underRefusal=0. Refusal quality is
+  // already refusalCalibration + under-refusal count. (Fase 4 actie 6 for citations;
+  // 2026-08-22 for the three soft metrics.)
+  const meanAnswerable = (pick: (score: CaseScores) => number): number =>
+    answerable.length === 0 ? 0 : answerable.reduce((acc, score) => acc + pick(score), 0) / answerable.length;
 
   const count = scores.length;
   return {
     hardHallucination: sum.hardHallucination / count,
-    faithfulness: sum.faithfulness / count,
-    relevance: sum.relevance / count,
-    citationCorrectness: answerableCitationCorrectness,
-    completeness: sum.completeness / count,
+    faithfulness: meanAnswerable((score) => score.faithfulness),
+    relevance: meanAnswerable((score) => score.relevance),
+    citationCorrectness: meanAnswerable((score) => score.citationCorrectness),
+    completeness: meanAnswerable((score) => score.completeness),
     refusalCalibration: sum.refusalCalibration / count,
     citationVerification: sum.citationVerification / count,
     orphanRate: sum.orphanRate / count,

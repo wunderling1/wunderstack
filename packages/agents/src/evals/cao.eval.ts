@@ -1091,13 +1091,17 @@ function answerLevelChecks(aggregate: AggregateScores): Check[] {
     `  hard-hallucination    ${pct(aggregate.hardHallucination)}  (min ${pct(ANSWER_THRESHOLDS.hardHallucination)})`,
   );
   console.log(
-    `  soft-faithfulness     ${pct(aggregate.faithfulness)}  (min ${pct(ANSWER_THRESHOLDS.softFaithfulness)})`,
+    `  soft-faithfulness     ${pct(aggregate.faithfulness)}  (min ${pct(ANSWER_THRESHOLDS.softFaithfulness)}; answerable cases only)`,
   );
-  console.log(`  answer-relevance      ${pct(aggregate.relevance)}  (min ${pct(ANSWER_THRESHOLDS.relevance)})`);
+  console.log(
+    `  answer-relevance      ${pct(aggregate.relevance)}  (min ${pct(ANSWER_THRESHOLDS.relevance)}; answerable cases only)`,
+  );
   console.log(
     `  citation-correctness  ${pct(aggregate.citationCorrectness)}  (min ${pct(ANSWER_THRESHOLDS.citationCorrectness)}; answerable cases only)`,
   );
-  console.log(`  completeness          ${pct(aggregate.completeness)}  (min ${pct(ANSWER_THRESHOLDS.completeness)})`);
+  console.log(
+    `  completeness          ${pct(aggregate.completeness)}  (min ${pct(ANSWER_THRESHOLDS.completeness)}; answerable cases only)`,
+  );
   console.log(
     `  refusal-calibration   ${pct(aggregate.refusalCalibration)}  (min ${pct(ANSWER_THRESHOLDS.refusalCalibration)})`,
   );
@@ -1123,11 +1127,11 @@ function answerLevelChecks(aggregate: AggregateScores): Check[] {
       ok: aggregate.hardHallucination >= ANSWER_THRESHOLDS.hardHallucination,
     },
     {
-      name: `answer: soft-faithfulness >= ${pct(ANSWER_THRESHOLDS.softFaithfulness)}`,
+      name: `answer: soft-faithfulness >= ${pct(ANSWER_THRESHOLDS.softFaithfulness)} (answerable cases only; refusals excluded)`,
       ok: aggregate.faithfulness >= ANSWER_THRESHOLDS.softFaithfulness,
     },
     {
-      name: `answer: relevance >= ${pct(ANSWER_THRESHOLDS.relevance)} (addresses the actual question)`,
+      name: `answer: relevance >= ${pct(ANSWER_THRESHOLDS.relevance)} (addresses the actual question; answerable cases only)`,
       ok: aggregate.relevance >= ANSWER_THRESHOLDS.relevance,
     },
     {
@@ -1135,7 +1139,7 @@ function answerLevelChecks(aggregate: AggregateScores): Check[] {
       ok: aggregate.citationCorrectness >= ANSWER_THRESHOLDS.citationCorrectness,
     },
     {
-      name: `answer: completeness >= ${pct(ANSWER_THRESHOLDS.completeness)}`,
+      name: `answer: completeness >= ${pct(ANSWER_THRESHOLDS.completeness)} (answerable cases only; refusals excluded)`,
       ok: aggregate.completeness >= ANSWER_THRESHOLDS.completeness,
     },
     {
@@ -1200,6 +1204,9 @@ function answerRegressionChecks(aggregate: AggregateScores): Check[] {
     // fixtures the rate is a noisy 0/33/67% and a single generation slip flips the gate (measured: an @1
     // draw failed purely here at 0.333 vs 0.000). The absolute under-refusal COUNT gate (<= 1, in
     // answerLevelChecks) is the real protection; the rate stays a trend-only number in the report.
+    // Soft faith/rel/complete averages exclude refusal cases for the same reason (2026-08-22): an
+    // allowed count-1 slip used to zero those means and fail regression against a 0-under-refusal
+    // baseline even when every answerable case was fine.
     ...(ref.orphanRate === undefined
       ? []
       : ([["orphan-source-rate", aggregate.orphanRate, ref.orphanRate]] as [string, number, number][])),
