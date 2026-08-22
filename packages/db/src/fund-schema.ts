@@ -29,14 +29,6 @@ export async function withFundSchema<T>(
   return withSearchPath(fundSchemaName(assertFundKey(fundKey)), fn);
 }
 
-export async function publicCorpusExists(): Promise<boolean> {
-  const rows = (await getDb().execute(sql.raw(publicCorpusTablesSql()))) as Array<{
-    relname: string;
-  }>;
-  const names = new Set(rows.map((row) => row.relname));
-  return names.has("documents") && names.has("chunks") && names.has("interaction_events");
-}
-
 export interface ActiveFund {
   key: string;
   schemaName: string;
@@ -72,8 +64,7 @@ async function exec(statement: string): Promise<unknown> {
  */
 export async function ensureFundTables(fundKey: string): Promise<ActiveFund> {
   const fund = await registerFund(fundKey);
-  const likePublic = await publicCorpusExists();
-  for (const statement of provisionDdl(fund.schemaName, fund.key, likePublic)) {
+  for (const statement of provisionDdl(fund.schemaName, fund.key, false)) {
     await exec(statement);
   }
   return fund;
@@ -96,7 +87,11 @@ export async function copyPublicCorpusIntoFund(fundKey: string): Promise<{
 }> {
   const key = assertFundKey(fundKey);
   const schemaName = fundSchemaName(key);
-  if (!(await publicCorpusExists())) {
+  const rows = (await getDb().execute(sql.raw(publicCorpusTablesSql()))) as unknown as Array<{
+    relname: string;
+  }>;
+  const names = new Set(rows.map((row) => row.relname));
+  if (!names.has("documents") || !names.has("chunks") || !names.has("interaction_events")) {
     return { documents: 0, chunks: 0, events: 0 };
   }
   await getDb().transaction(async (tx) => {
