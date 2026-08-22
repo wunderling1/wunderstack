@@ -1189,7 +1189,12 @@ function answerRegressionChecks(aggregate: AggregateScores): Check[] {
     ...(ref.relevance === undefined ? [] : ([["relevance", aggregate.relevance, ref.relevance]] as [string, number, number][])),
     ["citation-correctness", aggregate.citationCorrectness, ref.citationCorrectness],
     ["completeness", aggregate.completeness, ref.completeness],
-    ["refusal-calibration", aggregate.refusalCalibration, ref.refusalCalibration],
+    // refusal-calibration regression is intentionally NOT checked (B2 follow-up, 2026-08-22): with
+    // only 3 refusal fixtures a single generation slip drops 1.000 → 0.968 (still above the 0.90
+    // floor) and a second slip drops to 0.935, which fails the 5-point band even when the absolute
+    // under-refusal COUNT gate (≤ 1) would still pass at one slip. Same rationale as skipping the
+    // under-refusal-RATE regression: N=3 is too noisy for a ±tolerance check. The floor ≥ 0.90 and
+    // the count gate remain the protection.
     ...(ref.citationVerification === undefined
       ? []
       : ([["citation-verification", aggregate.citationVerification, ref.citationVerification]] as [
@@ -1206,7 +1211,9 @@ function answerRegressionChecks(aggregate: AggregateScores): Check[] {
     // answerLevelChecks) is the real protection; the rate stays a trend-only number in the report.
     // Soft faith/rel/complete averages exclude refusal cases for the same reason (2026-08-22): an
     // allowed count-1 slip used to zero those means and fail regression against a 0-under-refusal
-    // baseline even when every answerable case was fine.
+    // baseline even when every answerable case was fine. refusalCalibration left the higherIsBetter
+    // list on the same date: two slips (count=2, already red on the count gate) also failed the
+    // 5-point regression band (0.935 vs 1.000) without adding information the count gate missed.
     ...(ref.orphanRate === undefined
       ? []
       : ([["orphan-source-rate", aggregate.orphanRate, ref.orphanRate]] as [string, number, number][])),
