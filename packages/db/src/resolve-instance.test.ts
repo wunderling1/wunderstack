@@ -14,7 +14,7 @@ function oomtCao(): ResolvedInstance {
     tenantId: "oomt",
     agentKey: "cao",
     schemaName: "fund_oomt",
-    connectionRef: null,
+    connectionKey: null,
   });
 }
 
@@ -23,7 +23,7 @@ function oomtArbo(): ResolvedInstance {
     tenantId: "oomt",
     agentKey: "arbo",
     schemaName: "fund_oomt",
-    connectionRef: null,
+    connectionKey: null,
   });
 }
 

@@ -8,6 +8,8 @@
     "compare-retrieval": "tsx --env-file-if-exists=../../.env compare-retrieval.ts",
     "migrate-fund-schemas": "tsx --env-file-if-exists=../../.env migrate-fund-schemas.ts",
     "drop-public-corpus": "tsx --env-file-if-exists=../../.env drop-public-corpus.ts",
+    "revoke-public-fund-grants": "tsx --env-file-if-exists=../../.env revoke-public-fund-grants.ts",
+    "grant-reader": "tsx --env-file-if-exists=../../.env grant-reader.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test:unit": "tsx --test *.test.ts"

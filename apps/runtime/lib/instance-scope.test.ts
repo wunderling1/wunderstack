@@ -9,7 +9,7 @@ function instance(overrides: Partial<TenantConfig> & Pick<TenantConfig, "tenantI
   return {
     publicKey: "pk_test",
     schemaName: `fund_${overrides.tenantId}`,
-    connectionRef: null,
+    connectionKey: null,
     status: "active",
     pinnedReleaseTag: null,
     corsAllowlist: [],

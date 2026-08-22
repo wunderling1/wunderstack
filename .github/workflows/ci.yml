@@ -74,6 +74,9 @@ jobs:
       - name: Motion tokens
         run: pnpm check-motion
 
+      - name: Database GRANT TO PUBLIC
+        run: pnpm check-grants
+
       # Fast, offline unit tests
       - name: Unit tests
         run: pnpm turbo run test:unit

@@ -1,6 +1,11 @@
 export * from "./schema/index.js";
 export { getDb, getWriterDb, closeDb, type Database } from "./client.js";
 export { assertFundKey, quoteIdent, quoteLiteral, FUND_KEY_RE, SCHEMA_NAME_RE } from "./ident.js";
+export {
+  assertOpaqueConnectionKey,
+  resolveConnection,
+  connectionEnvName,
+} from "./connection-key.js";
 export { withSearchPath, withFundContext } from "./search-path.js";
 export {
   withFundSchema,
@@ -30,6 +35,7 @@ export {
   copyDocumentsSql,
   copyChunksSql,
   copyEventsSql,
+  revokePublicFundSchemaSql,
   assertNoAnnOrPartitionSql,
 } from "./fund-ddl.js";
 export { canDropPublicCorpus, type FundCopyCheck, type DropPublicDecision } from "./drop-public-corpus.js";

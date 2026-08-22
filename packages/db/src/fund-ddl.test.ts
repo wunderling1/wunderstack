@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { canDropPublicCorpus } from "./drop-public-corpus.js";
-import { dropPublicCorpusSql, provisionDdl } from "./fund-ddl.js";
+import { dropPublicCorpusSql, provisionDdl, revokePublicFundSchemaSql } from "./fund-ddl.js";
 
 describe("provisionDdl (track B)", () => {
   it("never emits CREATE ROLE, PARTITION, hnsw, or a multi-schema transaction", () => {
@@ -11,16 +11,25 @@ describe("provisionDdl (track B)", () => {
     assert.doesNotMatch(sql, /PARTITION BY/i);
     assert.doesNotMatch(sql, /\bhnsw\b/i);
     assert.doesNotMatch(sql, /\bBEGIN\b/);
+    assert.doesNotMatch(sql, /TO PUBLIC/i);
     assert.match(sql, /CREATE SCHEMA IF NOT EXISTS "fund_oomt"/);
     assert.match(sql, /schema_migrations/);
-    assert.match(sql, /GRANT USAGE ON SCHEMA/);
   });
 
   it("emits explicit CREATE TABLE without LIKE when public corpus is gone", () => {
     const sql = provisionDdl("fund_oomt", "oomt", false).join("\n");
     assert.doesNotMatch(sql, /LIKE public\./);
+    assert.doesNotMatch(sql, /TO PUBLIC/i);
     assert.match(sql, /vector\(4096\)/);
     assert.match(sql, /CREATE TABLE IF NOT EXISTS "fund_oomt"\.documents/);
+  });
+});
+
+describe("revokePublicFundSchemaSql", () => {
+  it("revokes PUBLIC without granting it", () => {
+    const sql = revokePublicFundSchemaSql("fund_oomt").join("\n");
+    assert.match(sql, /REVOKE ALL ON ALL TABLES IN SCHEMA "fund_oomt" FROM PUBLIC/);
+    assert.doesNotMatch(sql, /GRANT /);
   });
 });
 

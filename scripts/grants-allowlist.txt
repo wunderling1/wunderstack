@@ -1,0 +1,8 @@
+# Grandfathered TO PUBLIC hits. One path per line. # comments ignored by the checker
+# (grep -qxF matches the whole line, so do not put comments on the same line as a path).
+
+# RLS SELECT policy — not a GRANT. 0007 cannot CREATE ROLE on Scalingo; access is the table GRANT.
+packages/db/migrations/0007_analytics_reader_policy.sql
+
+# Historical GRANT SELECT ON control TO PUBLIC. Superseded by 0014_revoke_public_grants.sql.
+packages/db/migrations/0013_control_plane.sql

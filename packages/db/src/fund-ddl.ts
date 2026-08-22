@@ -186,14 +186,15 @@ export function fundTableIndexesSql(schemaName: string): string[] {
   ];
 }
 
-export function grantFundSchemaSql(schemaName: string): string[] {
+export function revokePublicFundSchemaSql(schemaName: string): string[] {
   const q = quoteIdent(schemaName);
   return [
-    `GRANT USAGE ON SCHEMA ${q} TO PUBLIC`,
-    `GRANT SELECT ON ALL TABLES IN SCHEMA ${q} TO PUBLIC`,
-    `ALTER DEFAULT PRIVILEGES IN SCHEMA ${q} GRANT SELECT ON TABLES TO PUBLIC`,
+    `REVOKE ALL ON ALL TABLES IN SCHEMA ${q} FROM PUBLIC`,
+    `REVOKE USAGE ON SCHEMA ${q} FROM PUBLIC`,
+    `ALTER DEFAULT PRIVILEGES IN SCHEMA ${q} REVOKE SELECT ON TABLES FROM PUBLIC`,
   ];
 }
+
 export function provisionDdl(schemaName: string, fundKey: string, likePublic = true): string[] {
   const tables = likePublic
     ? [createDocumentsLikeSql(schemaName), createChunksLikeSql(schemaName), createEventsLikeSql(schemaName)]
@@ -209,6 +210,5 @@ export function provisionDdl(schemaName: string, fundKey: string, likePublic = t
     ...tables,
     ...addFundCheckSql(schemaName, fundKey),
     ...addChunksFkSql(schemaName),
-    ...grantFundSchemaSql(schemaName),
   ];
 }

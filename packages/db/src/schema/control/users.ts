@@ -10,6 +10,9 @@ import { control } from "./schema.js";
  * `scrypt$<salt>$<hash>` string (node:crypto scrypt — no external hashing dependency). This table is
  * written only out-of-band by the `create-user` seed script (using the read-write role); the
  * dashboard itself connects read-only and only SELECTs for login.
+ *
+ * Never GRANT this table to PUBLIC (`password_hash`). Dashboard-login gets an explicit GRANT via
+ * `scripts/db/grant-reader.ts` (`DB_READER_ROLE`). See migration 0014.
  */
 export const users = control.table(
   "users",
