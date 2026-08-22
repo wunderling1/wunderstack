@@ -22,7 +22,7 @@ import {
   interactionEvents,
   listActiveFunds,
   listAppliedFundMigrations,
-  publicCorpusExists,
+  publicCorpusTablesSql,
   quoteLiteral,
   sql,
   type FundCopyCheck,
@@ -76,7 +76,11 @@ async function main(): Promise<void> {
   });
   const confirm = values.confirm === true || positionals.includes("--confirm");
 
-  const publicPresent = await publicCorpusExists();
+  const tableRows = (await getDb().execute(sql.raw(publicCorpusTablesSql()))) as unknown as Array<{
+    relname: string;
+  }>;
+  const names = new Set(tableRows.map((row) => row.relname));
+  const publicPresent = names.has("documents") && names.has("chunks") && names.has("interaction_events");
   const funds = await listActiveFunds();
   const checks: FundCopyCheck[] = [];
 

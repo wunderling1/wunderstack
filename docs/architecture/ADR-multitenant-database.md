@@ -167,7 +167,7 @@ Code review 2026-08-21 20:30. Eigenaar: Wunderstack-maintainers. Datum: 21 augus
 
 - `GRANT … TO PUBLIC` op `control` is ingetrokken (migratie `0014_revoke_public_grants`). `control.users` (`password_hash`) en `control.agent_instances` krijgen nooit een PUBLIC-grant.
 - Nieuwe fondsschema's krijgen geen PUBLIC-grant (`fund-ddl.ts`).
-- Bestaande `fund_*`-schema's: eenmalig `scripts/db/revoke-public-fund-grants.ts`.
+- Bestaande `fund_*`-schema's: eenmalig `scripts/db/revoke-public-fund-grants.ts`. Volgorde: [DEPLOY-revoke-public-grants.md](../runbooks/DEPLOY-revoke-public-grants.md) (`grant-reader` vóór `0014`).
 - Extra Scalingo-logins krijgen standaard geen SELECT. Een named reader alleen via `scripts/db/grant-reader.ts` (`DB_READER_ROLE`). We maken geen extra login aan zonder dat script.
 - De addon-owner behoudt alle rechten. Isolatie blijft D15, niet de database.
 
