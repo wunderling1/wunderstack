@@ -166,7 +166,33 @@ export function assessCitationContract(
   };
 }
 
-function buildRepairMessages(previous: string, reason: string, strippedQuotes: string[] = []): ChatMessage[] {
+/**
+ * The naar-rato repair hatch may fire only when BOTH are true:
+ *   - the contract violation is an ungrounded load-bearing fact (the `assessCitationContract` reason
+ *     contains "niet in de context staat");
+ *   - the question or previous attempt is a deeltijd / pro-rata computation.
+ *
+ * Unconditional, the hatch taught the model to "verwijs naar het fonds" on etd-026 (WAZo / 16 weken)
+ * instead of refusing. Derived golden questions (etd-d01 "24 uur per week", etd-d02 "parttime",
+ * etd-d03 "contract van 12 uur") do not always say "deeltijd", so the signal covers those phrasings.
+ */
+const UNGROUNDED_FACT_REASON = /niet in de context staat/i;
+const PRO_RATA_SIGNAL =
+  /deeltijd|part[- ]?time|pro-?rata|naar rato|naar-rato|\d+\s*uur per week|contract van \s*\d+\s*uur/i;
+
+export function isProRataViolation(reason: string, previous: string, userSupplied = ""): boolean {
+  if (!UNGROUNDED_FACT_REASON.test(reason)) {
+    return false;
+  }
+  return PRO_RATA_SIGNAL.test(`${userSupplied}\n${previous}`);
+}
+
+function buildRepairMessages(
+  previous: string,
+  reason: string,
+  strippedQuotes: string[] = [],
+  userSupplied = "",
+): ChatMessage[] {
   // Echo the exact quotes that failed verbatim verification so the repair turn fixes those specific
   // spans instead of re-guessing. The most common recoverable failure is a quote that stitched two
   // spans or paraphrased the head; the fix is to split into contiguous quotes under one marker.
@@ -180,6 +206,18 @@ function buildRepairMessages(previous: string, reason: string, strippedQuotes: s
           "elk met een eigen aaneengesloten quote die begint bij een woord dat letterlijk in de passage",
           "staat. Plak nooit twee stukken aan elkaar met \"…\" of \"...\".",
         ];
+  // naar-rato escape hatch (golden-set.REVIEW.md §15): a self-computed pro-rata TOTAL flagged as
+  // ungrounded must not collapse into a blanket refusal (etd-d03). Only offer that middle path when
+  // the question actually is a deeltijd/pro-rata computation — otherwise the hatch licenses
+  // under-refusal on out-of-corpus facts (etd-026 "16 weken" / "verwijs naar het fonds").
+  const proRataLines = isProRataViolation(reason, previous, userSupplied)
+    ? [
+        "Gaat het om een zelf te berekenen deeltijd- of pro-rata-uitkomst (bijvoorbeeld vakantie-uren naar",
+        "rato)? Verzin dan GEEN totaal, maar weiger ook NIET: noem de wél vermelde gegevens (zoals het",
+        "fulltime-aantal en de regel dat het naar rato geldt) mét [n], en verwijs voor het exacte getal naar",
+        "het fonds. Dat is een geldig, gegrond antwoord — geef dat in plaats van NOT_FOUND.",
+      ]
+    : [];
   return [
     { role: "assistant", content: previous },
     {
@@ -199,15 +237,13 @@ function buildRepairMessages(previous: string, reason: string, strippedQuotes: s
         "Houd elk citaat ZO KORT MOGELIJK: kies het kortste aaneengesloten fragment dat het feit dekt (een",
         "paar woorden of één deelzin), en begin het bij een woord dat letterlijk in de passage staat —",
         "neem geen inleidende woorden mee die je zou moeten aanpassen (lidwoord, hoofdletter).",
-        // naar-rato escape hatch (golden-set.REVIEW.md §15): once a self-computed pro-rata TOTAL is
-        // flagged as ungrounded, the model must NOT fall back to a blanket refusal — that turns a fixable
-        // deferral into over-refusal (etd-d03). Offer the grounded middle path explicitly, above the
-        // NOT_FOUND fallback, so a deeltijd/pro-rata question is answered, not refused.
-        "Gaat het om een zelf te berekenen deeltijd- of pro-rata-uitkomst (bijvoorbeeld vakantie-uren naar",
-        "rato)? Verzin dan GEEN totaal, maar weiger ook NIET: noem de wél vermelde gegevens (zoals het",
-        "fulltime-aantal en de regel dat het naar rato geldt) mét [n], en verwijs voor het exacte getal naar",
-        "het fonds. Dat is een geldig, gegrond antwoord — geef dat in plaats van NOT_FOUND.",
-        `Staat er echt niets bruikbaars in de context? Antwoord dan EXACT met: "${NOT_FOUND_MESSAGE}" en een lege citatie-array [].`,
+        ...proRataLines,
+        // Mirror prompt.ts "niet bepaalt / niet regelt / niet noemt": a first-pass hedge is a
+        // not-found case. The old repair turn only had the "niets bruikbaars" fallback, so the model
+        // rewrote the hedge instead of emitting the exact refusal.
+        'Concludeer je dat de CAO iets niet bepaalt, niet regelt of niet noemt? Dat is een niet-gevonden-geval:',
+        `antwoord dan EXACT met "${NOT_FOUND_MESSAGE}" en een lege citatie-array []. Voeg geen [n] toe.`,
+        `Staat er echt niets bruikbaars in de context? Zelfde zin, woord voor woord: "${NOT_FOUND_MESSAGE}"`,
       ].join("\n"),
     },
   ];
@@ -282,7 +318,12 @@ export async function generateAnswerWithRepair(args: {
     const extraMessages =
       best === undefined
         ? []
-        : buildRepairMessages(best.attempt.text, best.assessment.reason, best.assessment.strippedQuotes);
+        : buildRepairMessages(
+            best.attempt.text,
+            best.assessment.reason,
+            best.assessment.strippedQuotes,
+            userSupplied,
+          );
     const attempt = await args.generate(extraMessages);
     usage = addUsage(usage, attempt.usage);
 
@@ -317,7 +358,12 @@ export async function generateAnswerWithRepair(args: {
   if (best.assessment.penalty > 0 && isUnverifiableContentAnswer(best.attempt.text, args.chunkContentById)) {
     attemptsRun += 1;
     const rescue = await args.generate(
-      buildRepairMessages(best.attempt.text, best.assessment.reason, best.assessment.strippedQuotes),
+      buildRepairMessages(
+        best.attempt.text,
+        best.assessment.reason,
+        best.assessment.strippedQuotes,
+        userSupplied,
+      ),
     );
     usage = addUsage(usage, rescue.usage);
     if (!isUnusableAttempt(rescue)) {
