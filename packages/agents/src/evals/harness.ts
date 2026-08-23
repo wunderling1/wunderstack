@@ -1,6 +1,7 @@
 /**
  * Shared eval harness mechanics — gate accumulator, prerequisite resolution, and simple check runners.
- * Agent-specific golden sets and gate run functions stay in cao.eval.ts / arbo.eval.ts.
+ * Agent-specific golden sets and gate run functions stay in cao.eval.ts (multi-agent entry via
+ * agent-profile.ts). This module is the shared accumulator / credential resolution only.
  */
 import { env } from "@wunderstack/shared";
 

@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 
 import { DEFAULT_LLM_MODEL } from "@wunderstack/ai";
 
+import { JUDGE_MODEL } from "./judge.js";
+
 /**
  * Eval/production coupling INVARIANT (see docs/eval/GATE-ARCHITECTURE.md).
  *
@@ -14,6 +16,10 @@ import { DEFAULT_LLM_MODEL } from "@wunderstack/ai";
  * a cheaper model (`const EVAL_LLM_MODEL = "mistral-small-2603"`), decoupling the quality bar from what
  * users get, and no test caught it. This offline unit test is that missing net — it runs on the fast
  * `test:unit` path (no API keys) so it fires on every PR, even when Gate C itself skips.
+ *
+ * P4 (judge ≠ generator) was retired 2026-08-22: JUDGE_MODEL must equal DEFAULT_LLM_MODEL. A silent
+ * re-split (e.g. pinning Small as judge) would revive a false claim in docs without updating the
+ * decision — this test is that net.
  */
 
 const evalSourcePath = fileURLToPath(new URL("./cao.eval.ts", import.meta.url));
@@ -51,5 +57,14 @@ describe("eval/production model coupling (invariant)", () => {
     const resolve = (override?: string): string => override ?? DEFAULT_LLM_MODEL;
     assert.equal(resolve(undefined), DEFAULT_LLM_MODEL);
     assert.equal(resolve("mistral-large-2512"), "mistral-large-2512");
+  });
+
+  it("JUDGE_MODEL equals DEFAULT_LLM_MODEL (P4 retired 2026-08-22)", () => {
+    assert.equal(
+      JUDGE_MODEL,
+      DEFAULT_LLM_MODEL,
+      "Judge and production generator must stay the same pin after P4 retirement. A deliberate " +
+        "split requires updating judge.ts, GATE-ARCHITECTURE.md, and this test.",
+    );
   });
 });

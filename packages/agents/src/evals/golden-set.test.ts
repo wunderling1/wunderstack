@@ -48,7 +48,7 @@ describe("goldenCaseSchema refusal refinement", () => {
 describe("golden fixtures", () => {
   it("every refusal case has non-empty distractors that resolve to real passages", () => {
     const refusals = goldenCases.filter((testCase) => testCase.category === "refusal");
-    assert.ok(refusals.length > 0, "there is at least one refusal case");
+    assert.ok(refusals.length >= 10, "base set has at least 10 refusal cases (corpus v5)");
     for (const testCase of refusals) {
       const distractorCount = testCase.distractorPassageIds?.length ?? 0;
       assert.ok(distractorCount > 0, `${testCase.id} defines distractors`);
@@ -123,6 +123,24 @@ describe("fund layer (E12)", () => {
     assert.equal(etd.corpusVersion, "etd-1");
     assert.ok(etd.fund.length > 0, "the etd fund set names an integration target fund");
     assert.ok(etd.cases.length >= 20, "the etd fund set has at least 20 cases");
+  });
+
+  it("every FUND_SET_META key has a discovered fixture (no silent META orphans)", () => {
+    // loadFundSets() throws if META and disk disagree either way; this asserts the known registry
+    // is fully loaded so a missing arbo.oomt fixture cannot pass as "we just never ran that set".
+    const keys = goldenFundSets.map((set) => set.key).sort();
+    assert.deepEqual(keys, ["arbo.oomt", "demo", "etd", "etd-full"]);
+  });
+
+  it("arbo.oomt is scored against fund oomt with agent arbo", () => {
+    const arbo = goldenFundSets.find((set) => set.key === "arbo.oomt");
+    assert.ok(arbo, "arbo.oomt fund set is discovered");
+    assert.equal(arbo.fund, "oomt");
+    assert.equal(arbo.agentKey, "arbo");
+    assert.equal(arbo.corpusVersion, "arbo-oomt-1");
+    assert.ok(arbo.cases.length >= 10, "arbo.oomt starter set has at least 10 cases");
+    const refusals = arbo.cases.filter((testCase) => testCase.category === "refusal");
+    assert.ok(refusals.length >= 3, "arbo.oomt has the three behaviour refusal cases");
   });
 
   it("every fund case id is unique within its set", () => {

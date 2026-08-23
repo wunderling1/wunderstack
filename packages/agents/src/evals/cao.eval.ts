@@ -1,31 +1,35 @@
 /**
- * CAO-agent eval-suite (Fase 9) — the CI quality gate that blocks accuracy regressions.
+ * Multi-agent eval-suite — the CI quality gate that blocks accuracy regressions.
+ *
+ * Single process / single `eval-report.json` for every registered agent (see agent-profile.ts).
+ * CAO owns the G2 base golden set; other agents contribute G1 prompt contracts and G3-fund sets
+ * via `FUND_SET_META.agentKey`. Do not add a second `*.eval.ts` for agent 3 — add a profile.
  *
  * The golden set is split into two physical layers (see golden-set.ts):
  *   BASE — golden-set.base.jsonl + golden-passages.jsonl: corpus-agnostic behavioral cases that run
- *     on the committed FIXTURES, reproducible from the repo on every PR (Gates A, B, B2, C below).
+ *     on the committed FIXTURES, reproducible from the repo on every PR (G1, G2 below).
  *   FUND — golden-set.<fund>.jsonl: fund-specific correctness scored against the REAL ingested corpus
- *     via the production pipeline (Gate B-integration + Gate F). Needs a DB, so nightly-only.
+ *     via the production pipeline (G3-pipeline + G3-fund). Needs a DB, so nightly / path-filtered PRs.
  *
  * The gates (each with its own doc-comment at its definition):
  *
- *   Gate A — Prompt & clarify CONTRACT (offline, deterministic, always runs).
+ *   G1 — Prompt & clarify CONTRACT (offline, deterministic, always runs).
  *     A change-detector, NOT a behavioral gate: it asserts the system prompt still carries its
  *     non-negotiable grounding rules and that the deterministic clarify router fires on the right
  *     inputs. A prompt can contain a rule the model ignores; whether the model actually OBEYS the
- *     rules is tested behaviorally in Gate C. Clarify lives here because it is pure routing logic
+ *     rules is tested behaviorally in G2-answer. Clarify lives here because it is pure routing logic
  *     (see ../cao/clarify.ts), not an LLM call, so it is genuinely testable offline.
  *
- *   Gate B — Retrieval recall + rerank effect (needs SCALEWAY_API_KEY). FUND-SPECIFIC layer.
+ *   G2-retrieval — Retrieval recall + rerank effect (needs SCALEWAY_API_KEY). Base layer.
  *     Embeds golden passages + questions with the pinned production embedding model, scores cosine
  *     recall@k + MRR before and after the sovereign reranker. Relevance is matched on ARTICLE/LID
  *     (stable CAO structure), never on chunk id, so structure-aware re-chunking cannot break it for
  *     the wrong reason. The rerank step is a real gate (MRR may not regress), not just a report.
  *
- *   Gate C — Answer-level quality (needs SCALEWAY_API_KEY + MISTRAL_API_KEY).
+ *   G2-answer — Answer-level quality (needs SCALEWAY_API_KEY + MISTRAL_API_KEY).
  *     Generates answers on golden context and scores hard-hallucination (deterministic, near-zero
  *     tolerance), soft faithfulness + completeness (LLM-judge), citation-correctness, and two-sided
- *     refusal calibration (over- and under-refusal). Judge != generator (see judge.ts).
+ *     refusal calibration (over- and under-refusal). Judge = generator (P4 retired; see judge.ts).
  *
  * Skipped != passed: when EVAL_REQUIRE_ALL is set (the merge-to-main job), a gate whose API keys
  * are missing FAILS instead of skipping. Locally it skips so dev runs stay cheap.
@@ -80,6 +84,7 @@ import {
 import { ANSWER_THRESHOLDS, MULTI_TURN_SERVE_THRESHOLDS, answerFloorFailures } from "./answer-floors.js";
 import { acquireEvalLock, EvalAlreadyRunningError } from "./eval-lock.js";
 import { appendFundRecords, fundRecordsFromReport, resolveCommitSha } from "./fund-ledger.js";
+import { extraPromptContractChecks } from "./agent-profile.js";
 import { corpusIsolationContractChecks, corpusIsolationLiveChecks } from "./corpus-isolation.js";
 import { createEvalHarness, type EvalCheck as Check, type GateGroup, type GateRunResult } from "./harness.js";
 import { GATE_SPECS, type GateId, type GateSpec } from "./gates.js";
@@ -107,10 +112,9 @@ import { retryWithBackoff, sleep } from "./retry.js";
  * Generator model — the SAME model the production agent ships (`DEFAULT_LLM_MODEL`), so Gate C scores
  * what users actually get instead of drifting to a cheaper model. EVAL_GENERATION_MODEL overrides it
  * to A/B another sovereign generator without a code change; @wunderstack/ai enforces EU-sovereignty on
- * whatever is passed. NOTE (golden-set.REVIEW.md §17): the judge also runs on mistral-large-2512, so
- * the judge-scored soft metrics (faithfulness/relevance/completeness) now grade the judge's own model —
- * a bounded self-preference bias. The load-bearing anti-hallucination gates (hard-hallucination,
- * citation-verification, citation-correctness, dangling, over/under-refusal) are deterministic and
+ * whatever is passed. NOTE: the judge also runs on mistral-large-2512 (P4 retired 2026-08-22), so
+ * soft metrics (faithfulness/relevance/completeness) have full self-preference. Blocking floors
+ * (hard-hallucination, citation-verification, dangling, under-refusal counts) are deterministic and
  * judge-independent, so this bias does not touch the gates that carry the promise.
  */
 const EVAL_LLM_MODEL = env.EVAL_GENERATION_MODEL ?? DEFAULT_LLM_MODEL;
@@ -1189,12 +1193,10 @@ function answerRegressionChecks(aggregate: AggregateScores): Check[] {
     ...(ref.relevance === undefined ? [] : ([["relevance", aggregate.relevance, ref.relevance]] as [string, number, number][])),
     ["citation-correctness", aggregate.citationCorrectness, ref.citationCorrectness],
     ["completeness", aggregate.completeness, ref.completeness],
-    // refusal-calibration regression is intentionally NOT checked (B2 follow-up, 2026-08-22): with
-    // only 3 refusal fixtures a single generation slip drops 1.000 → 0.968 (still above the 0.90
-    // floor) and a second slip drops to 0.935, which fails the 5-point band even when the absolute
-    // under-refusal COUNT gate (≤ 1) would still pass at one slip. Same rationale as skipping the
-    // under-refusal-RATE regression: N=3 is too noisy for a ±tolerance check. The floor ≥ 0.90 and
-    // the count gate remain the protection.
+    // refusal-calibration regression is intentionally NOT checked (B2 follow-up, 2026-08-22): the
+    // absolute under-refusal COUNT gate (≤ 1) and the floor ≥ 0.90 remain the protection. Growing
+    // refusal fixtures to N=10 (corpus v5) reduces rate noise but does not restore a ±tolerance
+    // regression check — same rationale as skipping under-refusal-RATE regression.
     ...(ref.citationVerification === undefined
       ? []
       : ([["citation-verification", aggregate.citationVerification, ref.citationVerification]] as [
@@ -1205,10 +1207,10 @@ function answerRegressionChecks(aggregate: AggregateScores): Check[] {
   ];
   const lowerIsBetter: [string, number, number][] = [
     ["over-refusal-rate", aggregate.overRefusalRate, ref.overRefusalRate],
-    // under-refusal-RATE regression is intentionally NOT checked (B2, 2026-07-21): with only 3 refusal
-    // fixtures the rate is a noisy 0/33/67% and a single generation slip flips the gate (measured: an @1
-    // draw failed purely here at 0.333 vs 0.000). The absolute under-refusal COUNT gate (<= 1, in
-    // answerLevelChecks) is the real protection; the rate stays a trend-only number in the report.
+    // under-refusal-RATE regression is intentionally NOT checked (B2, 2026-07-21; still true at N=10
+    // in corpus v5): the absolute under-refusal COUNT gate (<= 1, in answerLevelChecks) is the real
+    // protection; the rate stays a trend-only number in the report. At N=10 one slip is ~10% instead
+    // of 33% at N=3 — count tolerance stays 1 (recalibrated percentage-wise by growing the set).
     // Soft faith/rel/complete averages exclude refusal cases for the same reason (2026-08-22): an
     // allowed count-1 slip used to zero those means and fail regression against a 0-under-refusal
     // baseline even when every answerable case was fine. refusalCalibration left the higherIsBetter
@@ -1353,6 +1355,7 @@ async function answerQualityChecks(): Promise<Check[]> {
 const GATE_RUNS: Record<GateId, () => GateRunResult | Promise<GateRunResult>> = {
   "G1-contract": () => [
     ...promptContractChecks(),
+    ...extraPromptContractChecks(),
     ...clarifyContractChecks(),
     ...fixtureHashChecks(),
     ...corpusIsolationContractChecks(),

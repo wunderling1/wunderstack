@@ -120,8 +120,11 @@ export type GoldenCaseCategory = z.infer<typeof goldenCaseCategorySchema>;
  * naar rato at 24u/12u, incl. the "26 × 12 = 312"-style fabrication reproduced from a real
  * conversation). No passages changed — only golden-set.base.jsonl grew — but any base fixture edit
  * must bump this version, so the retrieval baseline is re-recorded at v4 (see baseline.ts).
+ *
+ * v5 (2026-08-22): expands base refusal fixtures from 3 → 10 near-misses so under-refusal count
+ * gates are not dominated by N=3 noise. Re-record baseline with EVAL_WRITE_BASELINE=1.
  */
-export const GOLDEN_CORPUS_VERSION = "4";
+export const GOLDEN_CORPUS_VERSION = "5";
 
 /** Base layer file (was golden-set.jsonl before the E12 physical split; content is unchanged). */
 const BASE_CASES_FILE = "golden-set.base.jsonl";
@@ -327,6 +330,16 @@ function loadFundSets(): GoldenFundSet[] {
       cases: parseJsonl(raw, goldenFundCaseSchema),
       fixtureHash: createHash("sha256").update(raw).digest("hex"),
     });
+  }
+  // Reverse guard: a META entry without a fixture must fail loud (same severity as fixture without
+  // META). Discovery is file-driven; without this check an orphan META key is silently never scored.
+  for (const key of Object.keys(FUND_SET_META)) {
+    if (!sets.some((set) => set.key === key)) {
+      throw new Error(
+        `FUND_SET_META key "${key}" has no fixture file golden-set.${key}.jsonl. ` +
+          "Add the fixture (see docs/eval/golden-sets/) or remove the META entry.",
+      );
+    }
   }
   return sets;
 }
