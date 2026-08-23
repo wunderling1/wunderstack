@@ -2,7 +2,7 @@
  * Corpus-isolation checks shared across agent eval entries (CAO + arbo).
  * Contract layer is offline; live layer needs DATABASE_URL + SCALEWAY_API_KEY.
  */
-import { bindClaimsToInstance, instanceFromRow, pickUnkeyedInstance, retrievalScope } from "@wunderstack/db";
+import { bindClaimsToInstance, instanceFromRow, listActiveFunds, pickUnkeyedInstance, retrievalScope } from "@wunderstack/db";
 import { listCorpora, retrieveContext, retrieveInputSchema } from "@wunderstack/rag";
 
 import type { EvalCheck } from "./harness.js";
@@ -86,14 +86,33 @@ export async function corpusIsolationLiveChecks(): Promise<EvalCheck[]> {
   }
 
   const probeQuery = "vakantie loon toeslag pensioen arbeidsduur tillen pbm beeldscherm";
+  let funds: Awaited<ReturnType<typeof listActiveFunds>>;
+  try {
+    funds = await listActiveFunds();
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    return [
+      {
+        name: "corpus-isolation: listActiveFunds() against the control plane",
+        ok: false,
+        detail,
+      },
+    ];
+  }
+  const schemaByFund = new Map(funds.map((fund) => [fund.key, fund.schemaName]));
   const checks: EvalCheck[] = [];
   for (const { fund, agentKey } of corpora) {
     const result = await retrieveContext({ query: probeQuery, fund, agentKey, topK: 20, minScore: 0 });
     const leaked = result.chunks.filter(
       (chunk) => chunk.source.fund !== fund || chunk.source.agentKey !== agentKey,
     );
-    const expectedSchema = `fund_${fund}`;
-    const wrongSchema = result.chunks.filter((chunk) => chunk.source.schemaName !== expectedSchema);
+    // Compare against control.funds.schemaName — not a reconstructed `fund_${fund}` string — so the
+    // check proves the registry, not the formula the writer itself uses.
+    const expectedSchema = schemaByFund.get(fund);
+    const wrongSchema =
+      expectedSchema === undefined
+        ? result.chunks
+        : result.chunks.filter((chunk) => chunk.source.schemaName !== expectedSchema);
     checks.push({
       name: `corpus-isolation: fund "${fund}" agent "${agentKey}" returns only its own chunks`,
       ok: leaked.length === 0,
@@ -103,12 +122,14 @@ export async function corpusIsolationLiveChecks(): Promise<EvalCheck[]> {
           : `${String(leaked.length)} chunk(s) leaked from other fund/agent pairs`,
     });
     checks.push({
-      name: `corpus-isolation: fund "${fund}" agent "${agentKey}" reports the SET LOCAL schema`,
-      ok: wrongSchema.length === 0,
+      name: `corpus-isolation: fund "${fund}" agent "${agentKey}" reports the control-plane schema`,
+      ok: expectedSchema !== undefined && wrongSchema.length === 0,
       detail:
-        wrongSchema.length === 0
-          ? `schemaName=${expectedSchema}`
-          : `${String(wrongSchema.length)} chunk(s) reported a different schema than ${expectedSchema}`,
+        expectedSchema === undefined
+          ? `fund "${fund}" missing from control.funds`
+          : wrongSchema.length === 0
+            ? `schemaName=${expectedSchema}`
+            : `${String(wrongSchema.length)} chunk(s) reported a different schema than ${expectedSchema}`,
     });
   }
 

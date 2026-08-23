@@ -41,12 +41,36 @@ jobs:
     if: github.event_name != 'workflow_dispatch' || inputs.run_db_gates == true
     runs-on: ubuntu-latest
     env:
-      # Whether this run brings up the gate database. Nightly always does; a dispatch does on request.
-      GATE_DB: ${{ github.event_name == 'schedule' || inputs.run_db_gates == true }}
       # Ephemeral, local, thrown away with the runner — so these credentials are not a secret.
       GATE_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/wunderstack
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Need the merge-base for path-filtered GATE_DB on pull_request.
+          fetch-depth: 0
+
+      - name: Resolve GATE_DB
+        # Nightly / dispatch always. On PRs: only when the diff touches packages that can break
+        # corpus isolation (db / rag / tenant) — starts pgvector, not the 25-min LLM answer gate.
+        id: gate_db
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.run_db_gates }}" = "true" ]; then
+            echo "GATE_DB=true" >> "$GITHUB_ENV"
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.event.pull_request.head.sha }}"
+            if git diff --name-only "$BASE...$HEAD" | grep -E '^packages/(db|rag|tenant)/' >/dev/null; then
+              echo "GATE_DB=true" >> "$GITHUB_ENV"
+              echo "enabled=true" >> "$GITHUB_OUTPUT"
+              echo "PR touches packages/db|rag|tenant — enabling gate database for G3-isolation"
+              exit 0
+            fi
+          fi
+          echo "GATE_DB=false" >> "$GITHUB_ENV"
+          echo "enabled=false" >> "$GITHUB_OUTPUT"
 
       - name: Enable Corepack
         run: corepack enable
@@ -183,6 +207,19 @@ jobs:
           name: eval-report
           path: packages/agents/eval-report.json
           if-no-files-found: warn
+
+      # Promotion ledger check (offline): may this fund be promoted at HEAD? Reads the ledger the
+      # eval just appended and the structure reports ingest just wrote. A NO-GO is the signal —
+      # including "ledger still empty for this fund" — not a skip.
+      - name: Promote-check (nightly / GATE_DB)
+        if: success() && env.GATE_DB == 'true'
+        run: |
+          set -euo pipefail
+          for fund in demo etd etd-full oomt; do
+            echo "::group::promote-check $fund HEAD"
+            pnpm promote-check "$fund" HEAD || exit 1
+            echo "::endgroup::"
+          done
 
   # Manual-only: refresh the recorded baseline (retrieval + answer) under nightly config and publish
   # it as an artifact for review. Never commits — a human downloads it, inspects the deltas, and
