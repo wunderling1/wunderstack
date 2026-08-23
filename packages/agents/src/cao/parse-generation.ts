@@ -61,12 +61,16 @@ export interface ParsedGenerationOutput {
  *
  * Matches `chunk_id=` (equals), not JSON `"chunk_id":`, so a leaked JSON array in the
  * prose is left for the citation-coupling guard instead of being silently mangled.
+ *
+ * The assembled-context leak is `Citaat: "…" [chunk_id=…]` as a pair. Strip that pair
+ * only — a Dutch sentence that uses `Citaat: "…"` without a chunk_id is answer text,
+ * not protocol, and must not be silently shortened (#21).
  */
 export function stripChunkIdsFromProse(answer: string): string {
   return answer
+    .replace(/\s*\.?[ \t]*Citaat:\s*"[^"]*"\s*\[chunk_id=[^\]]+\]/gi, "")
     .replace(/\s*\[chunk_id=[^\]]+\]/gi, "")
     .replace(/\s*\bchunk_id=[A-Za-z0-9._-]+/gi, "")
-    .replace(/\s*\.?[ \t]*Citaat:\s*"[^"]*"/gi, "")
     .replace(/ +([.,;:])/g, "$1")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")

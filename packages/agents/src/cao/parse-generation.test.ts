@@ -138,6 +138,11 @@ describe("stripChunkIdsFromProse", () => {
     const jsonShape = '{"marker":1,"chunk_id":"abc-123","quote":"x"}';
     assert.equal(stripChunkIdsFromProse(jsonShape), jsonShape);
   });
+
+  it("keeps a Dutch Citaat: quote that is not a protocol leak (no chunk_id)", () => {
+    const prose = 'Het relevante citaat: "de werknemer heeft recht op loon" staat in artikel 12.';
+    assert.equal(stripChunkIdsFromProse(prose), prose);
+  });
 });
 
 describe("parseGenerationOutput strips leaked chunk_id from answer prose", () => {
