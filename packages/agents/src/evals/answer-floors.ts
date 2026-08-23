@@ -31,28 +31,24 @@ export const ANSWER_THRESHOLDS = {
   citationCorrectness: 0.75,
   completeness: 0.7,
   refusalCalibration: 0.9,
-  // citationVerification / dangling: absolute gate is COUNT-based (0 of N), not the rate thresholds
-  // below. Rates stay in the console for trend; see answerLevelChecks + golden-set.REVIEW.md
-  // (Gate C close-out). At N=31 one failure is already 96.8% < 0.98 — schijngranulariteit over an
-  // [X]-gate that follows from the "verzint niets"-promise.
-  citationVerification: 0.98,
   // Orphan sources (a shown citation without an inline marker) must be eliminated by the contract.
   maxOrphanRate: 0,
-  // Inline markers without a verified citation behind them are just as bad as orphan source cards.
-  maxDanglingMarkerRate: 0,
   maxOverRefusalRate: 0.05,
-  maxUnderRefusalRate: 0.1,
   /**
    * Safety-vs-quality split (REVIEW.md §21). The ABSOLUTE safety guarantee — no unverified citation and no
    * fabricated fact reaches the user — is enforced deterministically by hard-hallucination (>=0.98),
    * orphan-source (=0), and the verifyCitations strip/reconcile pipeline (unit-tested in
    * verify-citations.test.ts / generate-answer.test.ts / agent.ts). The RAW generation slip that survives
-   * best-of-N is irreducible single-sample variance: across runs a rotating ~1/31 of cases mangle some part
+   * best-of-N is irreducible single-sample variance: across runs a rotating ~1/N of cases mangle some part
    * of the citation protocol (long quote / ellipsis / sentinel / capital) even on Mistral Large. So the raw
-   * count gates are QUALITY-TREND gates with a sourced tolerance of one case (~3.2% at N=31): a single
-   * stochastic slip passes, a systematic regression (>=2) fails. Under-refusal is count-based for the same
-   * reason — with only 3 refusal fixtures the rate is a noisy 0/33/67%, and a lone GROUNDED
-   * should-have-deferred answer (hard-hallucination still 1.0) is a calibration slip, not a fabrication.
+   * count gates are QUALITY-TREND gates with a sourced tolerance of one case: a single stochastic slip
+   * passes, a systematic regression (>=2) fails. Under-refusal stays count-based: at N=10 refusal fixtures
+   * (corpus v5) one slip is ~10% (was 33% at N=3); maxUnderRefusalCount remains 1 — tighter percentage-wise,
+   * same absolute slip budget.
+   *
+   * Rates that appear in the eval report (citationVerification, danglingMarkerRate, underRefusalRate)
+   * are trend-only unless listed here as a gate. Do not reintroduce dead rate thresholds that disagree
+   * with the count gates below — that is a trap, not documentation.
    */
   maxUnverifiedCount: 1,
   maxDanglingCount: 1,

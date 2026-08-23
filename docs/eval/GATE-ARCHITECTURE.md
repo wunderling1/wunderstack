@@ -215,7 +215,7 @@ genoemd) · `[?]` **bron onbekend — te herleiden of te herzien**.
 | orphanRate | ≤ 0 | rate | `[X]` citatie-integriteit is binair |
 | danglingMarker | ≤ 1 case | **count** | `[X]` citatie-integriteit (rate = trend-only) |
 | overRefusalRate | ≤ 0.05 | rate | `[C]` bron niet gevonden → herijk na ≥ 14 nightly-runs. Nulmeting 0%. |
-| underRefusal | ≤ 1 refusal-case beantwoord | **count** | `[E]` count-tolerantie ~3.2% @ N=31 uit waargenomen roterende slip (§21 safety-vs-quality, `answer-floors.ts`); rate 0.10 = trend-only. |
+| underRefusal | ≤ 1 refusal-case beantwoord | **count** | `[E]` count-tolerantie; bij N=10 refusals (corpus v5, 2026-08-22) is één slip ~10% (was 33% @ N=3); rate blijft trend-only. |
 
 ### G3 (productie-pipeline — "provisional")
 | Metric | Drempel | Bron |
@@ -244,7 +244,7 @@ CI-config; falen = rode `verify`, maar ze verschijnen niet in het lagenmodel of 
 | Eval scoort het productiemodel | eval-generator = `DEFAULT_LLM_MODEL` via `EVAL_GENERATION_MODEL`, één seam | E1 · zie §4.1 |
 | Skip ≠ pass | een gate die niet kan draaien wordt ROOD waar hij verplicht is (`EVAL_REQUIRE_ALL`/`_DB`), env bereikt de eval echt (turbo `passThroughEnv`) | E0/E8 · zie §4.2 |
 | Eén verified-answer-seam | `generateVerifiedAnswer`/`generateAnswerWithRepair` gedeeld door `answer()`, `answerStream()` én de eval | zie §4.3 |
-| Judge-robuustheid | exact één parse-retry, fail-loud, geen default scores; mediaan over `EVAL_JUDGE_SAMPLES` | E2/P3b |
+| Judge-robuustheid | exact één parse-retry, fail-loud, geen default scores; mediaan over `EVAL_JUDGE_SAMPLES`. **P4 (judge ≠ generator) vervallen 2026-08-22:** judge = generator = productie-Large; soft metrics hebben self-preference; blocking floors blijven deterministisch | E2/P3b |
 | Golden-set-schema | refusal-cases ≥ 1 distractor; loader gooit zonder `FUND_SET_META` | E3/E12 |
 | Shared assemble | eval-context = productie-`assemble()` (snapshot-test); geaccepteerd residu: `sourceRef`-formaat (zie §4.5) | E4 |
 | K-alignment | candidateK 15 → topK 5 = wat het model ziet = wat de gate meet | E6 |
@@ -520,7 +520,7 @@ gebruikte pad, geen bewijs.
 | P2 | Gate A eerlijk benoemen (contract-test) | G1 |
 | P3a | modelpinning (reproduceerbare baseline) | invariant Eval scoort het productiemodel |
 | P3b | flakiness dempen (judge-samples mediaan) | invariant Judge-robuustheid |
-| P4 | judge ≠ generator | invariant Judge-robuustheid |
+| P4 | judge ≠ generator | **Vervallen 2026-08-22.** Generator moet productie zijn (`DEFAULT_LLM_MODEL` = Large). Enige soevereine alternatieve judge is Small; zwakker model dat Large beoordeelt is slechter dan self-preference. Soft metrics: full self-preference. Blocking floors (hard-hallucination, count-gates) blijven judge-onafhankelijk. Afgedwongen: `JUDGE_MODEL === DEFAULT_LLM_MODEL` in `eval-model-coupling.test.ts`. |
 | P5 | faithfulness splitsen (hard-hallucination) | G2-answer (hardHallucination + softFaithfulness) |
 | P6 | over-/under-refusal apart rapporteren | G2-answer (overRefusal + underRefusal) |
 | P7 | recall op artikel/lid + corpus-snapshot | G2-retrieval + invariant Fixture-hygiëne |
