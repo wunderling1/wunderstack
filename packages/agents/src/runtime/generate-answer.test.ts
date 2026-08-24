@@ -80,6 +80,14 @@ describe("assessCitationContract", () => {
     const mealChunks = new Map<string, string>([["meal", "Na 19:00 uur krijg je € 6,25 netto."]]);
     assert.equal(assessCitationContract(output, mealChunks).penalty, 0);
   });
+
+  it("flags kg as an arbo hard fact but not as a CAO hard fact", () => {
+    const output = raw("Til maximaal 25 kg [1].", [
+      { marker: 1, chunk_id: "adv", quote: "De werknemer heeft recht op 104 roostervrije uren per jaar." },
+    ]);
+    assert.equal(assessCitationContract(output, chunks).penalty, 0);
+    assert.ok(assessCitationContract(output, chunks, "", "arbo").penalty > 0);
+  });
 });
 
 /** A scripted generator: returns the next queued output per call, recording the messages it saw. */

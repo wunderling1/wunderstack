@@ -30,5 +30,9 @@ default + `agent_config` override).
 
 ## Wat bewust niet
 
-Gedragswijzigingen (clarify voor arbo, repair-coaching op arbo-refusal, hernoemen van
+Gedragswijzigingen (clarify voor arbo, repair-coaching-zin op arbo-refusal, hernoemen van
 `cao-retrieval` span) — aparte PRs met evalbewijs.
+
+Repair-assessment volgt wél `profile.agentKey` voor hard-fact-patronen (kg/dB voor arbo); de
+gecoachte refusal-zin blijft de CAO-tekst tot die gedrag-PR. Overige `runtime/` → `cao/`-imports:
+registry (verwacht), retrieval-types in `profile.ts` (historisch thuis), `NOT_FOUND_MESSAGE`-default.

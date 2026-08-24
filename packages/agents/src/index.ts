@@ -20,7 +20,6 @@ export {
   isAgentKey,
   listAgentProfiles,
   requireAgentProfile,
-  registerTestAgentProfile,
   type AgentKey,
 } from "./runtime/registry.js";
 

@@ -30,6 +30,11 @@ import { stripFailedMarkers, stripUnverifiedMarkers, verifyCitations } from "./v
  * docs/decisions/DECISION-second-agent-arbo.md. Mastra stays inside this package.
  */
 
+/** Langfuse span name for the follow-up chip call. Frozen per agentKey — do not rename. */
+export function followUpSpanName(agentKey: string): string {
+  return `${agentKey}-follow-ups`;
+}
+
 const ZERO_USAGE: AgentUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 const CITATION_SCORE_NAME = "citation-verification-rate";
 
@@ -293,7 +298,7 @@ async function maybeSuggestFollowUps(args: {
     return { questions: [], usage: ZERO_USAGE };
   }
 
-  const span = args.trace.startModelCall(`${args.profile.agentKey}-follow-ups`, {
+  const span = args.trace.startModelCall(followUpSpanName(args.profile.agentKey), {
     question: args.question,
     citationCount: args.result.citations.length,
   });
@@ -358,6 +363,7 @@ export function createGroundedAgent(profile: AgentRuntimeProfile): GroundedAgent
     const generated = await generateAnswerWithRepair({
       chunkContentById: new Map(args.retrieval.fullChunkContent),
       userSupplied: args.userSupplied,
+      agentKey: resolveHardFactAgentKey(profile.agentKey),
       // B4: omit notFoundMessage so generate-answer keeps coaching the CAO refusal (pre-existing
       // arbo leak). Serve-time refusals still use profile.notFoundMessage.
       generate: async (extraMessages) => {
