@@ -56,3 +56,25 @@ describe("resolveRequestScope (keyed)", () => {
     }
   });
 });
+
+describe("resolveRequestScope (unconfigured-open)", () => {
+  const allow = ["oomt", "demo"];
+
+  it("null config without unconfigured agent is 400 no_agent_instance (no CAO answer)", () => {
+    const result = resolveRequestScope(null, "demo", allow, null);
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.equal(result.status, 400);
+      assert.equal(result.error, "no_agent_instance");
+    }
+  });
+
+  it("null config with RUNTIME_UNCONFIGURED_AGENT=cao still answers as cao (local/dev)", () => {
+    const result = resolveRequestScope(null, "demo", allow, "cao");
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      assert.equal(result.fund, "demo");
+      assert.equal(result.agentKey, "cao");
+    }
+  });
+});

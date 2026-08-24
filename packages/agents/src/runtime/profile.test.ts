@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { arboProfile } from "../arbo/agent.js";
-import { caoProfile } from "../cao/agent.js";
+import { arboProfile } from "../arbo/profile.js";
+import { caoProfile } from "../cao/profile.js";
 import { NOT_FOUND_MESSAGE } from "../cao/prompt.js";
 import { NOT_IN_CATALOG_MESSAGE } from "../arbo/prompt.js";
 

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { arboProfile } from "../arbo/agent.js";
+import { arboProfile } from "../arbo/profile.js";
 import { NOT_IN_CATALOG_MESSAGE } from "../arbo/prompt.js";
 import type { AgentStreamEvent } from "../types.js";
 import { createGroundedAgent } from "./create-agent.js";
