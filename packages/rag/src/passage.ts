@@ -1,4 +1,4 @@
-import { and, asc, chunks, documents, eq, listActiveFunds, withFundSchema } from "@wunderstack/db";
+import { and, asc, chunks, documents, eq, isNotNull, listActiveFunds, withFundSchema } from "@wunderstack/db";
 import { z } from "zod";
 
 export interface CorpusKey {
@@ -24,6 +24,49 @@ export async function listCorpora(): Promise<CorpusKey[]> {
   }
   keys.sort((a, b) => a.fund.localeCompare(b.fund) || a.agentKey.localeCompare(b.agentKey));
   return keys;
+}
+
+export const structuralRefsInputSchema = z.object({
+  fund: z.string().min(1),
+  agentKey: z.string().min(1),
+});
+
+export interface StructuralRefs {
+  articles: string[];
+  chapters: string[];
+}
+
+/**
+ * Distinct article and chapter labels in one fund+agent corpus. Used by the G3-fund reachability
+ * check: presence of an expected ref is a structural fact, not an embedding ranking. One schema,
+ * scoped by fund and agent_key — never a UNION across funds.
+ */
+export async function listStructuralRefs(input: { fund: string; agentKey: string }): Promise<StructuralRefs> {
+  const { fund, agentKey } = structuralRefsInputSchema.parse(input);
+  const corpusScope = and(eq(documents.fund, fund), eq(documents.agentKey, agentKey));
+
+  return withFundSchema(fund, async (db) => {
+    const articleRows = await db
+      .selectDistinct({ article: chunks.article })
+      .from(chunks)
+      .innerJoin(documents, eq(chunks.documentId, documents.id))
+      .where(and(corpusScope, isNotNull(chunks.article)));
+    const chapterRows = await db
+      .selectDistinct({ chapter: chunks.chapter })
+      .from(chunks)
+      .innerJoin(documents, eq(chunks.documentId, documents.id))
+      .where(and(corpusScope, isNotNull(chunks.chapter)));
+
+    const articles = articleRows
+      .map((row) => row.article)
+      .filter((value): value is string => Boolean(value))
+      .sort((a, b) => a.localeCompare(b));
+    const chapters = chapterRows
+      .map((row) => row.chapter)
+      .filter((value): value is string => Boolean(value))
+      .sort((a, b) => a.localeCompare(b));
+    return { articles, chapters };
+  });
 }
 
 /**

@@ -44,7 +44,7 @@
  */
 
 import { DEFAULT_LLM_MODEL, embed, generateText, isRateLimited } from "@wunderstack/ai";
-import { closeDb, rerank, retrieveContext, assemble, type RetrievedChunk } from "@wunderstack/rag";
+import { closeDb, listStructuralRefs, rerank, retrieveContext, assemble, type RetrievedChunk, type StructuralRefs } from "@wunderstack/rag";
 import {
   env,
   EVAL_FIXTURE_FUND,
@@ -105,6 +105,7 @@ import {
   type RetrievalIntegrationReport,
   type AnswerCaseReport,
   type AnswerReport,
+  type FundCaseDiagnosis,
 } from "./report-writer.js";
 import { retryWithBackoff, sleep } from "./retry.js";
 
@@ -428,6 +429,11 @@ interface RecallMetrics {
 
 function normalizeRef(value: string): string {
   return value.trim().toLowerCase();
+}
+
+/** Leading section number of a normalised ref ("2.6. persoonlijke …" -> "2.6"), "" when absent. */
+function leadingSectionNumber(normalizedRef: string): string {
+  return /^[\d.]+/.exec(normalizedRef)?.[0]?.replace(/\.$/, "") ?? "";
 }
 
 /**
@@ -860,6 +866,101 @@ async function retrievalIntegrationChecks(): Promise<Check[]> {
  * condensed via the LLM before retrieval (fundCaseQuery), mirroring production. Uses production
  * topK/minScore.
  */
+/** The structural ref a fund case is scored on: chapter for arbo catalogs, article for CAO sets. */
+function expectedRefFor(testCase: GoldenFundCase, agentKey: string): string | null {
+  if (agentKey === "arbo" && testCase.expectedChapter) return testCase.expectedChapter;
+  return testCase.expectedArticle ?? testCase.expectedChapter ?? null;
+}
+
+/** The structural refs a retrieved chunk carries, in the same shape `expectedRefFor` produces. */
+function chunkRefs(chunk: RetrievedChunk): string[] {
+  const chapter =
+    chunk.structure.chapter ?? (typeof chunk.metadata.chapter === "string" ? chunk.metadata.chapter : null);
+  return [chapter, chunk.structure.article].filter((ref): ref is string => Boolean(ref));
+}
+
+function catalogRefSet(catalog: StructuralRefs): Set<string> {
+  const seen = new Set<string>();
+  for (const ref of [...catalog.articles, ...catalog.chapters]) {
+    seen.add(normalizeRef(ref));
+  }
+  return seen;
+}
+
+/**
+ * Diagnose every answerable fund case, splitting "the corpus does not have it" from "this question
+ * did not rank it". Presence is a DISTINCT article/chapter lookup — not an embedding of the expected
+ * ref. Without this a red fund gate is a single aggregate and every explanation is a guess.
+ */
+function diagnoseFundCases(
+  answerable: GoldenFundCase[],
+  rankedChunks: RetrievedChunk[][],
+  agentKey: string,
+  catalog: StructuralRefs,
+): FundCaseDiagnosis[] {
+  const presentRefs = catalogRefSet(catalog);
+  const diagnoses: FundCaseDiagnosis[] = [];
+
+  for (const [index, testCase] of answerable.entries()) {
+    const chunks = rankedChunks[index] ?? [];
+    const expectedRef = expectedRefFor(testCase, agentKey);
+    const retrievedRefs = chunks.flatMap((chunk) => chunkRefs(chunk));
+    const rankIndex = chunks.findIndex((chunk) => chunkMatchesFundCase(chunk, testCase, agentKey));
+
+    if (expectedRef === null) {
+      diagnoses.push({ id: testCase.id, expectedRef, verdict: "unranked", rank: null, retrievedRefs });
+      continue;
+    }
+    if (rankIndex >= 0) {
+      diagnoses.push({ id: testCase.id, expectedRef, verdict: "hit", rank: rankIndex + 1, retrievedRefs });
+      continue;
+    }
+
+    const present = presentRefs.has(normalizeRef(expectedRef));
+    diagnoses.push({
+      id: testCase.id,
+      expectedRef,
+      verdict: present ? "unranked" : "label-only",
+      rank: null,
+      retrievedRefs,
+    });
+  }
+
+  return diagnoses;
+}
+
+/**
+ * Fixture-reachability guard. Fails on `label-only` cases only: those cannot be scored at all.
+ * `unranked` cases stay with the recall thresholds.
+ */
+function fixtureReachabilityCheck(set: GoldenFundSet, diagnoses: FundCaseDiagnosis[], catalog: StructuralRefs): Check {
+  const seen = catalogRefSet(catalog);
+
+  const labelOnly = diagnoses.filter((diagnosis) => diagnosis.verdict === "label-only");
+  const detail = labelOnly
+    .map((diagnosis) => {
+      const ref = diagnosis.expectedRef ?? "";
+      const prefix = leadingSectionNumber(normalizeRef(ref));
+      const nearby = prefix === "" ? [] : [...seen].filter((candidate) => leadingSectionNumber(candidate) === prefix);
+      const hint =
+        nearby.length === 0
+          ? "absent from the fund (no article or chapter with that number)"
+          : `corpus labels around ${prefix}: ${nearby.map((candidate) => `"${candidate}"`).join(" | ")}`;
+      return `${diagnosis.id} expects "${ref}" — ${hint}`;
+    })
+    .join("; ");
+
+  const unranked = diagnoses.filter((diagnosis) => diagnosis.verdict === "unranked").length;
+  return {
+    name: `fund "${set.key}" fixtures: every expected article/chapter exists in the corpus`,
+    ok: labelOnly.length === 0,
+    detail:
+      labelOnly.length === 0
+        ? `${String(diagnoses.length)} case(s) resolvable in the corpus (${String(unranked)} not ranked by their own question — see recall)`
+        : `${String(labelOnly.length)} of ${String(diagnoses.length)} exist nowhere in the fund — ${detail}`,
+  };
+}
+
 async function fundLayerChecks(set: GoldenFundSet): Promise<Check[]> {
   const agentKey = set.agentKey;
   const answerable = set.cases.filter((testCase) => testCase.category !== "refusal");
@@ -878,6 +979,8 @@ async function fundLayerChecks(set: GoldenFundSet): Promise<Check[]> {
     rankedChunks.push(result.chunks);
   }
   const metrics = scoreFundIntegrationRecall(rankedChunks, answerable, agentKey);
+  const catalog = await listStructuralRefs({ fund: set.fund, agentKey });
+  const diagnoses = diagnoseFundCases(answerable, rankedChunks, agentKey, catalog);
 
   let emptyProbes = 0;
   for (const query of MIN_SCORE_PROBES) {
@@ -908,6 +1011,14 @@ async function fundLayerChecks(set: GoldenFundSet): Promise<Check[]> {
     `  near-miss cases — ${String(nearMiss.length)} present, NOT scored here (needs the answer layer; ` +
       `see docs/eval/BESLUIT-refusal-guard-2026-07-31.md)\n`,
   );
+  for (const diagnosis of diagnoses) {
+    const where = diagnosis.rank === null ? "-" : `rank ${String(diagnosis.rank)}`;
+    console.log(
+      `    ${diagnosis.id}: ${diagnosis.verdict} (${where}) expected=${JSON.stringify(diagnosis.expectedRef)} ` +
+        `retrieved=${diagnosis.retrievedRefs.slice(0, PRODUCTION_DEFAULTS.topK).map((ref) => JSON.stringify(ref)).join(", ")}`,
+    );
+  }
+  console.log("");
 
   fundLayerReports.push({
     key: set.key,
@@ -925,9 +1036,11 @@ async function fundLayerChecks(set: GoldenFundSet): Promise<Check[]> {
     thresholds: { ...RETRIEVAL_INTEGRATION_THRESHOLDS },
     refusalGuard: { probes: MIN_SCORE_PROBES.length, empty: emptyProbes, required: requiredEmpty },
     unscoredNearMissCases: nearMiss.length,
+    cases: diagnoses,
   });
 
   return [
+    fixtureReachabilityCheck(set, diagnoses, catalog),
     ...recallChecks(`fund "${set.key}" retrieval`, metrics, RETRIEVAL_INTEGRATION_THRESHOLDS),
     {
       name: `fund "${set.key}" refusal-guard: >= ${String(requiredEmpty)} out-of-corpus probes return 0 hits (refuse-without-LLM)`,

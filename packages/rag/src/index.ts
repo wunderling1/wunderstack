@@ -100,10 +100,13 @@ export { assemble, type AssembledContext, type RetrievalTimings } from "./assemb
 export {
   fetchParentPassage,
   listCorpora,
+  listStructuralRefs,
   passageInputSchema,
+  structuralRefsInputSchema,
   type CorpusKey,
   type PassageInput,
   type PassageResult,
+  type StructuralRefs,
 } from "./passage.js";
 // Re-exported so short-lived callers (the eval run) can close the DB pool and exit cleanly without
 // depending on @wunderstack/db directly. Long-lived servers keep the pool and never call this.
