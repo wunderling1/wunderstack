@@ -76,6 +76,25 @@ distractor context that does *not* answer the question. Details below.
 - Any future edit to either fixture file must bump `GOLDEN_CORPUS_VERSION` and re-record the baseline
   — enforced by the fixture-hash guard in Gate A (`fixtureHashChecks`, E10).
 
+## 2026-08-24 — grounded scope-refusal is a refusal (etd-025 vs etd-032)
+
+Not a fixture change. The gate and the golden set disagreed on what a refusal looks like.
+
+etd-025's `referenceAnswer` is a grounded scope-refusal: the 2024 raise is out of this CAO's term,
+with the 2023 `looptijd` as the cited fact. The generator produced that form (PR #29 artefact, run
+32737827106: `finishReason=stop`, 338 chars, `hardHallucination=1`) and the gate scored it as
+under-refusal because `answerRefuses` only accepted the literal `NOT_FOUND_MESSAGE`. The golden set
+and the gate rewarded opposite behaviour.
+
+Decision: recognise a meta-level "this CAO does not determine X" with no subsequent granted
+entitlement as a refusal. etd-032 stays under-refusal: after "staat geen fietsplan" it assigns
+travel reimbursement from the `reiskosten` distractor. The prompt's documented-no exception quoted
+that same passage, which is why the model answered it. Exception is now limited to the asked
+subject; the example is detached from `reiskosten`.
+
+Logged in `docs/eval/GATE-ARCHITECTURE.md` (changelog 2026-08-24). Count ceiling ≤ 1 unchanged.
+Hard-hallucination stays absolute.
+
 ## v4 (base) — E13 derived-calculation cases
 
 **Change:** +3 `derived` cases (31 cases total), no passage changes. `derived` is a new category for
