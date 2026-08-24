@@ -409,3 +409,43 @@ describe("generateAnswerWithRepair", () => {
     assert.equal(result.text, flagged);
   });
 });
+
+/**
+ * Stop-sequence regression (2026-08-23). Six of 38 Gate C cases finished on `length` with a COMPLETE
+ * answer: prose, sentinel and a closed JSON array, followed by `\n\n\n+++++ <path>` and an invented
+ * repository file. `GENERATION_CONFIG.stop = ["+++++"]` now ends generation at that separator, so the
+ * chosen text stops right after the citation block. These assert that the contract assessor — the
+ * seam the repair loop optimises — reads such a stopped answer as clean, not as a violation.
+ */
+describe("assessCitationContract with a stop-sequence-terminated answer", () => {
+  it("scores a grounded answer that stopped at the separator as clean", () => {
+    const output = raw("Je hebt recht op 104 roostervrije uren per jaar [1].", [
+      { marker: 1, chunk_id: "adv", quote: "104 roostervrije uren" },
+    ]);
+    // What the provider now returns: identical up to the closing `]`, nothing after it.
+    assert.equal(assessCitationContract(output, chunks).penalty, 0);
+  });
+
+  it("is unchanged by a trailing newline where the runaway used to start", () => {
+    const output = `${raw("Je hebt recht op 104 roostervrije uren per jaar [1].", [
+      { marker: 1, chunk_id: "adv", quote: "104 roostervrije uren" },
+    ])}\n\n\n`;
+    assert.equal(assessCitationContract(output, chunks).penalty, 0);
+  });
+
+  it("still flags the pre-stop answer when the citation block itself is broken", () => {
+    // The stop sequence must not launder a real violation: an unbacked marker stays a violation.
+    const output = `Je hebt recht op 104 roostervrije uren per jaar [1].\n${CITATIONS_SENTINEL}\n[]`;
+    assert.ok(assessCitationContract(output, chunks).penalty > 0);
+  });
+
+  it("treats the runaway tail as scoreable text when a stop sequence did NOT fire", () => {
+    // Old behaviour, kept as documentation: everything after the array is parsed away, so a case
+    // that ran away still scored clean — which is why the runaway was invisible to every gate
+    // except finishReason.
+    const output = `${raw("Je hebt recht op 104 roostervrije uren per jaar [1].", [
+      { marker: 1, chunk_id: "adv", quote: "104 roostervrije uren" },
+    ])}\n\n\n+++++ examples/cao-assistent/voorbeeld-2.md\nJe bent een assistent…`;
+    assert.equal(assessCitationContract(output, chunks).penalty, 0);
+  });
+});

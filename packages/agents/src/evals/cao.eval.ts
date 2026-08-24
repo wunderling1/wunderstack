@@ -1205,6 +1205,7 @@ async function multiTurnServeChecks(): Promise<Check[]> {
               ],
               temperature: GENERATION_CONFIG.temperature,
               maxTokens: GENERATION_CONFIG.maxTokens,
+              stop: GENERATION_CONFIG.stop,
             }),
           { baseDelayMs: 5000, maxAttempts: 8 },
         ).then((result) => ({
@@ -1450,6 +1451,7 @@ async function answerQualityChecks(): Promise<Check[]> {
               // Single source of truth: packages/shared/src/config/generation.ts (same as production agent).
               temperature: GENERATION_CONFIG.temperature,
               maxTokens: GENERATION_CONFIG.maxTokens,
+              stop: GENERATION_CONFIG.stop,
             }),
           { baseDelayMs: 5000, maxAttempts: 8 },
         ).then((result) => ({

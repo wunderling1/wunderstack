@@ -26,6 +26,13 @@ export interface GenerateTextInput {
   model?: string;
   temperature?: number;
   maxTokens?: number;
+  /**
+   * Provider stop sequences. Generation ends at the first match and `finishReason` is `stop`,
+   * not `length` — the difference between an answer that ended and one that ran out of budget.
+   * Callers pass `GENERATION_CONFIG.stop` so eval and production stop at the same strings; see
+   * that constant for why this exists (repository-continuation runaway, 2026-08-23).
+   */
+  stop?: readonly string[];
   /** Aborts the in-flight provider request (e.g. when the client disconnects). */
   abortSignal?: AbortSignal;
 }
@@ -279,13 +286,21 @@ function mapUsage(usage: z.infer<typeof mistralUsageSchema>): TokenUsage {
   };
 }
 
-function buildMistralRequestBody(input: GenerateTextInput, stream: boolean): Record<string, unknown> {
+/**
+ * Exported for unit testing (`models.test.ts`): the request body is the contract with the provider,
+ * and a parameter that silently fails to be sent looks exactly like a model that ignores it.
+ * @internal
+ */
+export function buildMistralRequestBody(input: GenerateTextInput, stream: boolean): Record<string, unknown> {
   const model = input.model ?? DEFAULT_LLM_MODEL;
+  // An empty array is not a stop list; sending `stop: []` is a request the provider may reject.
+  const stop = input.stop === undefined || input.stop.length === 0 ? undefined : [...input.stop];
   return {
     model,
     messages: input.messages,
     ...(input.temperature === undefined ? {} : { temperature: input.temperature }),
     max_tokens: input.maxTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+    ...(stop === undefined ? {} : { stop }),
     ...(stream ? { stream: true, stream_options: { include_usage: true } } : {}),
   };
 }

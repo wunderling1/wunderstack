@@ -374,6 +374,10 @@ export function createCaoAgent(): CaoAgent {
           modelSettings: {
             temperature: GENERATION_CONFIG.temperature,
             maxOutputTokens: GENERATION_CONFIG.maxTokens,
+            // Mastra/AI-SDK spelling of GENERATION_CONFIG.stop; the eval reaches the same provider
+            // through @wunderstack/ai's `stop`. Both must be wired or the gate measures a different
+            // generation than production runs.
+            stopSequences: [...GENERATION_CONFIG.stop],
           },
           tracingOptions: args.tracingOptions,
           ...(args.signal === undefined ? {} : { abortSignal: args.signal }),
