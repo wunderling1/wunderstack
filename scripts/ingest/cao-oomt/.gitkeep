@@ -1,0 +1,8 @@
+# CAO Motorvoertuigen- en Tweewielerbedrijf (OOMT).
+#
+# NOT in ../input/. That directory is the ETD CAO ingest and `ingest <dir>` takes EVERY supported
+# file in it, so a second CAO there silently lands in fund "elektronische-detailhandel". It did:
+# between 2026-08-18 and 2026-08-24 the ETD fund held 245 ETD chunks + 668 OOMT chunks, and
+# G3-fund etd-full hit@1 fell from 92.9% to 64.3% against a corpus that was 73% the wrong CAO.
+#
+# This file has no fund set and no ingest step yet. Give it its own fund before ingesting it.

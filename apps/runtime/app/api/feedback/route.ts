@@ -1,5 +1,6 @@
 import { recordFeedbackScore } from "@wunderstack/agents";
 import { attachFeedbackByTrace } from "@wunderstack/analytics";
+import { getTenantId } from "@wunderstack/tenant";
 import { readBodyBounded } from "@/lib/http";
 import { checkRateLimit, clientKey } from "@/lib/rate-limit";
 import { feedbackRequestSchema } from "./contract";
@@ -53,7 +54,7 @@ export async function POST(request: Request): Promise<Response> {
     // Mirror the signal onto the durable event-log (matched on traceId). Best-effort: a feedback
     // score on Langfuse must not fail because the event-log write did.
     try {
-      await attachFeedbackByTrace(traceId, rating);
+      await attachFeedbackByTrace(traceId, rating, getTenantId());
     } catch (error) {
       console.error("[api/feedback] failed to attach feedback to event-log:", error);
     }

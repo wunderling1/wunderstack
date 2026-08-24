@@ -23,7 +23,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
 import { embed } from "@wunderstack/ai";
-import { and, chunks as chunksTable, closeDb, documents, eq, getDb } from "@wunderstack/db";
+import { and, chunks as chunksTable, closeDb, documents, ensureFundTables, eq, withFundSchema } from "@wunderstack/db";
 import { EMBEDDING_CONFIG, EVAL_FIXTURE_FUND, env } from "@wunderstack/shared";
 import { z } from "zod";
 
@@ -107,12 +107,14 @@ async function main(): Promise<void> {
   // clue as to which database it was even talking to.
   console.log(formatDatabaseTarget(describeDatabaseTarget(env.DATABASE_URL)));
 
-  const db = getDb();
-  const existing = await db
-    .select({ contentHash: documents.contentHash })
-    .from(documents)
-    .where(and(eq(documents.sourceUri, SOURCE_URI), eq(documents.agentKey, "cao")))
-    .limit(1);
+  await ensureFundTables(EVAL_FIXTURE_FUND);
+  const existing = await withFundSchema(EVAL_FIXTURE_FUND, (db) =>
+    db
+      .select({ contentHash: documents.contentHash })
+      .from(documents)
+      .where(and(eq(documents.sourceUri, SOURCE_URI), eq(documents.agentKey, "cao")))
+      .limit(1),
+  );
 
   if (existing[0]?.contentHash === contentHash && !force) {
     console.log(
@@ -127,7 +129,7 @@ async function main(): Promise<void> {
   );
   const vectors = await embedAll(passages);
 
-  await db.transaction(async (tx) => {
+  await withFundSchema(EVAL_FIXTURE_FUND, async (tx) => {
     const [document] = await tx
       .insert(documents)
       .values({

@@ -22,10 +22,13 @@ and does not count toward the rule of three.
    attribute (hint only — see decision 3). `retrieve()` and `fetchParentPassage()` require `agentKey`
    with no default so a forgotten call-site is a type error, not a silent cross-corpus read.
 
-3. **`tenant_config` becomes an agent-instance table.** One row per `(tenant_id, agent_key)`, unique
-   on that pair, with its own `public_key` per row. The public key resolves the agent instance
-   server-side. `data-agent` on the embed snippet is a hint for widgets that can show multiple
-   instances; it must be validated against what the key allows and never overrides agent choice.
+3. **`tenant_config` is an agent-instance table** (one row per `(tenant_id, agent_key)`, unique
+   `public_key` per row). Amended 21 August 2026: that table **moves to `control.agent_instances`**
+   ([ADR-multitenant-database.md](../architecture/ADR-multitenant-database.md)). Existing cao **and**
+   arbo rows keep their `agent_key`. The public key stays a public identifier (no hash); rotation
+   remains revocability without rebuilding the instance. `data-agent` on the embed snippet is a hint
+   for widgets that can show multiple instances; it must be validated against what the key allows and
+   never overrides agent choice.
 
 4. **Rule of three: copy, don't abstract.** The arbo module is a copy-and-adapt of the CAO module.
    No generic `RagAgent` / `BaseAgent`. Shared infrastructure stays in `packages/rag` (retrieve →

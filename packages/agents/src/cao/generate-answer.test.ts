@@ -9,6 +9,7 @@ import {
   assessCitationContract,
   GenerationAbortedError,
   generateAnswerWithRepair,
+  isProRataViolation,
 } from "./generate-answer.js";
 
 const chunks = new Map<string, string>([
@@ -99,6 +100,58 @@ function scriptedGenerate(outputs: string[]): {
   };
 }
 
+const UNGROUNDED_REASON =
+  "de tekst noemt een concreet bedrag, percentage of aantal dat niet in de context staat (16 weken)";
+const QUOTE_ONLY_REASON = "1 citaat(en) waren niet woordelijk in de context terug te vinden";
+
+describe("isProRataViolation", () => {
+  it("stays off for an ungrounded out-of-corpus fact without a deeltijd/pro-rata signal (etd-026)", () => {
+    assert.equal(
+      isProRataViolation(
+        UNGROUNDED_REASON,
+        "Je hebt recht op 16 weken zwangerschapsverlof [1].",
+        "Hoeveel weken zwangerschapsverlof krijg ik?",
+      ),
+      false,
+    );
+  });
+
+  it("fires for derived golden phrasings that do not say 'deeltijd'", () => {
+    assert.equal(
+      isProRataViolation(UNGROUNDED_REASON, "120 vakantie-uren", "Ik werk 24 uur per week. Op hoeveel vakantie-uren heb ik dan per jaar recht?"),
+      true,
+      "etd-d01: 24 uur per week",
+    );
+    assert.equal(
+      isProRataViolation(UNGROUNDED_REASON, "48 vakantie-uren", "En als ik 12 uur per week werk?"),
+      true,
+      "etd-d02: 12 uur per week",
+    );
+    assert.equal(
+      isProRataViolation(UNGROUNDED_REASON, "60 vakantie-uren", "Ik heb een contract van 12 uur per week."),
+      true,
+      "etd-d03-style: contract van N uur",
+    );
+    assert.equal(
+      isProRataViolation(UNGROUNDED_REASON, "Naar rato is dat 120 uur.", "Op hoeveel vakantie-uren heb ik recht?"),
+      true,
+      "previous attempt already used naar rato",
+    );
+    assert.equal(
+      isProRataViolation(UNGROUNDED_REASON, "", "Ik werk parttime, hoeveel vakantie-uren?"),
+      true,
+      "parttime without the word deeltijd",
+    );
+  });
+
+  it("stays off when the violation is only a non-verbatim quote, even on a deeltijd question", () => {
+    assert.equal(
+      isProRataViolation(QUOTE_ONLY_REASON, "104 roostervrije uren", "Ik werk 24 uur per week."),
+      false,
+    );
+  });
+});
+
 describe("generateAnswerWithRepair", () => {
   it("returns the first attempt unchanged when it already honours the contract", async () => {
     const clean = raw("Je hebt recht op 104 roostervrije uren [1].", [
@@ -138,13 +191,21 @@ describe("generateAnswerWithRepair", () => {
     const invented = raw("Je hebt recht op 16 weken zwangerschapsverlof [1].", [
       { marker: 1, chunk_id: "wazo", quote: "16 weken zwangerschapsverlof" },
     ]);
-    const { generate } = scriptedGenerate([invented, NOT_FOUND_MESSAGE]);
+    const { generate, calls } = scriptedGenerate([invented, NOT_FOUND_MESSAGE]);
 
-    const result = await generateAnswerWithRepair({ chunkContentById: chunks, generate });
+    const result = await generateAnswerWithRepair({
+      chunkContentById: chunks,
+      generate,
+      userSupplied: "Hoeveel weken zwangerschapsverlof krijg ik?",
+    });
 
     assert.equal(result.attempts, 2);
     assert.equal(result.repaired, true);
     assert.equal(result.text, NOT_FOUND_MESSAGE);
+    const repairPrompt = calls[1]?.[1]?.content ?? "";
+    assert.equal(repairPrompt.includes("weiger ook NIET"), false, "pro-rata hatch must stay off for etd-026");
+    assert.ok(repairPrompt.includes("niet bepaalt, niet regelt of niet noemt"), "niet-regelt clause");
+    assert.ok(repairPrompt.includes(NOT_FOUND_MESSAGE), "exact not-found template");
   });
 
   it("keeps the first attempt when the retry is no better (tie broken toward fewer violations)", async () => {
@@ -305,6 +366,34 @@ describe("generateAnswerWithRepair", () => {
     const repairPrompt = calls[1]?.[1]?.content ?? "";
     assert.ok(repairPrompt.includes("NIET letterlijk"), "names the verbatim failure");
     assert.ok(repairPrompt.includes("een niet-letterlijke quote"), "echoes the exact stripped quote");
+    assert.ok(repairPrompt.includes("niet bepaalt, niet regelt of niet noemt"), "niet-regelt is always in the repair turn");
+    assert.equal(repairPrompt.includes("weiger ook NIET"), false, "quote-only violation is not a pro-rata hatch");
+  });
+
+  it("offers the naar-rato hatch when an ungrounded total sits on a deeltijd question (etd-d01)", async () => {
+    const vacationChunks = new Map<string, string>([
+      ["vac", "Een fulltimer heeft recht op 190 uur vakantie per jaar. Voor deeltijd gelden die rechten naar rato."],
+    ]);
+    const invented = raw("Bij 24 uur per week heb je recht op 120 vakantie-uren [1].", [
+      { marker: 1, chunk_id: "vac", quote: "190 uur vakantie per jaar" },
+    ]);
+    const deferred = raw(
+      "Een fulltimer heeft 190 uur vakantie [1]; bij 24 uur geldt dit naar rato. Je fonds rekent het exact uit.",
+      [{ marker: 1, chunk_id: "vac", quote: "190 uur vakantie per jaar" }],
+    );
+    const { generate, calls } = scriptedGenerate([invented, deferred]);
+
+    const result = await generateAnswerWithRepair({
+      chunkContentById: vacationChunks,
+      generate,
+      userSupplied: "Ik werk 24 uur per week. Op hoeveel vakantie-uren heb ik dan per jaar recht?",
+    });
+
+    assert.equal(result.repaired, true);
+    assert.equal(result.text, deferred);
+    const repairPrompt = calls[1]?.[1]?.content ?? "";
+    assert.ok(repairPrompt.includes("weiger ook NIET"), "pro-rata hatch on for a 24-uur-per-week question");
+    assert.ok(repairPrompt.includes("niet bepaalt, niet regelt of niet noemt"), "niet-regelt still present beside the hatch");
   });
 
   it("does not let an empty attempt win the penalty tie over a real (flagged) attempt", async () => {

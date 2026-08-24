@@ -8,9 +8,9 @@ import { auth } from "@/auth";
 import { decideAccess } from "@/lib/authz";
 
 /**
- * Embed-console server actions (Fase 4, admin-only, D12). Writes go through the tenant_config_writer
- * connection (getWriterDb inside @wunderstack/db); reads elsewhere use the read connection. Every
- * action re-checks admin access server-side — never trust the client to have hidden the form.
+ * Embed-console server actions (Fase 4, admin-only, D12). Writes go through the agent-instances
+ * writer connection (getWriterDb inside @wunderstack/db); reads elsewhere use the read connection.
+ * Every action re-checks admin access server-side — never trust the client to have hidden the form.
  */
 
 async function assertAdmin(): Promise<void> {

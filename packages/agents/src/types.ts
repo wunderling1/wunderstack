@@ -143,6 +143,11 @@ export interface CaoAnswerOptions {
    * trace so portal and MCP traffic can be separated (PLAN-mcp-server Fase 1a).
    */
   channel?: string;
+  /**
+   * Corpus snapshot tag from `control.agent_config` (resolved instance). Langfuse tag; not a
+   * retrieval filter.
+   */
+  corpusVersion?: string;
 }
 
 /**

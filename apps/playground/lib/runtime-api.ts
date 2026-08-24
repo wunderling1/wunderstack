@@ -1,6 +1,6 @@
 /**
  * Headers for playground calls that proxy to the runtime. When the fondsinstance has embed auth
- * configured (tenant_config.publicKey), browser requests must carry the public tenant-key — same
+ * configured (agent instance public key), browser requests must carry the public tenant-key — same
  * header the embed widget uses (`x-wunderstack-key`). The key is a public identifier (see
  * DECISION-embed-api.md), so exposing it via NEXT_PUBLIC_* matches the embed snippet model.
  */

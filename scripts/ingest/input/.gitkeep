@@ -2,3 +2,5 @@
 #   pnpm --filter @wunderstack/ingest ingest -- --fund <fund> --agent <key> --version <v>
 # This directory is the default ingestion source.
 # OOMT arbocatalogus lives in ../arbo-oomt/ (not here — this dir is the ETD CAO ingest).
+# The OOMT CAO PDF lives in ../cao-oomt/. Never drop a second CAO here: `ingest <dir>` takes every
+# supported file, and that is how elektronische-detailhandel silently gained cao_oomt (2026-08-24).

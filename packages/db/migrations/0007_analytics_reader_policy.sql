@@ -15,11 +15,10 @@ DROP POLICY IF EXISTS "interaction_events_reader_select" ON "interaction_events"
 -- write policy, so RLS denies its INSERT/UPDATE/DELETE. The table owner (app/writer role, used by
 -- the runtime) bypasses RLS entirely and writes normally.
 --
--- NOTE — NO per-tenant row filtering. `USING (true)` means any reader sees ALL rows. This is safe
--- ONLY under the v1 invariant "one instance = one tenant = one DB" (D15): a fund's database contains
--- only its own rows, and the dashboard additionally scopes every fund query by tenantId at the app
--- layer (see packages/analytics/src/kpi.ts). Before any instance holds more than one tenant's data,
--- replace this with a per-tenant predicate (e.g. USING (tenant_id = current_setting('app.tenant_id')))
--- so isolation stops depending solely on the application remembering to filter.
+-- NOTE — NO per-tenant row filtering. `USING (true)` means any reader sees ALL rows. Amended
+-- 2026-08-21 (ADR-multitenant-database, track B): isolation is still D15 (one runtime process =
+-- one fund). CREATE ROLE is unavailable, so this policy is not a fund lock. The dashboard scopes
+-- fund queries by tenantId at the app layer (packages/analytics/src/kpi.ts). Cross-fund
+-- aggregation must use control-plane counters, never SQL across fund schemas.
 CREATE POLICY "interaction_events_reader_select" ON "interaction_events"
   FOR SELECT TO PUBLIC USING (true);

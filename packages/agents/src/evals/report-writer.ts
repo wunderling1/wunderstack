@@ -23,7 +23,12 @@ const reportPath = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "ev
 // v6: gate registry (four-layer model) — GateReport gains id/layer/title + a THREE-valued status
 //     ("passed" | "failed" | "skipped"); the old boolean `passed`/`name` fields are replaced so a
 //     skipped gate can never masquerade as passed (docs/eval/GATE-ARCHITECTURE.md §4.2).
-export const EVAL_REPORT_SCHEMA_VERSION = 6;
+// v7: FundLayerReport.cases — per-case verdict/rank/retrieved refs for the fund layer, so a red fund
+//     gate is diagnosable from the artefact instead of only as an aggregate (arbo.oomt, 2026-08-23).
+// v8: FundLayerReport.documents — the corpus a fund actually held when it was measured. A fund that
+//     silently gained a second CAO read as a ranking collapse and left no trace in the artefact
+//     (elektronische-detailhandel, 2026-08-24).
+export const EVAL_REPORT_SCHEMA_VERSION = 8;
 
 export interface ReportCheck {
   name: string;
@@ -129,6 +134,15 @@ export interface RetrievalIntegrationReport {
  * intended refusal behaviour that this layer cannot score (it runs no answer scoring), so the count
  * travels with the report instead of disappearing. See `docs/eval/BESLUIT-refusal-guard-2026-07-31.md`.
  */
+/** One fund case's outcome: matched at a rank, present-but-unranked, or absent from the corpus. */
+export interface FundCaseDiagnosis {
+  id: string;
+  expectedRef: string | null;
+  verdict: "hit" | "unranked" | "label-only";
+  rank: number | null;
+  retrievedRefs: string[];
+}
+
 export interface FundLayerReport {
   key: string;
   fund: string;
@@ -143,7 +157,16 @@ export interface FundLayerReport {
     empty: number;
     required: number;
   };
+  /** The documents the fund's corpus actually held at measurement time (composition guard). */
+  documents: { title: string; version: string }[];
   unscoredNearMissCases: number;
+  /**
+   * Per-case diagnosis (2026-08-23). Without it a red fund gate is a single aggregate number and
+   * every explanation for it is a guess — which is exactly what arbo.oomt's 0.500 cost. `label-only`
+   * means the expected ref exists nowhere in the fund (fixture/ingest), `unranked` means it exists
+   * but this question never surfaced it (retrieval).
+   */
+  cases: FundCaseDiagnosis[];
 }
 
 export interface EvalReport {

@@ -191,6 +191,9 @@ importers:
       tailwindcss:
         specifier: ^4.3.2
         version: 4.3.2
+      tsx:
+        specifier: 4.22.4
+        version: 4.22.4
       tw-animate-css:
         specifier: ^1.4.0
         version: 1.4.0
@@ -270,6 +273,9 @@ importers:
       '@wunderstack/ai':
         specifier: workspace:*
         version: link:../ai
+      '@wunderstack/db':
+        specifier: workspace:*
+        version: link:../db
       '@wunderstack/rag':
         specifier: workspace:*
         version: link:../rag
@@ -364,6 +370,9 @@ importers:
       eslint:
         specifier: 10.6.0
         version: 10.6.0(jiti@2.7.0)
+      tsx:
+        specifier: 4.22.4
+        version: 4.22.4
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -522,6 +531,34 @@ importers:
       zod:
         specifier: 4.4.3
         version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: 22.20.0
+        version: 22.20.0
+      eslint:
+        specifier: 10.6.0
+        version: 10.6.0(jiti@2.7.0)
+      tsx:
+        specifier: 4.22.4
+        version: 4.22.4
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+
+  scripts/db:
+    dependencies:
+      '@wunderstack/agents':
+        specifier: workspace:*
+        version: link:../../packages/agents
+      '@wunderstack/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@wunderstack/rag':
+        specifier: workspace:*
+        version: link:../../packages/rag
+      '@wunderstack/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
     devDependencies:
       '@types/node':
         specifier: 22.20.0

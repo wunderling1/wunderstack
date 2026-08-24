@@ -1,12 +1,14 @@
 import { z } from "zod";
 
 /**
- * Tenant context (D15). One instance = one tenant = one fund (1-to-1 in v1):
+ * Tenant context (D15, track B). One runtime process = one tenant = one fund:
  *   - `tenant` is the deployment/instance identity, taken from the `TENANT` env var
  *     (e.g. `oomt`, `demo`). It is the technical key.
  *   - `fund` is the domain word used in customer context. `tenantFund()` maps a tenant to it.
  *
  * Tenant zero is the demo instance (`TENANT=demo`), whose fund is the demo corpus.
+ * The control plane may know many funds; this package stays the process boundary until
+ * CREATE ROLE exists (ADR-multitenant-database). Do not collapse D15.
  *
  * Env is parsed once here via Zod (see .cursor/rules/300-typescript.mdc): a single typed source
  * of truth for tenant identity, so no app hardcodes a tenant/fund literal.

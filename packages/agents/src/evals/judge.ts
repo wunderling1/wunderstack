@@ -4,7 +4,7 @@ import { env } from "@wunderstack/shared";
 import { z } from "zod";
 
 import { extractCitationMarkers } from "../cao/build-citations.js";
-import { findUngroundedFacts } from "../cao/hard-facts.js";
+import { findUngroundedFacts, type HardFactAgentKey } from "../hard-facts.js";
 import { parseGenerationOutput } from "../cao/parse-generation.js";
 import { verifyCitations } from "../cao/verify-citations.js";
 import { passageToHit, type GoldenCase, type GoldenPassage } from "./golden-set.js";
@@ -14,19 +14,19 @@ import { retryWithBackoff } from "./retry.js";
  * LLM-as-judge and deterministic scorers for Gate C (answer-level eval).
  * All model calls go through @wunderstack/ai (sovereign Mistral path).
  *
- * Judge != generator (self-preference bias): the answer generator runs on Mistral Small
- * (mistral-small-2603) and the LLM-judge on a DIFFERENT, pinned Mistral model, Mistral Large
- * (mistral-large-2512). A model grading its own output is biased toward it; using a different
- * family is hard within the sovereignty frame, so we at least separate the model and lean on the
- * deterministic scorers (hard-hallucination, citation-correctness, refusal) which carry no such
- * bias. This residual bias is disclosed on purpose — it is procurement-relevant.
+ * P4 (judge ≠ generator) RETIRED 2026-08-22: the eval generator must equal the production model
+ * (`DEFAULT_LLM_MODEL` = mistral-large-2512). The only sovereign alternative judge is Small; a
+ * weaker model grading Large is worse than self-preference. Soft metrics (faithfulness / relevance /
+ * completeness) therefore have full self-preference. Blocking floors (hard-hallucination, citation /
+ * dangling / under-refusal counts) stay deterministic and judge-independent. Re-introducing a model
+ * split requires updating this comment, GATE-ARCHITECTURE.md, and eval-model-coupling.test.ts.
  *
  * Both LLM scores (soft faithfulness, completeness) are non-deterministic even at temperature 0.
  * EVAL_JUDGE_SAMPLES (default 1) draws N judge samples per case and takes the median — a majority
  * vote that keeps a single flaky grade from flipping a gate. Raise it on the merge queue / nightly.
  */
 
-/** Pinned judge model — deliberately different from the generator (mistral-small-2603). */
+/** Pinned judge model — same pin as production/eval generator (P4 retired; see module comment). */
 export const JUDGE_MODEL = "mistral-large-2512";
 
 const judgeResponseSchema = z.object({
@@ -130,6 +130,14 @@ export interface CaseScores {
 
 export interface AggregateScores {
   hardHallucination: number;
+  /**
+   * Soft faithfulness / relevance / completeness: mean over ANSWERABLE cases only.
+   * Refusal cases copy `refusalCalibration` onto those fields per-case (nothing substantive
+   * to judge), so including them in the mean lets one allowed under-refusal (count ≤ 1) zero
+   * three regression metrics against a baseline recorded at underRefusal=0. Refusal quality
+   * is already `refusalCalibration` + under-refusal count. Same exclusion as citationCorrectness
+   * (Fase 4 actie 6).
+   */
   faithfulness: number;
   relevance: number;
   citationCorrectness: number;
@@ -320,9 +328,9 @@ export function scoreRefusalCalibration(answer: string, testCase: GoldenCase, no
 
 /**
  * Hard-hallucination check (deterministic, near-zero tolerance) — the gate that actually backs the
- * "hij verzint niets"-promise. The hard-fact regexes live in `../cao/hard-facts.js` (shared with the
- * production runtime guard, so the gate and the guard cannot drift). Each load-bearing fact — money
- * amounts (€), percentages, and quantities with a unit — must literally appear in the grounding.
+ * "hij verzint niets"-promise. The hard-fact regexes live in `../hard-facts.js` (shared with the
+ * production runtime guard per agentKey, so the gate and the guard cannot drift). Each load-bearing
+ * fact must literally appear in the grounding.
  *
  * Returns 1 when every hard fact is grounded (or there are none), 0 when any is invented. Binary on
  * purpose: one fabricated salary or term is a hard fail, regardless of how fluent the answer reads.
@@ -331,12 +339,13 @@ export function scoreHardHallucination(
   answer: string,
   passages: GoldenPassage[],
   userSupplied = "",
+  agentKey: HardFactAgentKey = "cao",
 ): { score: number; invented: string[] } {
   // Grounding = retrieved context + what the user themselves put on the table. A `derived` case asks
   // "en bij 24 uur?"; the agent echoing "24 uur" is not a hallucination, so the user's question/history
   // count as grounding. What stays forbidden is an invented *result* (a pro-rata total not in the CAO).
   const grounding = `${passages.map((passage) => passage.content).join(" ")} ${userSupplied}`;
-  const invented = findUngroundedFacts(answer, grounding, userSupplied);
+  const invented = findUngroundedFacts(answer, grounding, userSupplied, agentKey);
   return { score: invented.length === 0 ? 1 : 0, invented };
 }
 
@@ -520,9 +529,6 @@ export function aggregateScores(scores: CaseScores[]): AggregateScores {
   const sum = scores.reduce(
     (acc, score) => ({
       hardHallucination: acc.hardHallucination + score.hardHallucination,
-      faithfulness: acc.faithfulness + score.faithfulness,
-      relevance: acc.relevance + score.relevance,
-      completeness: acc.completeness + score.completeness,
       refusalCalibration: acc.refusalCalibration + score.refusalCalibration,
       citationVerification: acc.citationVerification + score.citationVerification,
       orphanRate: acc.orphanRate + score.orphanRate,
@@ -530,9 +536,6 @@ export function aggregateScores(scores: CaseScores[]): AggregateScores {
     }),
     {
       hardHallucination: 0,
-      faithfulness: 0,
-      relevance: 0,
-      completeness: 0,
       refusalCalibration: 0,
       citationVerification: 0,
       orphanRate: 0,
@@ -547,21 +550,23 @@ export function aggregateScores(scores: CaseScores[]): AggregateScores {
   const unverifiedCitationCount = scores.filter((score) => score.citationVerification === 0).length;
   const danglingCaseCount = scores.filter((score) => score.danglingMarkerRate > 0).length;
 
-  // citationCorrectness is averaged over ANSWERABLE cases only. A refusal has no article to cite, so
-  // the scorer returns a vacuous 1.0 for it — including those in the mean would flatter the metric and
-  // hide answerable-case citation errors. Refusal correctness is already measured by refusalCalibration
-  // + under-refusal, so citationCorrectness stays a pure answerable-case signal. (Fase 4 actie 6:
-  // requires a baseline re-record — the value shifts vs a baseline recorded over all cases.)
-  const answerableCitationCorrectness =
-    answerable.length === 0 ? 0 : answerable.reduce((acc, score) => acc + score.citationCorrectness, 0) / answerable.length;
+  // Soft quality + citationCorrectness: answerable cases only. Refusal cases copy
+  // refusalCalibration onto faith/rel/complete per-case (nothing to judge) and score a
+  // vacuous 1.0 on citationCorrectness. Including them in the mean either flatters the
+  // metric (correct refusal) or lets one allowed under-refusal (count ≤ 1) zero three
+  // regression checks against a baseline recorded at underRefusal=0. Refusal quality is
+  // already refusalCalibration + under-refusal count. (Fase 4 actie 6 for citations;
+  // 2026-08-22 for the three soft metrics.)
+  const meanAnswerable = (pick: (score: CaseScores) => number): number =>
+    answerable.length === 0 ? 0 : answerable.reduce((acc, score) => acc + pick(score), 0) / answerable.length;
 
   const count = scores.length;
   return {
     hardHallucination: sum.hardHallucination / count,
-    faithfulness: sum.faithfulness / count,
-    relevance: sum.relevance / count,
-    citationCorrectness: answerableCitationCorrectness,
-    completeness: sum.completeness / count,
+    faithfulness: meanAnswerable((score) => score.faithfulness),
+    relevance: meanAnswerable((score) => score.relevance),
+    citationCorrectness: meanAnswerable((score) => score.citationCorrectness),
+    completeness: meanAnswerable((score) => score.completeness),
     refusalCalibration: sum.refusalCalibration / count,
     citationVerification: sum.citationVerification / count,
     orphanRate: sum.orphanRate / count,

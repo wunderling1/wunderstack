@@ -25,7 +25,11 @@ dashboard (Fase 3) leest hieruit. Dit document legt de privacy- en toegangsbesli
 
 3. **Één identiteitsmodel.** `session_id` is gedeeld tussen het event-log en de Langfuse-trace, zodat
    een rij in het dashboard en een trace in Langfuse aan elkaar te knopen zijn. `tenant_id` (D15) is
-   de technische sleutel, `fund` het domeinwoord; 1-op-1 in v1.
+   de technische sleutel, `fund` het domeinwoord; 1-op-1 **per runtime-proces**. Geamendeerd
+   21 augustus 2026: het event-log verhuist van “de fondsdatabase” naar **het fondsschema** binnen
+   één Postgres ([ADR-multitenant-database.md](../architecture/ADR-multitenant-database.md) tak B).
+   Database-per-fonds blijft het promotiepad, geen default. Cross-fonds-aggregatie alleen op
+   control-tellers, nooit met SQL over fondsschema’s.
 
 4. **Read-only toegang via RLS + table-grants (D4) — géén eigen rol op managed Postgres.**
    *Herzien 2026-07-22 na live-test.* Scalingo's managed Postgres staat de app-rol **geen `CREATE ROLE`**

@@ -14,9 +14,17 @@
     "depcruise": "depcruise apps packages scripts",
     "check-ui-boundaries": "bash scripts/check-ui-boundaries.sh",
     "check-motion": "bash scripts/check-motion.sh",
+    "check-grants": "bash scripts/check-grants.sh",
     "bake-off": "pnpm --filter @wunderstack/bake-off bake-off",
     "promote-check": "pnpm --filter @wunderstack/promote check",
-    "seed:oomt": "pnpm --filter @wunderstack/ingest seed:oomt"
+    "seed:oomt": "pnpm --filter @wunderstack/ingest seed:oomt",
+    "db:provision-fund": "pnpm --filter @wunderstack/db-scripts provision",
+    "db:compare-retrieval": "pnpm --filter @wunderstack/db-scripts compare-retrieval",
+    "db:migrate-fund-schemas": "pnpm --filter @wunderstack/db-scripts migrate-fund-schemas",
+    "db:drop-public-corpus": "pnpm --filter @wunderstack/db-scripts drop-public-corpus",
+    "db:revoke-public-fund-grants": "pnpm --filter @wunderstack/db-scripts revoke-public-fund-grants",
+    "db:grant-reader": "pnpm --filter @wunderstack/db-scripts grant-reader",
+    "db:inspect-grants": "pnpm --filter @wunderstack/db-scripts inspect-grants"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

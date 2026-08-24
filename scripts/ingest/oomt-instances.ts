@@ -60,7 +60,7 @@ const ARBO_TEXTS = {
 
 const ARBO_CONFIG = {
   minScore: 0.35,
-  corpusVersion: "arbo-oomt-1",
+  corpusVersion: "arbo-oomt-2",
   starterCategories: ARBO_STARTER_CATEGORIES,
   statusLabels: {
     searching: "Catalogus doorzoeken",
@@ -97,7 +97,7 @@ async function main(): Promise<void> {
   console.log(`  NEXT_PUBLIC_WUNDERSTACK_TENANT_KEY_ARBO=${arbo.publicKey}`);
   console.log("\nThen ingest the arbocatalogus:");
   console.log(
-    "  pnpm --filter @wunderstack/ingest ingest arbo-oomt --fund oomt --agent arbo --version arbo-oomt-1 --prune",
+    "  pnpm --filter @wunderstack/ingest ingest arbo-oomt --fund oomt --agent arbo --version arbo-oomt-2 --prune",
   );
 }
 

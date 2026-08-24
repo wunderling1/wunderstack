@@ -1,56 +1,31 @@
 /**
- * Hard-fact detection for arbocatalogus answers: physical limits and safety thresholds.
+ * Arbo hard-fact detection — thin binding of the shared module to agentKey `"arbo"`.
+ * Implementation lives in `../hard-facts.ts` so the eval judge and this runtime guard cannot drift.
  */
+export {
+  ARBO_HARD_FACT_PATTERNS as HARD_FACT_PATTERNS,
+  normalizeFact,
+} from "../hard-facts.js";
 
-export const HARD_FACT_PATTERNS: RegExp[] = [
-  /\b\d+(?:[.,]\d+)?\s?(?:kg|kilogram|kilogrammen)\b/gi,
-  /\b\d+(?:[.,]\d+)?\s?(?:dB|decibel)\b/gi,
-  /\b\d+(?:[.,]\d+)?\s?ppm\b/gi,
-  /\b\d+(?:[.,]\d+)?\s?°C\b/g,
-  /\b\d+(?:[.,]\d+)?\s?(?:uur|uren|dag|dagen|week|weken|maand|maanden|jaar|jaren)\b/gi,
-];
-
-export function normalizeFact(text: string): string {
-  return text.toLowerCase().replace(/\s+/g, "");
-}
+import {
+  containsHardFact as sharedContains,
+  extractHardFacts as sharedExtract,
+  findUngroundedFacts as sharedFind,
+  hasUngroundedHardFact as sharedHasUngrounded,
+} from "../hard-facts.js";
 
 export function extractHardFacts(text: string): string[] {
-  const withoutCitations = text.replace(/\[\d+\]/g, " ");
-  const facts: string[] = [];
-  for (const pattern of HARD_FACT_PATTERNS) {
-    for (const match of withoutCitations.matchAll(pattern)) {
-      facts.push(match[0].trim());
-    }
-  }
-  return facts;
+  return sharedExtract(text, "arbo");
 }
 
 export function containsHardFact(text: string): boolean {
-  return extractHardFacts(text).length > 0;
+  return sharedContains(text, "arbo");
 }
 
 export function hasUngroundedHardFact(text: string, grounding: string, userSupplied = ""): boolean {
-  return findUngroundedFacts(text, grounding, userSupplied).length > 0;
-}
-
-/** Leading numeric token of a hard fact ("16 jaar" → "16"). */
-function numericCore(fact: string): string {
-  const match = /\d[\d.,]*/.exec(fact);
-  return match ? match[0].replace(/[.,]+$/, "") : "";
+  return sharedHasUngrounded(text, grounding, userSupplied, "arbo");
 }
 
 export function findUngroundedFacts(text: string, grounding: string, userSupplied = ""): string[] {
-  const normalizedGrounding = normalizeFact(`${grounding} ${userSupplied}`);
-  const userNumbers = new Set(
-    [...userSupplied.matchAll(/\d[\d.,]*/g)].map((match) => match[0].replace(/[.,]+$/, "")),
-  );
-  return extractHardFacts(text).filter((fact) => {
-    if (normalizedGrounding.includes(normalizeFact(fact))) {
-      return false;
-    }
-    // A number the user already stated is a premise, even when the answer adds an implicit unit
-    // ("mijn leerling is 16" → "16 jaar"). Same rule as cao/hard-facts.ts.
-    const number = numericCore(fact);
-    return !(number.length > 0 && userNumbers.has(number));
-  });
+  return sharedFind(text, grounding, userSupplied, "arbo");
 }

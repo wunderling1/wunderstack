@@ -1,5 +1,15 @@
 import { embed } from "@wunderstack/ai";
-import { chunks, cosineDistance, documents, and, eq, getDb, sql } from "@wunderstack/db";
+import {
+  chunks,
+  cosineDistance,
+  documents,
+  and,
+  eq,
+  sql,
+  fundSchemaName,
+  withSearchPath,
+  type Database,
+} from "@wunderstack/db";
 import { EMBEDDING_CONFIG } from "@wunderstack/shared";
 import { requireRerankConfig } from "@wunderstack/shared";
 import { z } from "zod";
@@ -50,6 +60,8 @@ export interface RetrievedChunkSource {
   sourceUri: string;
   fund: string;
   agentKey: string;
+  /** Physical schema SET LOCAL used for this search. Evidence, not a caller-supplied label. */
+  schemaName: string;
   version: string;
 }
 
@@ -73,7 +85,7 @@ export interface RetrievedChunk {
   metadata: Record<string, unknown>;
 }
 
-async function embedQuery(query: string): Promise<number[]> {
+export async function embedQuery(query: string): Promise<number[]> {
   const result = await embed({
     texts: [query],
     model: EMBEDDING_CONFIG.model,
@@ -110,21 +122,64 @@ export interface RetrievePhaseTimings {
   searchMs: number;
 }
 
+export interface RetrieveFromVectorInput {
+  fund: string;
+  agentKey: string;
+  minScore?: number;
+  candidateK?: number;
+  /**
+   * Physical schema to resolve unqualified `documents`/`chunks` against (track B:
+   * organizational search_path via SET LOCAL in a transaction). Omit to use
+   * `fund_<fund>` (with `public` still on the path for pgvector operators).
+   * Do not mix fund schemas.
+   */
+  searchPath?: string;
+}
+
 /**
- * Retrieval with per-phase timings for Langfuse latency budgets.
+ * Physical schema SET LOCAL will use. Hits report this as `source.schemaName` — callers cannot
+ * assign a different label than the path that was searched.
  */
+export function searchPathForRetrieve(input: { fund: string; searchPath?: string }): string {
+  return input.searchPath ?? fundSchemaName(input.fund);
+}
+
+/**
+ * Exact (flat) pgvector search with a precomputed query vector. Used by the PR3
+ * copy-identity measurement so `public` and `fund_<key>` see the same embedding.
+ * No rewrite, no rerank, no sibling expansion.
+ */
+export async function retrieveFromVector(
+  queryVector: number[],
+  input: RetrieveFromVectorInput,
+): Promise<{ chunks: RetrievedChunk[]; searchMs: number }> {
+  const config = requireRerankConfig();
+  const candidateK = input.candidateK ?? config.candidateK;
+  const minScore = input.minScore ?? 0;
+  const schemaName = searchPathForRetrieve(input);
+  const params = { fund: input.fund, agentKey: input.agentKey, candidateK, minScore, schemaName };
+
+  return withSearchPath(schemaName, (tx) => searchByVector(tx, queryVector, params));
+}
+
+/** Retrieval with per-phase timings for Langfuse latency budgets. */
 export async function retrieveValidatedTimed(
   input: ParsedRetrieveInput,
 ): Promise<{ chunks: RetrievedChunk[]; timings: RetrievePhaseTimings }> {
-  const { query, fund, agentKey, minScore } = input;
-  const config = requireRerankConfig();
-  const candidateK = input.candidateK ?? config.candidateK;
-
   const embedStart = performance.now();
-  const queryVector = await embedQuery(query);
+  const queryVector = await embedQuery(input.query);
   const embedMs = performance.now() - embedStart;
 
-  const db = getDb();
+  const { chunks: hits, searchMs } = await retrieveFromVector(queryVector, input);
+  return { chunks: hits, timings: { embedMs, searchMs } };
+}
+
+async function searchByVector(
+  db: Pick<Database, "select">,
+  queryVector: number[],
+  input: { fund: string; agentKey: string; minScore: number; candidateK: number; schemaName: string },
+): Promise<{ chunks: RetrievedChunk[]; searchMs: number }> {
+  const { fund, agentKey, minScore, candidateK, schemaName } = input;
   const distance = cosineDistance(chunks.embedding, queryVector);
 
   const searchStart = performance.now();
@@ -166,6 +221,7 @@ export async function retrieveValidatedTimed(
         sourceUri: row.sourceUri,
         fund: row.fund,
         agentKey: row.agentKey,
+        schemaName,
         version: row.version,
       },
       structure: {
@@ -179,5 +235,5 @@ export async function retrieveValidatedTimed(
     }))
     .filter((hit) => hit.score >= minScore);
 
-  return { chunks: mapped, timings: { embedMs, searchMs } };
+  return { chunks: mapped, searchMs };
 }

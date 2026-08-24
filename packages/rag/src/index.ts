@@ -83,8 +83,12 @@ export async function retrieveContext(input: RetrieveContextInput): Promise<Asse
 
 export {
   retrieve,
+  retrieveFromVector,
+  embedQuery,
+  searchPathForRetrieve,
   retrieveInputSchema,
   type RetrieveInput,
+  type RetrieveFromVectorInput,
   type RetrievedChunk,
   type RetrievedChunkSource,
   type RetrievedChunkStructure,
@@ -96,10 +100,15 @@ export { assemble, type AssembledContext, type RetrievalTimings } from "./assemb
 export {
   fetchParentPassage,
   listCorpora,
+  listCorpusDocuments,
+  listStructuralRefs,
   passageInputSchema,
+  structuralRefsInputSchema,
+  type CorpusDocument,
   type CorpusKey,
   type PassageInput,
   type PassageResult,
+  type StructuralRefs,
 } from "./passage.js";
 // Re-exported so short-lived callers (the eval run) can close the DB pool and exit cleanly without
 // depending on @wunderstack/db directly. Long-lived servers keep the pool and never call this.

@@ -11,14 +11,17 @@
     "./evals/fund-ledger": {
       "types": "./src/evals/fund-ledger.ts",
       "default": "./src/evals/fund-ledger.ts"
+    },
+    "./evals/golden-set": {
+      "types": "./src/evals/golden-set.ts",
+      "default": "./src/evals/golden-set.ts"
     }
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test:unit": "tsx --test 'src/**/*.test.ts'",
-    "test": "tsx --env-file-if-exists=../../.env src/evals/cao.eval.ts && tsx --env-file-if-exists=../../.env src/evals/arbo.eval.ts",
-    "test:arbo": "tsx --env-file-if-exists=../../.env src/evals/arbo.eval.ts",
+    "test": "tsx --env-file-if-exists=../../.env src/evals/cao.eval.ts",
     "smoke": "tsx --env-file-if-exists=../../.env src/smoke.ts",
     "latency:mcp": "tsx --env-file-if-exists=../../.env src/latency-mcp.ts",
     "sync-model-prices": "tsx --env-file-if-exists=../../.env src/sync-model-prices.ts"
@@ -35,6 +38,7 @@
     "@mastra/langfuse": "^1.4.2",
     "@mastra/observability": "^1.15.2",
     "@wunderstack/ai": "workspace:*",
+    "@wunderstack/db": "workspace:*",
     "@wunderstack/rag": "workspace:*",
     "@wunderstack/shared": "workspace:*",
     "zod": "4.4.3"

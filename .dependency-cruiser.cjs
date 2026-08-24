@@ -50,6 +50,14 @@ module.exports = {
       to: { path: "^(apps|scripts)/" },
     },
     {
+      name: "no-apps-to-fund-schema",
+      comment:
+        "Apps must not import fund-schema tables directly (ADR-multitenant-database). Retrieval and corpus reads go through packages/rag or @wunderstack/analytics.",
+      severity: "error",
+      from: { path: "^apps/" },
+      to: { path: "^packages/db/src/schema/fund/" },
+    },
+    {
       name: "no-circular",
       comment: "Circular dependencies make the module graph fragile; break the cycle.",
       severity: "error",

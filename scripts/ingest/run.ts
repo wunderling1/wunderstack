@@ -22,7 +22,7 @@ import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
 import { embed } from "@wunderstack/ai";
-import { and, chunks as chunksTable, closeDb, documents, eq, getDb, inArray, sql } from "@wunderstack/db";
+import { and, chunks as chunksTable, closeDb, documents, ensureFundTables, eq, inArray, resolveInstanceByFundAgent, sql, withFundSchema } from "@wunderstack/db";
 import { EMBEDDING_CONFIG, env } from "@wunderstack/shared";
 
 import { chunk, type Chunk } from "./chunk.js";
@@ -181,12 +181,13 @@ async function ingestFile(options: CliOptions, filePath: string): Promise<FileOu
     throw new Error(`No chunks produced for ${filePath}; nothing to ingest.`);
   }
 
-  const db = getDb();
-  const existing = await db
-    .select({ contentHash: documents.contentHash })
-    .from(documents)
-    .where(and(eq(documents.sourceUri, sourceUri), eq(documents.agentKey, options.agentKey)))
-    .limit(1);
+  const existing = await withFundSchema(options.fund, (db) =>
+    db
+      .select({ contentHash: documents.contentHash })
+      .from(documents)
+      .where(and(eq(documents.sourceUri, sourceUri), eq(documents.agentKey, options.agentKey)))
+      .limit(1),
+  );
 
   // Idempotency is keyed on the parsed SOURCE TEXT, not the chunk output. A chunker/config change
   // (same PDF) therefore looks "unchanged" and would be skipped; --force re-chunks and re-embeds.
@@ -197,7 +198,7 @@ async function ingestFile(options: CliOptions, filePath: string): Promise<FileOu
 
   const vectors = await embedChunks(pieces);
 
-  await db.transaction(async (tx) => {
+  await withFundSchema(options.fund, async (tx) => {
     const [document] = await tx
       .insert(documents)
       .values({
@@ -283,7 +284,7 @@ export function isPruneCandidate(
  * Chunks go with the document row via the schema's ON DELETE CASCADE.
  */
 async function pruneFund(fund: string, agentKey: string, keptSourceUris: string[]): Promise<PrunedDocument[]> {
-  const db = getDb();
+  return withFundSchema(fund, async (db) => {
   const held = await db
     .select({
       id: documents.id,
@@ -312,10 +313,25 @@ async function pruneFund(fund: string, agentKey: string, keptSourceUris: string[
     sourceUri: doc.sourceUri,
     chunkCount: countByDocument.get(doc.id) ?? 0,
   }));
+  });
 }
 
 async function main(): Promise<void> {
   const options = parseCli();
+  if (!options.dryRun) {
+    await ensureFundTables(options.fund);
+    const resolved = await resolveInstanceByFundAgent(options.fund, options.agentKey).catch(() => null);
+    if (resolved) {
+      console.log(
+        `control.agent_instances: ${resolved.fundKey}/${resolved.agentKey} → schema ${resolved.schemaName}` +
+          `${resolved.connectionKey ? ` (connection_key set)` : ""}`,
+      );
+    } else {
+      console.log(
+        `control.agent_instances: no row for ${options.fund}/${options.agentKey} (ingest continues; instance may follow corpus).`,
+      );
+    }
+  }
   const files = await listInputFiles(options.inputPath);
 
   if (files.length === 0) {

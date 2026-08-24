@@ -2,6 +2,7 @@ import { Chat } from "@/components/chat/chat";
 import { PlaygroundSidebar } from "@/components/chat/playground-sidebar";
 import { availableFunds } from "@/lib/fund-scope";
 import { getFundTheme } from "@/lib/fund-theme";
+import { arboSurfaceError } from "@/lib/public-env";
 import { fetchTenantPublicConfig, type PlaygroundAgent } from "@/lib/runtime-config";
 
 /**
@@ -17,6 +18,17 @@ export default async function DemoPage({
   const agentParam = params.agent;
   const requestedFund = typeof fundParam === "string" ? fundParam : undefined;
   const agent: PlaygroundAgent = agentParam === "arbo" ? "arbo" : "cao";
+  const arboError = agent === "arbo" ? arboSurfaceError() : null;
+
+  if (arboError) {
+    return (
+      <main className="flex h-dvh flex-col items-center justify-center bg-page px-6 text-center">
+        <p role="alert" className="max-w-md text-sm text-text">
+          {arboError}
+        </p>
+      </main>
+    );
+  }
 
   const funds = availableFunds(agent);
   const fund = requestedFund && funds.includes(requestedFund) ? requestedFund : (funds[0] as string);

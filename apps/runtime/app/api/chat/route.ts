@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { recordInteractionEvent, type InteractionOutcome } from "@wunderstack/analytics";
 import { getTenantId } from "@wunderstack/tenant";
 import { env } from "@wunderstack/shared";
-import { getAgentById, resolveAgentIdFromConfig } from "@/lib/agent";
+import { getAgentById } from "@/lib/agent";
 import {
   createChatWorkSignal,
   DEFAULT_CHAT_HEARTBEAT_MS,
@@ -11,7 +11,7 @@ import {
 } from "@/lib/chat-stream";
 import { corsHeaders, preflight } from "@/lib/cors";
 import { resolveEmbedAuth } from "@/lib/embed-auth";
-import { resolveFundScope } from "@/lib/fund-scope";
+import { loadCorpusVersion, resolveRequestScope } from "@/lib/instance-scope";
 import { readBodyBounded } from "@/lib/http";
 import { acquireSlot, checkDailyCap, checkRateLimit, clientKey, releaseSlot } from "@/lib/rate-limit";
 import { tenantCorsAllowlist } from "@/lib/tenant-cors";
@@ -103,12 +103,12 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: "invalid_request" }, { status: 400, headers: cors });
   }
 
-  const scope = resolveFundScope(parsed.data.fund);
+  const scope = resolveRequestScope(auth.config, parsed.data.fund);
   if (!scope.ok) {
     return Response.json({ error: scope.error }, { status: scope.status, headers: cors });
   }
 
-  const agentId = resolveAgentIdFromConfig(auth.config);
+  const agentId = scope.agentKey;
   let agent;
   try {
     agent = getAgentById(agentId);
@@ -124,6 +124,7 @@ export async function POST(request: Request): Promise<Response> {
   // Clients self-report the surface (playground | embed); default to "api" for untagged callers.
   const channel = parsed.data.channel ?? "api";
   const tenantId = getTenantId();
+  const corpusVersion = await loadCorpusVersion(fund, agentId);
 
   // Global daily ceiling: a coarse backstop on the demo's total inference bill, counted only for
   // requests that reach the expensive path (after validation), independent of per-IP/per-key limits.
@@ -177,6 +178,7 @@ export async function POST(request: Request): Promise<Response> {
             sessionId,
             channel,
             ...(userId === undefined ? {} : { userId }),
+            ...(corpusVersion === undefined ? {} : { corpusVersion }),
           },
         ),
         enqueue: (chunk) => controller.enqueue(chunk),

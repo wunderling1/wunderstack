@@ -140,7 +140,7 @@ describe("scoreCitationVerification — refusal prose scores the delivered outpu
   });
 });
 
-describe("aggregateScores — citationCorrectness (Fase 4 actie 6)", () => {
+describe("aggregateScores — answerable-only soft metrics (actie 6 + 2026-08-22)", () => {
   function caseScore(overrides: Partial<CaseScores>): CaseScores {
     return {
       hardHallucination: 1,
@@ -174,5 +174,73 @@ describe("aggregateScores — citationCorrectness (Fase 4 actie 6)", () => {
   it("returns 0 citationCorrectness when there are no answerable cases", () => {
     const aggregate = aggregateScores([caseScore({ category: "refusal", refused: true, citationCorrectness: 1 })]);
     assert.equal(aggregate.citationCorrectness, 0);
+  });
+
+  it("does not let an allowed under-refusal zero faithfulness/relevance/completeness", () => {
+    // Mirrors the 2026-08-22 PR-hot-path fail: under-refusal count ≤ 1 is allowed, but copying
+    // refusalCalibration=0 onto faith/rel/complete and averaging over all cases dropped relevance
+    // 0.002 below baseline−tolerance. Refusal quality stays on refusalCalibration + the count gate.
+    const scores: CaseScores[] = [
+      caseScore({ category: "in_scope", faithfulness: 1, relevance: 0.95, completeness: 0.9 }),
+      caseScore({ category: "in_scope", faithfulness: 1, relevance: 0.95, completeness: 0.9 }),
+      caseScore({
+        category: "refusal",
+        refused: false,
+        refusalCalibration: 0,
+        faithfulness: 0,
+        relevance: 0,
+        completeness: 0,
+      }),
+    ];
+    const aggregate = aggregateScores(scores);
+    assert.equal(aggregate.faithfulness, 1);
+    assert.equal(aggregate.relevance, 0.95);
+    assert.equal(aggregate.completeness, 0.9);
+    // refusalCalibration still averages over ALL cases: (1 + 1 + 0) / 3.
+    assert.equal(aggregate.refusalCalibration, 2 / 3);
+    assert.equal(aggregate.underRefusalCount, 1);
+  });
+
+  it("does not let a correct refusal lift faithfulness/relevance/completeness", () => {
+    const scores: CaseScores[] = [
+      caseScore({
+        category: "in_scope",
+        faithfulness: 0.6,
+        relevance: 0.6,
+        completeness: 0.6,
+        refusalCalibration: 0.6,
+      }),
+      caseScore({
+        category: "refusal",
+        refused: true,
+        refusalCalibration: 1,
+        faithfulness: 1,
+        relevance: 1,
+        completeness: 1,
+      }),
+    ];
+    const aggregate = aggregateScores(scores);
+    assert.equal(aggregate.faithfulness, 0.6);
+    assert.equal(aggregate.relevance, 0.6);
+    assert.equal(aggregate.completeness, 0.6);
+    // refusalCalibration still averages over ALL cases: (0.6 + 1) / 2.
+    assert.equal(aggregate.refusalCalibration, 0.8);
+  });
+
+  it("returns 0 faithfulness/relevance/completeness when there are no answerable cases", () => {
+    const aggregate = aggregateScores([
+      caseScore({
+        category: "refusal",
+        refused: true,
+        refusalCalibration: 1,
+        faithfulness: 1,
+        relevance: 1,
+        completeness: 1,
+      }),
+    ]);
+    assert.equal(aggregate.faithfulness, 0);
+    assert.equal(aggregate.relevance, 0);
+    assert.equal(aggregate.completeness, 0);
+    assert.equal(aggregate.refusalCalibration, 1);
   });
 });

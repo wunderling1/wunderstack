@@ -1,9 +1,9 @@
 import { fetchPassage } from "@wunderstack/agents";
 import { getTenantId } from "@wunderstack/tenant";
-import { getAgentById, resolveAgentIdFromConfig } from "@/lib/agent";
+import { getAgentById } from "@/lib/agent";
 import { corsHeaders, preflight } from "@/lib/cors";
 import { resolveEmbedAuth } from "@/lib/embed-auth";
-import { resolveFundScope } from "@/lib/fund-scope";
+import { resolveRequestScope } from "@/lib/instance-scope";
 import { readBodyBounded } from "@/lib/http";
 import { checkRateLimit, clientKey } from "@/lib/rate-limit";
 import { tenantCorsAllowlist } from "@/lib/tenant-cors";
@@ -58,12 +58,12 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: "invalid_request" }, { status: 400, headers: cors });
   }
 
-  const scope = resolveFundScope(parsed.data.fund);
+  const scope = resolveRequestScope(auth.config, parsed.data.fund);
   if (!scope.ok) {
     return Response.json({ error: scope.error }, { status: scope.status, headers: cors });
   }
 
-  const agentId = resolveAgentIdFromConfig(auth.config);
+  const agentId = scope.agentKey;
   try {
     getAgentById(agentId);
   } catch {

@@ -1,0 +1,30 @@
+{
+  "name": "@wunderstack/db-scripts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "provision": "tsx --env-file-if-exists=../../.env provision-fund.ts",
+    "compare-retrieval": "tsx --env-file-if-exists=../../.env compare-retrieval.ts",
+    "migrate-fund-schemas": "tsx --env-file-if-exists=../../.env migrate-fund-schemas.ts",
+    "drop-public-corpus": "tsx --env-file-if-exists=../../.env drop-public-corpus.ts",
+    "revoke-public-fund-grants": "tsx --env-file-if-exists=../../.env revoke-public-fund-grants.ts",
+    "grant-reader": "tsx --env-file-if-exists=../../.env grant-reader.ts",
+    "inspect-grants": "tsx --env-file-if-exists=../../.env inspect-grants.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test:unit": "tsx --test *.test.ts"
+  },
+  "dependencies": {
+    "@wunderstack/agents": "workspace:*",
+    "@wunderstack/db": "workspace:*",
+    "@wunderstack/rag": "workspace:*",
+    "@wunderstack/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.0",
+    "eslint": "10.6.0",
+    "tsx": "4.22.4",
+    "typescript": "6.0.3"
+  }
+}
