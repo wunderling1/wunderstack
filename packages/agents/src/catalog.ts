@@ -1,7 +1,10 @@
 import { z } from "zod";
 
 import { createGroundedAgent } from "./runtime/create-agent.js";
-import { AGENT_PROFILES, isAgentKey, type AgentKey } from "./runtime/registry.js";
+import {
+  listAgentProfiles,
+  resolveRegisteredProfile,
+} from "./runtime/registry.js";
 import type { GroundedAgent } from "./types.js";
 
 /**
@@ -21,7 +24,7 @@ let cachedAgents = new Map<string, GroundedAgent>();
 
 /** List all agents available in the catalog. */
 export function listAgents(): AgentDescriptor[] {
-  return Object.values(AGENT_PROFILES).map((profile) => ({
+  return listAgentProfiles().map((profile) => ({
     id: profile.agentKey,
     label: profile.label,
     description: profile.description,
@@ -30,18 +33,18 @@ export function listAgents(): AgentDescriptor[] {
 
 /** Resolve an agent by id; throws when unknown. */
 export function getAgent(id: string): GroundedAgent {
-  if (!isAgentKey(id)) {
+  const profile = resolveRegisteredProfile(id);
+  if (!profile) {
     throw new Error(`Unknown agent: ${id}`);
   }
-  const key: AgentKey = id;
 
-  const cached = cachedAgents.get(key);
+  const cached = cachedAgents.get(id);
   if (cached) {
     return cached;
   }
 
-  const instance = createGroundedAgent(AGENT_PROFILES[key]);
-  cachedAgents.set(key, instance);
+  const instance = createGroundedAgent(profile);
+  cachedAgents.set(id, instance);
   return instance;
 }
 
