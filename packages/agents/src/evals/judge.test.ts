@@ -3,8 +3,60 @@ import { describe, it } from "node:test";
 
 import type { ChatMessage } from "@wunderstack/ai";
 
+import { NOT_FOUND_MESSAGE } from "../cao/prompt.js";
+
 import type { GoldenCase, GoldenPassage } from "./golden-set.js";
-import { aggregateScores, parseJudgeOutput, runJudgeWithParseRetry, scoreCitationVerification, type CaseScores } from "./judge.js";
+import {
+  aggregateScores,
+  answerRefuses,
+  parseJudgeOutput,
+  runJudgeWithParseRetry,
+  scoreCitationVerification,
+  type CaseScores,
+} from "./judge.js";
+
+describe("answerRefuses — grounded scope-refusal vs adjacent grant (etd-025 / etd-032)", () => {
+  it("still treats the exact NOT_FOUND_MESSAGE as a refusal", () => {
+    assert.equal(answerRefuses(NOT_FOUND_MESSAGE, NOT_FOUND_MESSAGE), true);
+  });
+
+  it("still treats 'niet terugvinden' as a refusal", () => {
+    assert.equal(
+      answerRefuses("Ik kan dit niet terugvinden in de CAO-documenten waar ik toegang toe heb.", NOT_FOUND_MESSAGE),
+      true,
+    );
+  });
+
+  it("recognises a grounded scope-refusal with a verified citation (etd-025)", () => {
+    // PR #29 artefact (run 32737827106): finishReason=stop, 338 chars, hardHallucination=1.
+    // The CAO's own referenceAnswer for this case is the same shape. Treating only the template
+    // as a refusal made the golden set and the gate reward opposite behaviour.
+    const prose = [
+      "De CAO loopt af op 31 december 2023 en bepaalt geen loonsverhoging per 1 januari 2024 [1].",
+      "",
+      "Vanaf 1 januari 2024 geldt dus geen cao meer uit deze documenten, en daarmee ook geen automatische loonsverhoging op die datum.",
+    ].join("\n");
+    assert.equal(answerRefuses(prose, NOT_FOUND_MESSAGE), true);
+  });
+
+  it("does not treat a scope-negation that then grants an adjacent entitlement as a refusal (etd-032)", () => {
+    // Same artefact. First sentence is the etd-025 shape; the second assigns travel reimbursement
+    // from the reiskosten distractor. A regex that only looks for "staat geen" would green this
+    // without the prompt collision being fixed — the same form as the truncation-split we refused.
+    const prose = [
+      "In deze CAO staat geen regeling voor een fietsplan of een vaste fietsvergoeding [1].",
+      "",
+      "De CAO regelt alleen een vergoeding voor reizen die verder gaan dan het normale woon-werkverkeer, en dan alleen als je daarvoor toestemming of opdracht krijgt van je werkgever [1].",
+    ].join("\n");
+    assert.equal(answerRefuses(prose, NOT_FOUND_MESSAGE), false);
+  });
+
+  it("does not treat an in-corpus documented no as a refusal (etd-009)", () => {
+    const prose =
+      "Nee, voor het normale woon-werkverkeer bestaat geen recht op vergoeding. Alleen als je voor het werk verder moet reizen dan de gebruikelijke woon-werkafstand, krijg je voor dat extra deel een vergoeding.";
+    assert.equal(answerRefuses(prose, NOT_FOUND_MESSAGE), false);
+  });
+});
 
 describe("parseJudgeOutput", () => {
   it("parses a clean JSON object", () => {

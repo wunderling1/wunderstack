@@ -311,9 +311,48 @@ export function scoreCitationCorrectness(
   return mentionsArticle ? 0.6 : 0;
 }
 
-/** Whether an answer is a refusal ("niet gevonden") rather than a substantive answer. */
+/**
+ * Meta-level "this CAO does not contain/determine X" — not an in-corpus documented no
+ * ("heeft geen recht op woon-werkvergoeding"). Used to recognise a grounded scope-refusal
+ * (etd-025) without treating a CAO-stated 'nee' as a refusal (etd-009).
+ */
+const SCOPE_NEGATION =
+  /(?:deze\s+)?cao[\s\S]{0,160}(?:bepaalt|regelt|bevat|kent)\s+geen/i;
+const SCOPE_ABSENCE =
+  /(?:in\s+deze\s+cao|deze\s+cao)[\s\S]{0,80}staat\s+geen|(?:staat|bevat)\s+(?:er\s+)?geen\s+regeling|staat\s+niet\s+in\s+(?:deze\s+)?(?:cao|tekst|documenten)|niet\s+in\s+(?:deze\s+)?cao|valt\s+buiten\s+(?:deze\s+)?cao/i;
+
+/**
+ * A subsequent (or same-span) grant of an adjacent entitlement. The etd-032 form: after
+ * "staat geen fietsplan" it still assigns travel reimbursement. That is under-refusal, not a
+ * scope-refusal. Matching this on the negation span itself covers a one-sentence collapse.
+ */
+const GRANTS_ENTITLEMENT =
+  /\bregelt alleen\b|\bheeft recht op\b|\b(?:krijgt|ontvangt)\s+(?:hij|zij|de werknemer|een)\b/i;
+
+function hasScopeNegation(text: string): boolean {
+  return SCOPE_NEGATION.test(text) || SCOPE_ABSENCE.test(text);
+}
+
+/**
+ * Whether an answer is a refusal rather than a substantive answer.
+ *
+ * The template `NOT_FOUND_MESSAGE` and "niet terugvinden" remain the production contract. A
+ * grounded scope-refusal (the CAO does not determine X, with no entitlement granted after that
+ * negation) also counts — etd-025's own `referenceAnswer` is that form, and scoring only the
+ * template made the golden set and the gate reward opposite behaviour.
+ *
+ * A scope-negation that then assigns an adjacent right (etd-032: no fietsplan, then travel
+ * reimbursement from the same distractor) is NOT a refusal. Hard-hallucination stays absolute:
+ * a fabricated fact in the pre-sentinel prose still fails that gate even when this returns true.
+ */
 export function answerRefuses(answer: string, notFoundMessage: string): boolean {
-  return answer.includes(notFoundMessage) || /niet terugvinden/i.test(answer);
+  if (answer.includes(notFoundMessage) || /niet terugvinden/i.test(answer)) {
+    return true;
+  }
+  if (!hasScopeNegation(answer)) {
+    return false;
+  }
+  return !GRANTS_ENTITLEMENT.test(answer);
 }
 
 export function scoreRefusalCalibration(answer: string, testCase: GoldenCase, notFoundMessage: string): number {

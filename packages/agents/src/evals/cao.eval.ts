@@ -261,6 +261,15 @@ function promptContractChecks(): Check[] {
       ok: instructions.includes(NOT_FOUND_MESSAGE) && NOT_FOUND_MESSAGE.trim().length > 0,
     },
     {
+      // The documented-no exception used to quote the reiskosten passage verbatim, which is the
+      // distractor for etd-032 (fietsplan). The model then treated that near-miss as a documented
+      // no and answered it. The exception is only for the asked subject.
+      name: "prompt: documented-no applies only to the asked subject",
+      ok:
+        /gevraagde onderwerp/i.test(instructions) &&
+        !/woon-werkverkeer bestaat geen recht op vergoeding/i.test(instructions),
+    },
+    {
       name: "prompt: user turn carries both context and question",
       ok: prompt.includes("[1] voorbeeldcontext") && prompt.includes("Voorbeeldvraag?"),
     },
@@ -1205,6 +1214,7 @@ async function multiTurnServeChecks(): Promise<Check[]> {
               ],
               temperature: GENERATION_CONFIG.temperature,
               maxTokens: GENERATION_CONFIG.maxTokens,
+              stop: GENERATION_CONFIG.stop,
             }),
           { baseDelayMs: 5000, maxAttempts: 8 },
         ).then((result) => ({
@@ -1450,6 +1460,7 @@ async function answerQualityChecks(): Promise<Check[]> {
               // Single source of truth: packages/shared/src/config/generation.ts (same as production agent).
               temperature: GENERATION_CONFIG.temperature,
               maxTokens: GENERATION_CONFIG.maxTokens,
+              stop: GENERATION_CONFIG.stop,
             }),
           { baseDelayMs: 5000, maxAttempts: 8 },
         ).then((result) => ({
