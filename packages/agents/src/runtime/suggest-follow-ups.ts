@@ -1,6 +1,6 @@
 import { generateText } from "@wunderstack/ai";
 
-import type { CaoUsage } from "../types.js";
+import type { AgentUsage } from "../types.js";
 
 /**
  * Post-answer follow-up suggestions (grounded chips). A cheap Mistral Small call that proposes
@@ -22,7 +22,7 @@ export const FOLLOW_UP_TIMEOUT_MS = 8_000;
 
 const MAX_QUESTIONS = 3;
 const MAX_QUESTION_LENGTH = 200;
-const ZERO_USAGE: CaoUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+const ZERO_USAGE: AgentUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
 export interface SuggestFollowUpsInput {
   /** The verified Dutch answer that was just shown to the user. */
@@ -36,7 +36,7 @@ export interface SuggestFollowUpsInput {
 
 export interface SuggestFollowUpsResult {
   questions: string[];
-  usage: CaoUsage;
+  usage: AgentUsage;
 }
 
 function normalizeWhitespace(text: string): string {
@@ -278,7 +278,7 @@ export async function suggestFollowUps(input: SuggestFollowUpsInput): Promise<Su
   }
 }
 
-export function addUsage(a: CaoUsage, b: CaoUsage): CaoUsage {
+export function addUsage(a: AgentUsage, b: AgentUsage): AgentUsage {
   return {
     promptTokens: a.promptTokens + b.promptTokens,
     completionTokens: a.completionTokens + b.completionTokens,

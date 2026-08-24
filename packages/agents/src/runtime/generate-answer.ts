@@ -1,9 +1,9 @@
 import type { ChatMessage, TokenUsage } from "@wunderstack/ai";
 
 import { extractCitationMarkers } from "./build-citations.js";
-import { containsHardFact, findUngroundedFacts } from "./hard-facts.js";
+import { containsHardFact, findUngroundedFacts } from "../cao/hard-facts.js";
 import { parseGenerationOutput } from "./parse-generation.js";
-import { NOT_FOUND_MESSAGE } from "./prompt.js";
+import { NOT_FOUND_MESSAGE } from "../cao/prompt.js";
 import { verifyCitations } from "./verify-citations.js";
 
 /**

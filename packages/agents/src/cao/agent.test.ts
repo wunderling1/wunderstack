@@ -3,9 +3,9 @@ import { describe, it } from "node:test";
 
 import type { RetrievedChunk } from "@wunderstack/rag";
 
-import type { CaoStreamEvent, CaoUsage } from "../types.js";
+import type { AgentStreamEvent, AgentUsage } from "../types.js";
 import { settledAnswerBody, settledAnswerEvents, verifyAndBuild } from "./agent.js";
-import { CITATIONS_SENTINEL } from "./generation-schema.js";
+import { CITATIONS_SENTINEL } from "../runtime/generation-schema.js";
 import { NOT_FOUND_MESSAGE, UNVERIFIABLE_MESSAGE } from "./prompt.js";
 import type { RetrievalOutput } from "./tools.js";
 
@@ -17,7 +17,7 @@ import type { RetrievalOutput } from "./tools.js";
  * A future change that streams model tokens before verification would have to abandon this seam.
  */
 
-const ZERO_USAGE: CaoUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+const ZERO_USAGE: AgentUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
 function retrievalWithGrounding(grounding: string): RetrievalOutput {
   return {
@@ -166,7 +166,7 @@ describe("settledAnswerEvents — no ungrounded hard fact can be streamed", () =
       unverifiable: false,
       usage: ZERO_USAGE,
     };
-    const events: CaoStreamEvent[] = [...settledAnswerEvents(result, "trace-1")];
+    const events: AgentStreamEvent[] = [...settledAnswerEvents(result, "trace-1")];
     assert.deepEqual(
       events.map((event) => event.type),
       ["text", "citations", "done"],
@@ -180,7 +180,7 @@ describe("settledAnswerEvents — no ungrounded hard fact can be streamed", () =
   it("streams only the not-found message when the guard tripped — never the ungrounded number", () => {
     const retrieval = retrievalWithGrounding("Een fulltimer heeft recht op 190 uur vakantie per jaar.");
     const built = verifyAndBuild("Bij deeltijd is dat 120 uur.", retrieval, "");
-    const events: CaoStreamEvent[] = [...settledAnswerEvents({ ...built, usage: ZERO_USAGE }, null)];
+    const events: AgentStreamEvent[] = [...settledAnswerEvents({ ...built, usage: ZERO_USAGE }, null)];
 
     assert.ok(!JSON.stringify(events).includes("120 uur"), "the ungrounded number never reaches the stream");
     const textEvents = events.filter((event) => event.type === "text");
@@ -191,7 +191,7 @@ describe("settledAnswerEvents — no ungrounded hard fact can be streamed", () =
   });
 
   it("omits the text event for an empty answer", () => {
-    const events: CaoStreamEvent[] = [
+    const events: AgentStreamEvent[] = [
       ...settledAnswerEvents(
         {
           answer: "",
@@ -214,7 +214,7 @@ describe("settledAnswerEvents — no ungrounded hard fact can be streamed", () =
 
 describe("settledAnswerBody — prefix for optional followups before done", () => {
   it("emits text then citations without done (live stream inserts followups in between)", () => {
-    const events: CaoStreamEvent[] = [
+    const events: AgentStreamEvent[] = [
       ...settledAnswerBody({
         answer: "Je hebt recht op 190 uur.",
         citations: [],

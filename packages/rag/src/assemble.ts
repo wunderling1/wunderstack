@@ -15,7 +15,7 @@ export interface RetrievalTimings {
  *
  * Each retrieved chunk gets its own `[n]` marker and `chunk_id=` anchor so the model can cite
  * exactly one passage per marker. Citations for the UI are built later from model-attested quotes
- * (see packages/agents/src/cao/build-citations.ts).
+ * (see packages/agents/src/runtime/build-citations.ts).
  */
 
 const SNIPPET_MAX_CHARS = 240;

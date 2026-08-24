@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import type { CaoAnswer } from "@wunderstack/agents";
+import type { AgentAnswer } from "@wunderstack/agents";
 
 import {
   ASK_CAO_ERROR_MESSAGE,
@@ -12,7 +12,7 @@ import {
   toAskCaoOutput,
 } from "./mcp-ask-cao.js";
 
-function sampleAnswer(overrides: Partial<CaoAnswer> = {}): CaoAnswer {
+function sampleAnswer(overrides: Partial<AgentAnswer> = {}): AgentAnswer {
   return {
     answer: "Je hebt recht op 25 vakantiedagen per jaar [1].",
     found: true,

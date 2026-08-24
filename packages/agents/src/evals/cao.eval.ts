@@ -64,11 +64,11 @@ import {
 } from "@wunderstack/shared";
 
 import { detectClarification } from "../cao/clarify.js";
-import { condenseQuery, isElliptical, retrievalQueriesForFollowUp } from "../cao/condense.js";
-import { generateAnswerWithRepair } from "../cao/generate-answer.js";
+import { condenseQuery, isElliptical, retrievalQueriesForFollowUp } from "../runtime/condense.js";
+import { generateAnswerWithRepair } from "../runtime/generate-answer.js";
 import { verifyAndBuild } from "../cao/agent.js";
 import { type RetrievalOutput } from "../cao/tools.js";
-import { caoQuestionSchema } from "../types.js";
+import { agentQuestionSchema } from "../types.js";
 import { CAO_SYSTEM_INSTRUCTIONS, NOT_FOUND_MESSAGE, buildAnswerPrompt } from "../cao/prompt.js";
 import {
   type AnswerBaseline,
@@ -164,10 +164,10 @@ const EVAL_AGENT_KEY = "cao";
 
 /**
  * The exact request defaults the production chat path uses, read straight from the agent contract
- * (caoQuestionSchema). Gate B-integration passes these to `retrieveContext` so it measures what
+ * (agentQuestionSchema). Gate B-integration passes these to `retrieveContext` so it measures what
  * production actually does — topK (5) and minScore (0.48) — closing divergences #3/#6 for the nightly.
  */
-const PRODUCTION_DEFAULTS = caoQuestionSchema.parse({ question: "_", fund: EVAL_FIXTURE_FUND });
+const PRODUCTION_DEFAULTS = agentQuestionSchema.parse({ question: "_", fund: EVAL_FIXTURE_FUND });
 
 /**
  * Gate B-integration thresholds. Deliberately LOWER than the in-memory Gate B thresholds: the real

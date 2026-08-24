@@ -7,7 +7,7 @@
  * (the retrieval threshold in agent.ts is the deterministic half).
  */
 
-import { CITATIONS_SENTINEL } from "./generation-schema.js";
+import { CITATIONS_SENTINEL } from "../runtime/generation-schema.js";
 
 export const NOT_FOUND_MESSAGE =
   "Ik kan dit niet terugvinden in de CAO-documenten waar ik toegang toe heb. " +

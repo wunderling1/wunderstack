@@ -1,4 +1,4 @@
-import type { CaoAnswer } from "@wunderstack/agents";
+import type { AgentAnswer } from "@wunderstack/agents";
 
 import {
   askCaoCitationSchema,
@@ -26,7 +26,7 @@ export type AskArboInput = AskCaoInput;
 export const askArboOutputSchema = askCaoOutputSchema;
 export type AskArboOutput = AskCaoOutput;
 
-export function toAskArboOutput(result: CaoAnswer): AskArboOutput {
+export function toAskArboOutput(result: AgentAnswer): AskArboOutput {
   const citations = result.citations.map(toAskCaoCitation);
   return askArboOutputSchema.parse({
     answer: result.answer,
