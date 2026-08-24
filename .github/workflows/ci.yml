@@ -149,8 +149,10 @@ jobs:
       #   arbo-corpus    <- scripts/ingest/arbo-corpus/arbo-fictief.md (same fund, agent_key arbo;
       #                     G3-isolation needs a second agent on an ingested fund)
       #   arbo-oomt      <- scripts/ingest/arbo-oomt/arbo_catalogus_oomt.pdf (fund set "arbo.oomt")
-      #   elektronische-detailhandel <- scripts/ingest/input/*.pdf (fund set "etd-full", the only set
-      #                                 that can catch an ingest regression, so it runs the real parser)
+      #   elektronische-detailhandel <- scripts/ingest/input/cao_elektronische_detailhandel.pdf
+      #                                 (fund set "etd-full"). A FILE, not the directory: `ingest <dir>`
+      #                                 takes every supported file in it, and a second CAO dropped in
+      #                                 that folder silently joined this fund (hit@1 92.9% → 64.3%, 2026-08-24).
       - name: Ingest gate corpora
         if: env.GATE_DB == 'true'
         run: |
@@ -158,7 +160,7 @@ jobs:
           pnpm --filter @wunderstack/ingest ingest demo-corpus --fund demo --agent cao --version 1 --prune
           pnpm --filter @wunderstack/ingest ingest arbo-corpus --fund demo --agent arbo --version 1 --prune
           pnpm --filter @wunderstack/ingest ingest arbo-oomt --fund oomt --agent arbo --version arbo-oomt-2 --prune
-          pnpm --filter @wunderstack/ingest ingest input \
+          pnpm --filter @wunderstack/ingest ingest input/cao_elektronische_detailhandel.pdf \
             --fund elektronische-detailhandel --agent cao --version 1 --prune
         env:
           DATABASE_URL: ${{ env.GATE_DATABASE_URL }}

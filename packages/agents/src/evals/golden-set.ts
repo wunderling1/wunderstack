@@ -262,24 +262,45 @@ export interface FundSetMeta {
   corpusVersion: string;
   /** Retrieval agent key — defaults to cao for legacy fund sets. */
   agentKey?: string;
+  /**
+   * The documents this fund's corpus must consist of — `documents.title`, which the ingest sets to
+   * `basename(filePath, extname(filePath))` (or a literal, as the fixtures ingest does).
+   *
+   * Declared, because a retrieval number only means something once you know what it was measured
+   * against. On 2026-08-24 fund "elektronische-detailhandel" also held a second, unrelated CAO —
+   * 668 foreign chunks against 245 of its own, because `ingest <dir>` takes EVERY supported file and
+   * one had been dropped into `scripts/ingest/input/`. G3-fund read that as a ranking collapse
+   * (hit@1 92.9% -> 64.3%) and G3-isolation stayed green: nothing crossed a fund boundary, the wrong
+   * document simply arrived inside one. Omit only for a fund whose composition is deliberately open.
+   */
+  expectedDocuments?: readonly string[];
 }
 
 const FUND_SET_META: Record<string, FundSetMeta> = {
   // ETD — CAO Elektrotechnische Detailhandel 2023. Scored against the ingested ETD passages
   // (fund "eval-fixtures"); review log: fixtures/golden-set.REVIEW.md (fund layer section).
-  etd: { fund: "eval-fixtures", corpusVersion: "etd-1" },
+  etd: { fund: "eval-fixtures", corpusVersion: "etd-1", expectedDocuments: ["Golden eval fixtures"] },
   // Demo — the fictional "CAO Fictief" (Fase 5, tenant zero). Scored against the ingested demo corpus
   // (fund "demo", from scripts/ingest/demo-corpus). Runs on the nightly integration gate once that
   // corpus is ingested into the gate DB; base gates are unaffected (base fixture hash unchanged).
-  demo: { fund: "demo", corpusVersion: "demo-1" },
+  demo: { fund: "demo", corpusVersion: "demo-1", expectedDocuments: ["cao-fictief"] },
   // ETD-full — the SAME CAO as `etd` above, but the complete 62-page PDF as the production ingest
   // stores it, under its own fund. Where `etd` scores hand-curated verbatim passages, this set scores
   // what the pipeline actually produced from the source document, so it is the only fund set that can
   // catch an ingest regression. Starter set, built from the template in
   // docs/eval/golden-sets/TEMPLATE-starter.md; not yet reviewed by a fund.
-  "etd-full": { fund: "elektronische-detailhandel", corpusVersion: "etd-full-1" },
+  "etd-full": {
+    fund: "elektronische-detailhandel",
+    corpusVersion: "etd-full-1",
+    expectedDocuments: ["cao_elektronische_detailhandel"],
+  },
   // Arbo — OOMT sample arbocatalogus (scripts/ingest/arbo-oomt/arbo_catalogus_oomt.pdf).
-  "arbo.oomt": { fund: "oomt", corpusVersion: "arbo-oomt-2", agentKey: "arbo" },
+  "arbo.oomt": {
+    fund: "oomt",
+    corpusVersion: "arbo-oomt-2",
+    agentKey: "arbo",
+    expectedDocuments: ["arbo_catalogus_oomt"],
+  },
 };
 
 export interface GoldenFundSet {
@@ -296,6 +317,8 @@ export interface GoldenFundSet {
   cases: GoldenFundCase[];
   /** SHA-256 over the set file's raw bytes (traceability in the run artefact). */
   fixtureHash: string;
+  /** Document titles this fund's corpus must consist of; undefined = composition not pinned. */
+  expectedDocuments?: readonly string[];
 }
 
 const FUND_SET_FILE_RE = /^golden-set\.(.+)\.jsonl$/;
@@ -329,6 +352,7 @@ function loadFundSets(): GoldenFundSet[] {
       file,
       cases: parseJsonl(raw, goldenFundCaseSchema),
       fixtureHash: createHash("sha256").update(raw).digest("hex"),
+      ...(meta.expectedDocuments === undefined ? {} : { expectedDocuments: meta.expectedDocuments }),
     });
   }
   // Reverse guard: a META entry without a fixture must fail loud (same severity as fixture without

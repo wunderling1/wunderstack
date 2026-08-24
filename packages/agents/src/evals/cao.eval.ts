@@ -44,7 +44,17 @@
  */
 
 import { DEFAULT_LLM_MODEL, embed, generateText, isRateLimited } from "@wunderstack/ai";
-import { closeDb, listStructuralRefs, rerank, retrieveContext, assemble, type RetrievedChunk, type StructuralRefs } from "@wunderstack/rag";
+import {
+  closeDb,
+  listCorpusDocuments,
+  listStructuralRefs,
+  rerank,
+  retrieveContext,
+  assemble,
+  type CorpusDocument,
+  type RetrievedChunk,
+  type StructuralRefs,
+} from "@wunderstack/rag";
 import {
   env,
   EVAL_FIXTURE_FUND,
@@ -930,6 +940,45 @@ function diagnoseFundCases(
 }
 
 /**
+ * Corpus-composition guard (2026-08-24). Asserts the fund holds exactly the documents its fund set
+ * declares (`FUND_SET_META.expectedDocuments`).
+ *
+ * This is the gate that was missing. Fund "elektronische-detailhandel" silently gained a second,
+ * unrelated CAO — 668 foreign chunks against its own 245, because `ingest <dir>` takes every
+ * supported file and one had been dropped into `scripts/ingest/input/`. Every OTHER gate misread it:
+ * G3-fund reported a ranking collapse (hit@1 92.9% -> 64.3%), and G3-isolation stayed green because
+ * both documents were ingested INTO the same fund — nothing crossed a fund boundary, the wrong
+ * document simply arrived inside one. Isolation covers the data plane; this covers the ingest.
+ *
+ * An UNEXPECTED document fails on its own: recall measured against a contaminated corpus is not a
+ * quality signal, and for a per-fund product it is the failure that matters most.
+ */
+function corpusCompositionCheck(set: GoldenFundSet, present: CorpusDocument[]): Check[] {
+  if (set.expectedDocuments === undefined) {
+    return [];
+  }
+  const expected = [...set.expectedDocuments].sort((a, b) => a.localeCompare(b));
+  const actual = present.map((document) => document.title).sort((a, b) => a.localeCompare(b));
+  const unexpected = actual.filter((title) => !expected.includes(title));
+  const missing = expected.filter((title) => !actual.includes(title));
+
+  const problems = [
+    ...(unexpected.length === 0 ? [] : [`unexpected: ${unexpected.map((t) => `"${t}"`).join(", ")}`]),
+    ...(missing.length === 0 ? [] : [`missing: ${missing.map((t) => `"${t}"`).join(", ")}`]),
+  ];
+  return [
+    {
+      name: `fund "${set.key}" corpus: holds exactly the ${String(expected.length)} declared document(s)`,
+      ok: problems.length === 0,
+      detail:
+        problems.length === 0
+          ? actual.map((title) => `"${title}"`).join(", ")
+          : `${problems.join("; ")} — corpus is ${actual.map((title) => `"${title}"`).join(", ")}`,
+    },
+  ];
+}
+
+/**
  * Fixture-reachability guard. Fails on `label-only` cases only: those cannot be scored at all.
  * `unranked` cases stay with the recall thresholds.
  */
@@ -995,11 +1044,15 @@ async function fundLayerChecks(set: GoldenFundSet): Promise<Check[]> {
   }
   // Same probes and same slack as the base layer, so a fund is held to one standard, not its own.
   const requiredEmpty = MIN_SCORE_GUARD_REQUIRED;
+  const corpusDocuments = await listCorpusDocuments({ fund: set.fund, agentKey });
 
   console.log(
     `\nGate F — fund "${set.key}" correctness on the REAL pipeline, fund "${set.fund}", agent "${agentKey}", ` +
       `corpus v${set.corpusVersion}, topK=${String(PRODUCTION_DEFAULTS.topK)}, ` +
       `minScore=${String(PRODUCTION_DEFAULTS.minScore)}, ${String(answerable.length)} queries:`,
+  );
+  console.log(
+    `  corpus — ${String(corpusDocuments.length)} document(s): ${corpusDocuments.map((document) => `"${document.title}" (v${document.version})`).join(", ")}`,
   );
   logRecallMetrics(`fund "${set.key}" (after full pipeline)`, metrics, RETRIEVAL_INTEGRATION_THRESHOLDS);
   console.log(
@@ -1035,11 +1088,15 @@ async function fundLayerChecks(set: GoldenFundSet): Promise<Check[]> {
     },
     thresholds: { ...RETRIEVAL_INTEGRATION_THRESHOLDS },
     refusalGuard: { probes: MIN_SCORE_PROBES.length, empty: emptyProbes, required: requiredEmpty },
+    documents: corpusDocuments.map((document) => ({ title: document.title, version: document.version })),
     unscoredNearMissCases: nearMiss.length,
     cases: diagnoses,
   });
 
   return [
+    // Composition first: when the corpus is not what it claims to be, every number below — including
+    // reachability — is measured against the wrong documents.
+    ...corpusCompositionCheck(set, corpusDocuments),
     fixtureReachabilityCheck(set, diagnoses, catalog),
     ...recallChecks(`fund "${set.key}" retrieval`, metrics, RETRIEVAL_INTEGRATION_THRESHOLDS),
     {

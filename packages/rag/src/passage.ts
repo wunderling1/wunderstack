@@ -69,6 +69,38 @@ export async function listStructuralRefs(input: { fund: string; agentKey: string
   });
 }
 
+export interface CorpusDocument {
+  title: string;
+  sourceUri: string;
+  version: string;
+}
+
+/**
+ * The documents that make up one fund+agent corpus.
+ *
+ * Retrieval quality is only meaningful once you know WHAT was retrieved from. On 2026-08-24 fund
+ * "elektronische-detailhandel" held 245 ETD chunks plus 668 chunks of a completely different CAO —
+ * a second PDF had been dropped into `scripts/ingest/input/`, and `ingest <dir>` takes every
+ * supported file in it. G3-fund read that as a ranking collapse (hit@1 92.9% -> 64.3%) and
+ * G3-isolation stayed green, because both documents were ingested INTO the same fund: nothing
+ * leaked across a fund boundary, the wrong document simply arrived inside one.
+ *
+ * So composition is checkable as a structural fact, next to `listStructuralRefs`. Same invariant:
+ * one fund schema, scoped by fund and agent_key — never a UNION across funds.
+ */
+export async function listCorpusDocuments(input: { fund: string; agentKey: string }): Promise<CorpusDocument[]> {
+  const { fund, agentKey } = structuralRefsInputSchema.parse(input);
+
+  return withFundSchema(fund, async (db) => {
+    const rows = await db
+      .selectDistinct({ title: documents.title, sourceUri: documents.sourceUri, version: documents.version })
+      .from(documents)
+      .where(and(eq(documents.fund, fund), eq(documents.agentKey, agentKey)))
+      .orderBy(asc(documents.title));
+    return rows.map((row) => ({ title: row.title, sourceUri: row.sourceUri, version: row.version }));
+  });
+}
+
 /**
  * Fetch the full passage a citation points at, so the UI can expand "toon volledige passage".
  *

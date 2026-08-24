@@ -100,9 +100,11 @@ export { assemble, type AssembledContext, type RetrievalTimings } from "./assemb
 export {
   fetchParentPassage,
   listCorpora,
+  listCorpusDocuments,
   listStructuralRefs,
   passageInputSchema,
   structuralRefsInputSchema,
+  type CorpusDocument,
   type CorpusKey,
   type PassageInput,
   type PassageResult,
