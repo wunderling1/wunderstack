@@ -157,7 +157,7 @@ jobs:
           pnpm --filter @wunderstack/ingest ingest:fixtures
           pnpm --filter @wunderstack/ingest ingest demo-corpus --fund demo --agent cao --version 1 --prune
           pnpm --filter @wunderstack/ingest ingest arbo-corpus --fund demo --agent arbo --version 1 --prune
-          pnpm --filter @wunderstack/ingest ingest arbo-oomt --fund oomt --agent arbo --version arbo-oomt-1 --prune
+          pnpm --filter @wunderstack/ingest ingest arbo-oomt --fund oomt --agent arbo --version arbo-oomt-2 --prune
           pnpm --filter @wunderstack/ingest ingest input \
             --fund elektronische-detailhandel --agent cao --version 1 --prune
         env:

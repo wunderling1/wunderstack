@@ -279,7 +279,7 @@ const FUND_SET_META: Record<string, FundSetMeta> = {
   // docs/eval/golden-sets/TEMPLATE-starter.md; not yet reviewed by a fund.
   "etd-full": { fund: "elektronische-detailhandel", corpusVersion: "etd-full-1" },
   // Arbo — OOMT sample arbocatalogus (scripts/ingest/arbo-oomt/arbo_catalogus_oomt.pdf).
-  "arbo.oomt": { fund: "oomt", corpusVersion: "arbo-oomt-1", agentKey: "arbo" },
+  "arbo.oomt": { fund: "oomt", corpusVersion: "arbo-oomt-2", agentKey: "arbo" },
 };
 
 export interface GoldenFundSet {

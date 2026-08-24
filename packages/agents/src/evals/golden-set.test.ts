@@ -137,7 +137,7 @@ describe("fund layer (E12)", () => {
     assert.ok(arbo, "arbo.oomt fund set is discovered");
     assert.equal(arbo.fund, "oomt");
     assert.equal(arbo.agentKey, "arbo");
-    assert.equal(arbo.corpusVersion, "arbo-oomt-1");
+    assert.equal(arbo.corpusVersion, "arbo-oomt-2");
     assert.ok(arbo.cases.length >= 10, "arbo.oomt starter set has at least 10 cases");
     const refusals = arbo.cases.filter((testCase) => testCase.category === "refusal");
     assert.ok(refusals.length >= 3, "arbo.oomt has the three behaviour refusal cases");
