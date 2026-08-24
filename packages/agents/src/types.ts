@@ -43,16 +43,6 @@ export const agentQuestionSchema = z.object({
 
 export type AgentQuestion = z.input<typeof agentQuestionSchema>;
 
-/**
- * Arbo-agent question shape — same seam as the shared question schema with a separate minScore
- * default calibrated on the arbocatalogus corpus (fallback; per-fund value lives in agent_config).
- */
-export const arboQuestionSchema = agentQuestionSchema.extend({
-  minScore: z.number().min(0).max(1).default(0.35),
-});
-
-export type ArboQuestion = z.input<typeof arboQuestionSchema>;
-
 /** A verified, structure-aware citation (article/lid + quote + snippet). */
 export const agentCitationSchema = citationSchema;
 

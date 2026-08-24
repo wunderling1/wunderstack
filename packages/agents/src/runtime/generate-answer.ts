@@ -3,7 +3,7 @@ import type { ChatMessage, TokenUsage } from "@wunderstack/ai";
 import { extractCitationMarkers } from "./build-citations.js";
 import { containsHardFact, findUngroundedFacts } from "../cao/hard-facts.js";
 import { parseGenerationOutput } from "./parse-generation.js";
-import { NOT_FOUND_MESSAGE } from "../cao/prompt.js";
+import { NOT_FOUND_MESSAGE as CAO_NOT_FOUND_MESSAGE } from "../cao/prompt.js";
 import { verifyCitations } from "./verify-citations.js";
 
 /**
@@ -192,6 +192,7 @@ function buildRepairMessages(
   reason: string,
   strippedQuotes: string[] = [],
   userSupplied = "",
+  notFoundMessage: string = CAO_NOT_FOUND_MESSAGE,
 ): ChatMessage[] {
   // Echo the exact quotes that failed verbatim verification so the repair turn fixes those specific
   // spans instead of re-guessing. The most common recoverable failure is a quote that stitched two
@@ -242,8 +243,8 @@ function buildRepairMessages(
         // not-found case. The old repair turn only had the "niets bruikbaars" fallback, so the model
         // rewrote the hedge instead of emitting the exact refusal.
         'Concludeer je dat de CAO iets niet bepaalt, niet regelt of niet noemt? Dat is een niet-gevonden-geval:',
-        `antwoord dan EXACT met "${NOT_FOUND_MESSAGE}" en een lege citatie-array []. Voeg geen [n] toe.`,
-        `Staat er echt niets bruikbaars in de context? Zelfde zin, woord voor woord: "${NOT_FOUND_MESSAGE}"`,
+        `antwoord dan EXACT met "${notFoundMessage}" en een lege citatie-array []. Voeg geen [n] toe.`,
+        `Staat er echt niets bruikbaars in de context? Zelfde zin, woord voor woord: "${notFoundMessage}"`,
       ].join("\n"),
     },
   ];
@@ -301,8 +302,14 @@ export async function generateAnswerWithRepair(args: {
   userSupplied?: string;
   /** Total generation attempts (>= 1). Default 2 = one generation + one repair (legacy behaviour). */
   maxAttempts?: number;
+  /**
+   * Refusal sentence coached on the repair turn. Defaults to the CAO not-found message — keep that
+   * default for arbo until a dedicated behaviour PR (shared-runtime B4).
+   */
+  notFoundMessage?: string;
 }): Promise<AnswerWithRepairResult> {
   const userSupplied = args.userSupplied ?? "";
+  const notFoundMessage = args.notFoundMessage ?? CAO_NOT_FOUND_MESSAGE;
   const budget = Math.max(1, Math.trunc(args.maxAttempts ?? 2));
 
   let usage: TokenUsage = ZERO_USAGE;
@@ -323,6 +330,7 @@ export async function generateAnswerWithRepair(args: {
             best.assessment.reason,
             best.assessment.strippedQuotes,
             userSupplied,
+            notFoundMessage,
           );
     const attempt = await args.generate(extraMessages);
     usage = addUsage(usage, attempt.usage);
@@ -363,6 +371,7 @@ export async function generateAnswerWithRepair(args: {
         best.assessment.reason,
         best.assessment.strippedQuotes,
         userSupplied,
+        notFoundMessage,
       ),
     );
     usage = addUsage(usage, rescue.usage);
