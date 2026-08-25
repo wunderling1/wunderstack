@@ -2,6 +2,7 @@ import {
   and,
   desc,
   eq,
+  findFundsWithoutSchema,
   gte,
   interactionEvents,
   isNotNull,
@@ -171,9 +172,18 @@ export interface AgentActivityRow {
  * (tenant, agent, fund); ordered by volume. Admin-only data (the dashboard gates the route).
  * Aggregated in the app, one query per fund schema — never a SQL join across schemas.
  * `fundKey` is the schema source so callers never re-derive fund membership from tenantId.
+ * Throws when an active fund has no schema: that read would fall through to `public` and
+ * report a broken fund as an empty one.
  */
 export async function getAgentActivity(since: Date): Promise<AgentActivityRow[]> {
   const funds = await listActiveFunds();
+  const missing = await findFundsWithoutSchema(funds);
+  if (missing.length > 0) {
+    throw new Error(
+      `Active funds without a schema: ${missing.join(", ")}. Provisioning did not complete; ` +
+        "reading on would silently return public-corpus rows for these funds.",
+    );
+  }
   const all: AgentActivityRow[] = [];
   for (const fund of funds) {
     const rows = await withFundSchema(fund.key, (db) =>

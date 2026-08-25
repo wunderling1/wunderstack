@@ -10,6 +10,7 @@ export { withSearchPath, withFundContext } from "./search-path.js";
 export {
   withFundSchema,
   listActiveFunds,
+  findFundsWithoutSchema,
   registerFund,
   ensureFundTables,
   copyPublicCorpusIntoFund,
