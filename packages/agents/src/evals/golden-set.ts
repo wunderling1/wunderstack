@@ -27,6 +27,11 @@ export const goldenPassageSchema = z.object({
   content: z.string().min(1),
   article: z.string().optional(),
   lid: z.string().optional(),
+  /** Arbo catalog passages match on chapter heading instead of CAO article/lid. */
+  chapter: z.string().optional(),
+  sourceRef: z.string().optional(),
+  /** Pinned when the passage was exported from the gate DB (arbo G2 fixtures). */
+  corpusVersion: z.string().optional(),
   chunkType: z.enum(["text", "table"]).default("text"),
 });
 
@@ -63,6 +68,8 @@ export const goldenCaseSchema = z
     distractorPassageIds: z.array(z.string()).optional(),
     expectedArticle: z.string().optional(),
     expectedLid: z.string().optional(),
+    /** Arbo G2 cases may carry the fund-layer chapter anchor for diagnostics. */
+    expectedChapter: z.string().optional(),
     referenceAnswer: z.string().min(1),
     category: goldenCaseCategorySchema,
   })
@@ -149,6 +156,59 @@ export const GOLDEN_FIXTURE_HASH = createHash("sha256")
   .update("\0")
   .update(casesRaw)
   .digest("hex");
+
+// ---------------------------------------------------------------------------------------------------
+// ARBO G2 fixtures — passages exported from the gate DB + base-schema cases for answer-quality.
+// Loaded at module init so a missing/corrupt file fails loud (same contract as the CAO base layer).
+// ---------------------------------------------------------------------------------------------------
+
+const ARBO_PASSAGES_FILE = "golden-passages.arbo.oomt.jsonl";
+const ARBO_G2_CASES_FILE = "golden-set.arbo.oomt.g2.jsonl";
+const ARBO_META_FILE = "golden-passages.arbo.oomt.meta.json";
+
+const arboPassagesRaw = readFixture(ARBO_PASSAGES_FILE);
+const arboG2CasesRaw = readFixture(ARBO_G2_CASES_FILE);
+const arboMeta = z
+  .object({
+    corpusVersion: z.string().min(1),
+    fund: z.string().min(1),
+    agentKey: z.string().min(1),
+    contentHash: z.string().min(1),
+  })
+  .parse(JSON.parse(readFixture(ARBO_META_FILE)));
+
+export const arboGoldenPassages = parseJsonl(arboPassagesRaw, goldenPassageSchema);
+export const arboGoldenCases = parseJsonl(arboG2CasesRaw, goldenCaseSchema);
+/** Must match FUND_SET_META["arbo.oomt"].corpusVersion — bump both when re-exporting. */
+export const ARBO_G2_CORPUS_VERSION = arboMeta.corpusVersion;
+/** Hash recorded at export time — must equal {@link ARBO_GOLDEN_FIXTURE_HASH}. */
+export const ARBO_RECORDED_FIXTURE_HASH = arboMeta.contentHash;
+
+/**
+ * Content hash over arbo G2 passages + cases. A fixture edit without bumping the meta
+ * `corpusVersion` (and FUND_SET_META) must fail the G1 fixture-hash check.
+ */
+export const ARBO_GOLDEN_FIXTURE_HASH = createHash("sha256")
+  .update(arboPassagesRaw)
+  .update("\0")
+  .update(arboG2CasesRaw)
+  .digest("hex");
+
+const arboPassageMap = new Map(arboGoldenPassages.map((passage) => [passage.id, passage] as const));
+
+export function arboPassageById(id: string): GoldenPassage | undefined {
+  return arboPassageMap.get(id);
+}
+
+export function arboPassagesForCase(testCase: GoldenCase): GoldenPassage[] {
+  const ids =
+    testCase.category === "refusal"
+      ? (testCase.distractorPassageIds ?? [])
+      : testCase.expectedPassageIds;
+  return ids
+    .map((id) => arboPassageById(id))
+    .filter((passage): passage is GoldenPassage => passage !== undefined);
+}
 
 // Built once at module load so lookups are O(1) instead of a linear scan per call.
 const passageMap = new Map(goldenPassages.map((passage) => [passage.id, passage] as const));
@@ -324,7 +384,8 @@ export interface GoldenFundSet {
 const FUND_SET_FILE_RE = /^golden-set\.(.+)\.jsonl$/;
 
 /**
- * Discover the fund layers: every golden-set.<key>.jsonl in the fixtures dir except the base set.
+ * Discover the fund layers: every golden-set.<key>.jsonl in the fixtures dir except the base set
+ * and the arbo G2 answer-gate cases (`*.g2.jsonl` — base-schema, not fund-schema).
  * Deterministic order (sorted by key) so the run artefact is stable. Each discovered file must have a
  * FUND_SET_META entry or the load throws.
  */
@@ -333,7 +394,8 @@ function loadFundSets(): GoldenFundSet[] {
   for (const file of readdirSync(fixturesDir).sort((a, b) => a.localeCompare(b))) {
     const match = FUND_SET_FILE_RE.exec(file);
     const key = match?.[1];
-    if (!key || key === "base") {
+    // `.g2` = base-schema answer fixtures (expectedPassageIds), loaded separately — not a fund set.
+    if (!key || key === "base" || key.endsWith(".g2")) {
       continue;
     }
     const meta = FUND_SET_META[key];

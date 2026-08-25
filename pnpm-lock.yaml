@@ -578,6 +578,9 @@ importers:
       '@wunderstack/ai':
         specifier: workspace:*
         version: link:../../packages/ai
+      '@wunderstack/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@wunderstack/rag':
         specifier: workspace:*
         version: link:../../packages/rag

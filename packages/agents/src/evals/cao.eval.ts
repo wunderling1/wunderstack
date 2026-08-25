@@ -78,6 +78,9 @@ import {
   updateBaselineSection,
 } from "./baseline.js";
 import {
+  ARBO_G2_CORPUS_VERSION,
+  ARBO_GOLDEN_FIXTURE_HASH,
+  ARBO_RECORDED_FIXTURE_HASH,
   GOLDEN_CORPUS_VERSION,
   GOLDEN_FIXTURE_HASH,
   type GoldenCase,
@@ -328,21 +331,41 @@ function clarifyContractChecks(): Check[] {
  * this mechanism (nothing to compare).
  */
 function fixtureHashChecks(): Check[] {
+  const checks: Check[] = [];
   const baseline = readBaseline();
-  if (!baseline?.fixtureHash || baseline.corpusVersion !== GOLDEN_CORPUS_VERSION) {
-    return [];
-  }
-  const match = baseline.fixtureHash === GOLDEN_FIXTURE_HASH;
-  return [
-    {
+  if (baseline?.fixtureHash && baseline.corpusVersion === GOLDEN_CORPUS_VERSION) {
+    const match = baseline.fixtureHash === GOLDEN_FIXTURE_HASH;
+    checks.push({
       name: "fixtures: golden set matches the recorded baseline (or GOLDEN_CORPUS_VERSION was bumped)",
       ok: match,
       detail: match
         ? undefined
         : `fixture hash ${GOLDEN_FIXTURE_HASH.slice(0, 12)}… != baseline ${baseline.fixtureHash.slice(0, 12)}… at the same corpusVersion "${GOLDEN_CORPUS_VERSION}". ` +
           "Bump GOLDEN_CORPUS_VERSION and re-record the baseline (EVAL_WRITE_BASELINE=1).",
-    },
-  ];
+    });
+  }
+
+  const arboHashMatch = ARBO_GOLDEN_FIXTURE_HASH === ARBO_RECORDED_FIXTURE_HASH;
+  checks.push({
+    name: "fixtures: arbo G2 passages+cases match golden-passages.arbo.oomt.meta.json contentHash",
+    ok: arboHashMatch,
+    detail: arboHashMatch
+      ? undefined
+      : `computed ${ARBO_GOLDEN_FIXTURE_HASH.slice(0, 12)}… != meta ${ARBO_RECORDED_FIXTURE_HASH.slice(0, 12)}…. ` +
+        "Re-run pnpm --filter @wunderstack/eval-scripts export-arbo-passages (do not hand-edit fixtures).",
+  });
+
+  const arboFund = goldenFundSets.find((set) => set.key === "arbo.oomt");
+  const versionMatch = arboFund !== undefined && arboFund.corpusVersion === ARBO_G2_CORPUS_VERSION;
+  checks.push({
+    name: "fixtures: arbo G2 corpusVersion matches FUND_SET_META[arbo.oomt]",
+    ok: versionMatch,
+    detail: versionMatch
+      ? undefined
+      : `meta ${ARBO_G2_CORPUS_VERSION} != fund set ${arboFund?.corpusVersion ?? "(missing)"}. Bump both together.`,
+  });
+
+  return checks;
 }
 
 /**

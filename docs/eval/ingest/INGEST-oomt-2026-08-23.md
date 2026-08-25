@@ -53,3 +53,15 @@ tellen mee omdat een citaat nooit aan een kruisverwezen artikel geankerd mag wor
 ---
 
 *Rapportdatum 2026-08-23. Reproduceren:* `pnpm --filter @wunderstack/ingest report --fund oomt`
+
+## Arbo G2 answer-gate fixtures
+
+After every `corpus_version` bump for `oomt` / `arbo`, re-export the committed G2 passages:
+
+```bash
+pnpm --filter @wunderstack/eval-scripts export-arbo-passages
+```
+
+Writes `golden-passages.arbo.oomt.jsonl`, `golden-set.arbo.oomt.g2.jsonl`, and
+`golden-passages.arbo.oomt.meta.json` (with `contentHash`). G1 fails if the hash drifts without a
+re-export. Bump `FUND_SET_META["arbo.oomt"].corpusVersion` in the same change.

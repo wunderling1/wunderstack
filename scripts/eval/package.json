@@ -7,11 +7,13 @@
     "harvest-feedback": "tsx --env-file-if-exists=../../.env harvest-feedback.ts",
     "rerank-ablation": "tsx --env-file-if-exists=../../.env rerank-ablation.ts",
     "refusal-guard-probe": "tsx --env-file-if-exists=../../.env refusal-guard-probe.ts",
+    "export-arbo-passages": "tsx --env-file-if-exists=../../.env export-arbo-passages.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
   },
   "dependencies": {
     "@wunderstack/ai": "workspace:*",
+    "@wunderstack/db": "workspace:*",
     "@wunderstack/rag": "workspace:*",
     "@wunderstack/shared": "workspace:*",
     "zod": "4.4.3"
