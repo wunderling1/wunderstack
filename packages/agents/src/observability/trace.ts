@@ -3,7 +3,7 @@ import { SpanType } from "@mastra/core/observability";
 import type { Span } from "@mastra/core/observability";
 
 /**
- * Request-scoped tracing for the CAO-agent, confined to this package (Mastra/Langfuse never leak
+ * Request-scoped tracing for a grounded agent, confined to this package (Mastra/Langfuse never leak
  * past the agent seam — see .cursor/rules/500-agents.mdc).
  *
  * Why this exists: the agent's `generate`/`stream` already produce a Langfuse trace, but two calls
@@ -18,9 +18,9 @@ import type { Span } from "@mastra/core/observability";
  * answer, so it degrades to a no-op.
  */
 
-export interface CaoTraceInput {
-  /** Catalog agent id (e.g. cao | arbo) — surfaced as Langfuse span name and tag. */
-  agentKey?: string;
+export interface AgentTraceInput {
+  /** Catalog agent id (e.g. cao | arbo) — surfaced as Langfuse span name and tag. Required. */
+  agentKey: string;
   question: string;
   retrievalQuery?: string;
   fund: string | undefined;
@@ -84,7 +84,7 @@ export interface ModelCallTraceSpan {
 }
 
 /** Outcome recorded on the root span so clarify-turns, refusals and citation counts are traceable. */
-export interface CaoTraceOutcome {
+export interface AgentTraceOutcome {
   found: boolean;
   /** True when the agent asked a clarifying question instead of answering. */
   needsClarification?: boolean;
@@ -98,7 +98,7 @@ export interface CaoTraceOutcome {
   followUpCount?: number;
 }
 
-export interface CaoTrace {
+export interface AgentTrace {
   startRetrieval(meta: {
     topK: number;
     minScore: number;
@@ -109,7 +109,7 @@ export interface CaoTrace {
   /** Best-effort child span for a non-Mastra model call (follow-up suggestions). */
   startModelCall(name: string, input?: Record<string, unknown>): ModelCallTraceSpan;
   link(): TraceLink;
-  end(output: CaoTraceOutcome): void;
+  end(output: AgentTraceOutcome): void;
   fail(error: unknown): void;
   /** Record time-to-first-token once the first text delta is emitted. */
   recordTtft(ms: number): void;
@@ -117,7 +117,7 @@ export interface CaoTrace {
 
 const NOOP_RETRIEVAL: RetrievalTraceSpan = { end() {} };
 const NOOP_MODEL_CALL: ModelCallTraceSpan = { end() {} };
-const NOOP_TRACE: CaoTrace = {
+const NOOP_TRACE: AgentTrace = {
   startRetrieval: () => NOOP_RETRIEVAL,
   startModelCall: () => NOOP_MODEL_CALL,
   link: () => ({}),
@@ -127,11 +127,11 @@ const NOOP_TRACE: CaoTrace = {
 };
 
 /**
- * Start a trace for one CAO question. Returns a no-op handle when no observability instance is
+ * Start a trace for one agent question. Returns a no-op handle when no observability instance is
  * configured or if span creation fails, so callers never need to null-check.
  */
-export function startCaoTrace(mastra: Mastra, input: CaoTraceInput): CaoTrace {
-  const agentKey = input.agentKey ?? "cao";
+export function startAgentTrace(mastra: Mastra, input: AgentTraceInput): AgentTrace {
+  const agentKey = input.agentKey;
   const agentTag = `${agentKey}-agent`;
   let root: Span<SpanType.AGENT_RUN> | undefined;
   try {

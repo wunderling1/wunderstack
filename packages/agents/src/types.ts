@@ -10,18 +10,18 @@ import { z } from "zod";
  * runtime-validated at the boundary — see .cursor/rules/300-typescript.mdc).
  */
 
-export const caoHistoryMessageSchema = z.object({
+export const agentHistoryMessageSchema = z.object({
   role: z.enum(["user", "assistant"]),
   content: z.string().min(1).max(4000),
 });
 
-export const caoQuestionSchema = z.object({
+export const agentQuestionSchema = z.object({
   /** The end-user's question, answered in Dutch. */
   question: z.string().min(1, "question must not be empty"),
-  /** Restrict to a single O&O fund's CAO (required for corpus isolation). */
+  /** Restrict to a single O&O fund's corpus (required for corpus isolation). */
   fund: z.string().min(1),
   /** Recent turns, used only to condense elliptical follow-up questions into a standalone query. */
-  history: z.array(caoHistoryMessageSchema).max(6).default([]),
+  history: z.array(agentHistoryMessageSchema).max(6).default([]),
   /** How many chunks to keep after reranking (fed to the agent). Defaults to RERANK_CONFIG.topK (5). */
   topK: z.number().int().positive().max(50).default(5),
   /**
@@ -34,39 +34,39 @@ export const caoQuestionSchema = z.object({
    * ETD corpus has a clean gap — out-of-corpus probes top out at 0.465 while every in-scope relevant
    * chunk scores >= 0.520 (measured across both the base and fund layers) — so 0.48 refuses the probes
    * (3/3) without dropping a single in-scope hit. Embeddings are deterministic, so the ~0.02 margin on
-   * each side is stable. This is a global default (v1 is single-tenant, ETD is the only real fund);
-   * a per-fund minScore is deliberately deferred until a second fund's corpus forces it (regel van
-   * drie). See golden-set.REVIEW.md (Gate F stap 1).
+   * each side is stable. This is the CAO-agent default; arbo uses a lower default via
+   * `arboQuestionSchema`. A per-fund minScore lives in `agent_config` when configured.
+   * See golden-set.REVIEW.md (Gate F stap 1).
    */
   minScore: z.number().min(0).max(1).default(0.48),
 });
 
-export type CaoQuestion = z.input<typeof caoQuestionSchema>;
+export type AgentQuestion = z.input<typeof agentQuestionSchema>;
 
 /**
- * Arbo-agent question shape — same seam as CAO with a separate minScore default calibrated on the
- * arbocatalogus corpus (fallback; per-fund value lives in agent_config).
+ * Arbo-agent question shape — same seam as the shared question schema with a separate minScore
+ * default calibrated on the arbocatalogus corpus (fallback; per-fund value lives in agent_config).
  */
-export const arboQuestionSchema = caoQuestionSchema.extend({
+export const arboQuestionSchema = agentQuestionSchema.extend({
   minScore: z.number().min(0).max(1).default(0.35),
 });
 
 export type ArboQuestion = z.input<typeof arboQuestionSchema>;
 
 /** A verified, structure-aware citation (article/lid + quote + snippet). */
-export const caoCitationSchema = citationSchema;
+export const agentCitationSchema = citationSchema;
 
-export type CaoCitation = z.infer<typeof caoCitationSchema>;
+export type AgentCitation = z.infer<typeof agentCitationSchema>;
 
-export const caoUsageSchema = z.object({
+export const agentUsageSchema = z.object({
   promptTokens: z.number().int().nonnegative(),
   completionTokens: z.number().int().nonnegative(),
   totalTokens: z.number().int().nonnegative(),
 });
 
-export type CaoUsage = z.infer<typeof caoUsageSchema>;
+export type AgentUsage = z.infer<typeof agentUsageSchema>;
 
-export const caoAnswerSchema = z.object({
+export const agentAnswerSchema = z.object({
   /** The Dutch answer, with `[n]` citation markers when sources were used. When
    * `needsClarification` is true this holds the clarifying question instead. */
   answer: z.string(),
@@ -75,19 +75,19 @@ export const caoAnswerSchema = z.object({
   /** True when the agent asked a clarifying question instead of answering (underspecified input). */
   needsClarification: z.boolean().default(false),
   /** Verified citations — only chunks the model cited with a verbatim quote. */
-  citations: z.array(caoCitationSchema).default([]),
+  citations: z.array(agentCitationSchema).default([]),
   /** Langfuse trace id for this answer, so user feedback can be scored onto it. Null when tracing
    * is not configured. */
   traceId: z.string().nullable().default(null),
   /** LLM token usage for the generation step (all zero when no LLM call was made). */
-  usage: caoUsageSchema,
+  usage: agentUsageSchema,
   /** True when one or more model citations failed verbatim verification. */
   citationVerificationFailed: z.boolean().default(false),
   /** Grounded follow-up question chips (empty when not found / clarify / suggestion failed). */
   followUpQuestions: z.array(z.string().min(1).max(200)).max(3).default([]),
 });
 
-export type CaoAnswer = z.infer<typeof caoAnswerSchema>;
+export type AgentAnswer = z.infer<typeof agentAnswerSchema>;
 
 /**
  * Progress phases the agent passes through while answering. Emitted as `status` events so the UI can
@@ -96,22 +96,22 @@ export type CaoAnswer = z.infer<typeof caoAnswerSchema>;
  * user-facing (Dutch) labels. Only the normal answer path emits these; the clarify and not-found
  * paths return too fast for a phase flash to help.
  */
-export type CaoStreamPhase = "searching" | "retrieved" | "generating";
+export type AgentStreamPhase = "searching" | "retrieved" | "generating";
 
 /**
- * Streaming counterpart of `CaoAnswer`, as a sequence of events the API layer can forward to the
- * browser (see apps/demo). Order on the normal path: zero or more `status` events, zero or more
+ * Streaming counterpart of `AgentAnswer`, as a sequence of events the API layer can forward to the
+ * browser (see apps/playground). Order on the normal path: zero or more `status` events, zero or more
  * `text` deltas, exactly one `citations` (verified), optionally one `followups`, then exactly one
  * `done`. Clarify and not-found paths emit `text` → `citations` → `done` (no followups).
  */
-export type CaoStreamEvent =
-  | { type: "status"; phase: CaoStreamPhase; count?: number }
+export type AgentStreamEvent =
+  | { type: "status"; phase: AgentStreamPhase; count?: number }
   | { type: "text"; delta: string }
   | {
       type: "citations";
       found: boolean;
       needsClarification: boolean;
-      citations: CaoCitation[];
+      citations: AgentCitation[];
       citationVerificationFailed: boolean;
       /** Final answer text (sentinel/citation block stripped, failed markers removed). The client
        * replaces its accumulated streamed text with this to reconcile stripped citations. */
@@ -122,10 +122,10 @@ export type CaoStreamEvent =
       /** 2–3 grounded Dutch follow-up questions; omitted from the stream when empty. */
       questions: string[];
     }
-  | { type: "done"; usage: CaoUsage; traceId: string | null };
+  | { type: "done"; usage: AgentUsage; traceId: string | null };
 
 /** Per-call options for the agent seam. */
-export interface CaoAnswerOptions {
+export interface AgentAnswerOptions {
   /**
    * Aborts in-flight work (retrieval embedding + LLM generation). The API layer wires this to the
    * client connection so a disconnect stops the model call instead of burning tokens.
@@ -155,9 +155,6 @@ export interface CaoAnswerOptions {
  * Mastra stays hidden behind this interface (see .cursor/rules/500-agents.mdc).
  */
 export interface GroundedAgent {
-  answer(input: CaoQuestion, options?: CaoAnswerOptions): Promise<CaoAnswer>;
-  answerStream(input: CaoQuestion, options?: CaoAnswerOptions): AsyncIterable<CaoStreamEvent>;
+  answer(input: AgentQuestion, options?: AgentAnswerOptions): Promise<AgentAnswer>;
+  answerStream(input: AgentQuestion, options?: AgentAnswerOptions): AsyncIterable<AgentStreamEvent>;
 }
-
-/** Alias retained for the CAO module; all agents share the same seam shape in v1. */
-export type CaoAgent = GroundedAgent;

@@ -2,7 +2,7 @@
  * Prompt text for the arbocatalogus-agent. Answers only from THIS catalog — not Arbowet, not CAO.
  */
 
-import { CITATIONS_SENTINEL } from "../cao/generation-schema.js";
+import { CITATIONS_SENTINEL } from "../runtime/generation-schema.js";
 
 /** Refusal (a): not in this catalog. */
 export const NOT_IN_CATALOG_MESSAGE =

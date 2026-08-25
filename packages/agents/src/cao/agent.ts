@@ -4,31 +4,31 @@ import { EMBEDDING_CONFIG, GENERATION_CONFIG, env } from "@wunderstack/shared";
 import { createSovereignModel } from "../model/sovereign-model.js";
 import { buildLangfuseObservability } from "../observability/langfuse.js";
 import { recordNumericTraceScore } from "../observability/feedback.js";
-import { startCaoTrace, type CaoTrace } from "../observability/trace.js";
+import { startAgentTrace, type AgentTrace } from "../observability/trace.js";
 import {
-  caoAnswerSchema,
-  caoQuestionSchema,
-  type CaoAgent,
-  type CaoAnswer,
-  type CaoAnswerOptions,
-  type CaoCitation,
-  type CaoQuestion,
-  type CaoStreamEvent,
-  type CaoUsage,
+  agentAnswerSchema,
+  agentQuestionSchema,
+  type GroundedAgent,
+  type AgentAnswer,
+  type AgentAnswerOptions,
+  type AgentCitation,
+  type AgentQuestion,
+  type AgentStreamEvent,
+  type AgentUsage,
 } from "../types.js";
-import { buildVerifiedCitations, extractCitationMarkers } from "./build-citations.js";
+import { buildVerifiedCitations, extractCitationMarkers } from "../runtime/build-citations.js";
 import { detectClarification } from "./clarify.js";
-import { condenseQuery, isElliptical, retrievalQueriesForFollowUp } from "./condense.js";
-import { generateAnswerWithRepair } from "./generate-answer.js";
+import { condenseQuery, isElliptical, retrievalQueriesForFollowUp } from "../runtime/condense.js";
+import { generateAnswerWithRepair } from "../runtime/generate-answer.js";
 import { containsHardFact, hasUngroundedHardFact } from "./hard-facts.js";
-import { parseGenerationOutput } from "./parse-generation.js";
+import { parseGenerationOutput } from "../runtime/parse-generation.js";
 import { CAO_SYSTEM_INSTRUCTIONS, NOT_FOUND_MESSAGE, UNVERIFIABLE_MESSAGE, buildAnswerPrompt } from "./prompt.js";
-import { addUsage, FOLLOW_UP_MODEL, suggestFollowUps } from "./suggest-follow-ups.js";
+import { addUsage, FOLLOW_UP_MODEL, suggestFollowUps } from "../runtime/suggest-follow-ups.js";
 import { runRetrieval, type RetrievalOutput } from "./tools.js";
-import { stripFailedMarkers, stripUnverifiedMarkers, verifyCitations } from "./verify-citations.js";
+import { stripFailedMarkers, stripUnverifiedMarkers, verifyCitations } from "../runtime/verify-citations.js";
 
 /**
- * The CAO-agent — one Mastra `Agent` behind the `CaoAgent` seam. Multi-agent routing uses separate
+ * The CAO-agent — one Mastra `Agent` behind the `GroundedAgent` seam. Multi-agent routing uses separate
  * surfaces per agent (no Supervisor); see docs/decisions/DECISION-second-agent-arbo.md. Mastra stays
  * inside this package: callers never import Mastra directly.
  *
@@ -42,11 +42,11 @@ import { stripFailedMarkers, stripUnverifiedMarkers, verifyCitations } from "./v
  */
 
 const AGENT_KEY = "cao";
-const ZERO_USAGE: CaoUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+const ZERO_USAGE: AgentUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 const CITATION_SCORE_NAME = "citation-verification-rate";
 
 async function retrieveTraced(
-  trace: CaoTrace,
+  trace: AgentTrace,
   args: {
     retrievalQueries: string[];
     retrievalQuery: string;
@@ -148,7 +148,7 @@ export function verifyAndBuild(
   userSupplied: string,
 ): {
   answer: string;
-  citations: CaoCitation[];
+  citations: AgentCitation[];
   found: boolean;
   verificationFailed: boolean;
   hardFactGuardTriggered: boolean;
@@ -195,14 +195,14 @@ export function verifyAndBuild(
 
 type SettledAnswer = {
   answer: string;
-  citations: CaoCitation[];
+  citations: AgentCitation[];
   /** Settled by verifyAndBuild: false on any refusal (hard-fact guard, no verified citation). */
   found: boolean;
   verificationFailed: boolean;
   hardFactGuardTriggered: boolean;
   /** True when the answer was refused solely because no citation survived verification (G4 coupling). */
   unverifiable: boolean;
-  usage: CaoUsage;
+  usage: AgentUsage;
 };
 
 /**
@@ -215,7 +215,7 @@ type SettledAnswer = {
  * no token stream to retract. Streaming tokens as they arrive from the model would require abandoning
  * this seam — a deliberate change, not an accident. Locked by agent.test.ts.
  */
-export function* settledAnswerBody(result: SettledAnswer): Generator<CaoStreamEvent> {
+export function* settledAnswerBody(result: SettledAnswer): Generator<AgentStreamEvent> {
   const found = result.found;
   if (result.answer.length > 0) {
     yield { type: "text", delta: result.answer };
@@ -237,18 +237,18 @@ export function* settledAnswerBody(result: SettledAnswer): Generator<CaoStreamEv
 export function* settledAnswerEvents(
   result: SettledAnswer,
   traceId: string | null,
-): Generator<CaoStreamEvent> {
+): Generator<AgentStreamEvent> {
   yield* settledAnswerBody(result);
   yield { type: "done", usage: result.usage, traceId };
 }
 
 /** The user's own numbers are premises, not fabrications: question + prior turns count as grounding. */
-function userSuppliedText(input: CaoQuestion): string {
+function userSuppliedText(input: AgentQuestion): string {
   const history = input.history ?? [];
   return [input.question, ...history.map((message) => message.content)].join(" ");
 }
 
-async function resolveRetrievalQuestion(input: CaoQuestion, signal?: AbortSignal): Promise<{
+async function resolveRetrievalQuestion(input: AgentQuestion, signal?: AbortSignal): Promise<{
   answerQuestion: string;
   retrievalQuery: string;
   retrievalQueries: string[];
@@ -292,9 +292,9 @@ async function maybeSuggestFollowUps(args: {
   result: SettledAnswer;
   question: string;
   context: string;
-  trace: CaoTrace;
+  trace: AgentTrace;
   signal?: AbortSignal;
-}): Promise<{ questions: string[]; usage: CaoUsage }> {
+}): Promise<{ questions: string[]; usage: AgentUsage }> {
   if (args.result.hardFactGuardTriggered || args.result.citations.length === 0) {
     return { questions: [], usage: ZERO_USAGE };
   }
@@ -317,7 +317,7 @@ async function maybeSuggestFollowUps(args: {
   return suggested;
 }
 
-export function createCaoAgent(): CaoAgent {
+export function createCaoAgent(): GroundedAgent {
   const agent = new Agent({
     id: AGENT_KEY,
     name: AGENT_KEY,
@@ -349,16 +349,16 @@ export function createCaoAgent(): CaoAgent {
     retrieval: RetrievalOutput;
     answerQuestion: string;
     userSupplied: string;
-    tracingOptions: ReturnType<typeof tracingOptionsFor> & ReturnType<CaoTrace["link"]>;
+    tracingOptions: ReturnType<typeof tracingOptionsFor> & ReturnType<AgentTrace["link"]>;
     signal?: AbortSignal;
   }): Promise<{
     answer: string;
-    citations: CaoCitation[];
+    citations: AgentCitation[];
     found: boolean;
     verificationFailed: boolean;
     hardFactGuardTriggered: boolean;
     unverifiable: boolean;
-    usage: CaoUsage;
+    usage: AgentUsage;
   }> {
     const generated = await generateAnswerWithRepair({
       chunkContentById: new Map(args.retrieval.fullChunkContent),
@@ -398,12 +398,12 @@ export function createCaoAgent(): CaoAgent {
   }
 
   return {
-    async answer(input: CaoQuestion, options: CaoAnswerOptions = {}): Promise<CaoAnswer> {
-      const parsedInput = caoQuestionSchema.parse(input);
+    async answer(input: AgentQuestion, options: AgentAnswerOptions = {}): Promise<AgentAnswer> {
+      const parsedInput = agentQuestionSchema.parse(input);
       const { question, fund, topK, minScore } = parsedInput;
       const userSupplied = userSuppliedText(parsedInput);
 
-      const trace = startCaoTrace(mastra, {
+      const trace = startAgentTrace(mastra, {
         agentKey: AGENT_KEY,
         question,
         fund,
@@ -421,7 +421,7 @@ export function createCaoAgent(): CaoAgent {
         const clarification = detectClarification(question);
         if (clarification !== null) {
           trace.end({ found: false, needsClarification: true, citationCount: 0 });
-          return caoAnswerSchema.parse({
+          return agentAnswerSchema.parse({
             answer: clarification,
             found: false,
             needsClarification: true,
@@ -436,7 +436,7 @@ export function createCaoAgent(): CaoAgent {
 
         if (retrieval.hits.length === 0) {
           trace.end({ found: false, refused: true, citationCount: 0 });
-          return caoAnswerSchema.parse({
+          return agentAnswerSchema.parse({
             answer: NOT_FOUND_MESSAGE,
             found: false,
             needsClarification: false,
@@ -477,7 +477,7 @@ export function createCaoAgent(): CaoAgent {
           followUpCount: followUps.questions.length,
           ...(found ? {} : { refused: true }),
         });
-        return caoAnswerSchema.parse({
+        return agentAnswerSchema.parse({
           answer,
           found,
           needsClarification: false,
@@ -494,15 +494,15 @@ export function createCaoAgent(): CaoAgent {
     },
 
     async *answerStream(
-      input: CaoQuestion,
-      options: CaoAnswerOptions = {},
-    ): AsyncIterable<CaoStreamEvent> {
-      const parsedInput = caoQuestionSchema.parse(input);
+      input: AgentQuestion,
+      options: AgentAnswerOptions = {},
+    ): AsyncIterable<AgentStreamEvent> {
+      const parsedInput = agentQuestionSchema.parse(input);
       const { question, fund, topK, minScore } = parsedInput;
       const userSupplied = userSuppliedText(parsedInput);
       const requestStart = performance.now();
 
-      const trace = startCaoTrace(mastra, {
+      const trace = startAgentTrace(mastra, {
         agentKey: AGENT_KEY,
         question,
         fund,

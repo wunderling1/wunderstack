@@ -1,8 +1,8 @@
 import { DEFAULT_LLM_MODEL, generateText } from "@wunderstack/ai";
 
-import type { CaoQuestion } from "../types.js";
+import type { AgentQuestion } from "../types.js";
 
-type HistoryMessage = NonNullable<CaoQuestion["history"]>[number];
+type HistoryMessage = NonNullable<AgentQuestion["history"]>[number];
 
 const MAX_HISTORY_MESSAGES = 6;
 const MAX_ELLIPTICAL_WORDS = 8;

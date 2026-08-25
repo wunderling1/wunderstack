@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import type { ChatMessage } from "@wunderstack/ai";
 
 import { CITATIONS_SENTINEL } from "./generation-schema.js";
-import { NOT_FOUND_MESSAGE } from "./prompt.js";
+import { NOT_FOUND_MESSAGE } from "../cao/prompt.js";
 import {
   assessCitationContract,
   GenerationAbortedError,

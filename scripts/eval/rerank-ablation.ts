@@ -33,7 +33,7 @@ import { closeDb, retrieve, rewriteQuery, type RetrievedChunk } from "@wundersta
 import { EVAL_FIXTURE_FUND, requireRerankConfig } from "@wunderstack/shared";
 import { z } from "zod";
 
-/** Production request default from caoQuestionSchema (packages/agents/src/types.ts). */
+/** Production request default from agentQuestionSchema (packages/agents/src/types.ts). */
 const PRODUCTION_MIN_SCORE = 0.48;
 
 const here = dirname(fileURLToPath(import.meta.url));

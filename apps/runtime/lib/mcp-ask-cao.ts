@@ -1,4 +1,4 @@
-import type { CaoAnswer, CaoCitation } from "@wunderstack/agents";
+import type { AgentAnswer, AgentCitation } from "@wunderstack/agents";
 import { z } from "zod";
 
 /**
@@ -61,7 +61,7 @@ export function corpusVersionsFromCitations(citations: ReadonlyArray<{ version: 
   return [...new Set(citations.map((citation) => citation.version))];
 }
 
-export function toAskCaoCitation(citation: CaoCitation): z.infer<typeof askCaoCitationSchema> {
+export function toAskCaoCitation(citation: AgentCitation): z.infer<typeof askCaoCitationSchema> {
   return {
     ref: citation.ref,
     title: citation.title,
@@ -74,7 +74,7 @@ export function toAskCaoCitation(citation: CaoCitation): z.infer<typeof askCaoCi
   };
 }
 
-export function toAskCaoOutput(result: CaoAnswer): AskCaoOutput {
+export function toAskCaoOutput(result: AgentAnswer): AskCaoOutput {
   const citations = result.citations.map(toAskCaoCitation);
   return askCaoOutputSchema.parse({
     answer: result.answer,

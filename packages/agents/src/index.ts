@@ -1,6 +1,6 @@
 // @wunderstack/agents — agent definitions behind our own interface (Mastra hidden inside).
 //
-// This barrel exposes ONLY the seam: the CAO-agent factory and its Zod-typed contracts. Mastra and
+// This barrel exposes ONLY the seam: agent factories and their Zod-typed contracts. Mastra and
 // the AI SDK types never leak past here, so apps/RAG/API code depends on us, not on the framework
 // (see .cursor/rules/500-agents.mdc). Implemented in Phase 6 (see docs/plans/PLAN.md).
 
@@ -26,23 +26,22 @@ export {
 } from "./observability/feedback.js";
 
 export {
-  caoQuestionSchema,
+  agentQuestionSchema,
   arboQuestionSchema,
-  caoAnswerSchema,
-  caoCitationSchema,
-  caoUsageSchema,
+  agentAnswerSchema,
+  agentCitationSchema,
+  agentUsageSchema,
   type GroundedAgent,
-  type CaoAgent,
-  type CaoAnswerOptions,
-  type CaoQuestion,
-  type CaoAnswer,
-  type CaoCitation,
-  type CaoUsage,
-  type CaoStreamEvent,
+  type AgentAnswerOptions,
+  type AgentQuestion,
+  type AgentAnswer,
+  type AgentCitation,
+  type AgentUsage,
+  type AgentStreamEvent,
 } from "./types.js";
 
-export { fetchPassage, type PassageInput, type PassageResult } from "./cao/passage.js";
+export { fetchPassage, type PassageInput, type PassageResult } from "./runtime/passage.js";
 
-export { orphanSourceRate, extractCitationMarkers } from "./cao/build-citations.js";
-export { verifyCitations, normalizeWhitespace } from "./cao/verify-citations.js";
-export { parseGenerationOutput, splitStreamBuffer, CITATIONS_SENTINEL } from "./cao/parse-generation.js";
+export { orphanSourceRate, extractCitationMarkers } from "./runtime/build-citations.js";
+export { verifyCitations, normalizeWhitespace } from "./runtime/verify-citations.js";
+export { parseGenerationOutput, splitStreamBuffer, CITATIONS_SENTINEL } from "./runtime/parse-generation.js";
