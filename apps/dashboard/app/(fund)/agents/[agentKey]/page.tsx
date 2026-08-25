@@ -33,7 +33,7 @@ export default async function FundAgentPage({
         <h2 className="font-display text-lg font-semibold">{agentLabel(agentKey)}</h2>
         <p className="mt-1 font-mono text-sm text-text-muted">{agentKey}</p>
       </div>
-      <AgentOverviewPanel fundKey={tenantId} agentKey={agentKey} canWrite={false} />
+      <AgentOverviewPanel fundKey={tenantId} agentKey={agentKey} />
     </div>
   );
 }

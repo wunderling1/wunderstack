@@ -14,5 +14,5 @@ export default async function AgentOverviewPage({
   const agentKey = parseAgentKey(rawAgent);
   if (!fundKey || !agentKey) notFound();
 
-  return <AgentOverviewPanel fundKey={fundKey} agentKey={agentKey} canWrite />;
+  return <AgentOverviewPanel fundKey={fundKey} agentKey={agentKey} />;
 }

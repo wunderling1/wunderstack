@@ -111,13 +111,10 @@ export async function updateTextsAction(
       starters: starters.length > 0 ? starters : undefined,
     });
     // Explicit empty starters clears the list when the textarea is blank.
-    const next =
-      starters.length === 0
-        ? (() => {
-            const { starters: _drop, ...rest } = texts;
-            return rest;
-          })()
-        : texts;
+    const next = { ...texts };
+    if (starters.length === 0) {
+      delete next.starters;
+    }
     await updateTenantConfig({ tenantId: fundKey, agentKey, texts: next });
     revalidateAgent(fundKey, agentKey);
     return { ok: true };

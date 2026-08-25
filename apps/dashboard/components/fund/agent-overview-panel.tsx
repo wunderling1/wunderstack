@@ -19,18 +19,13 @@ const pct = (ratio: number) => `${Math.round(ratio * 100)}%`;
 const num = (value: number) => value.toLocaleString("nl-NL");
 const nnb = (value: string | null) => value ?? "n.n.b.";
 
-/**
- * Agent KPI + stub release overview. Shared by admin and fund faces (`canWrite` reserved for
- * future write panels; this surface is read-only today).
- */
+/** Agent KPI + stub release overview. Shared by admin and fund faces; this surface is read-only. */
 export async function AgentOverviewPanel({
   fundKey,
   agentKey,
-  canWrite: _canWrite,
 }: {
   fundKey: string;
   agentKey: string;
-  canWrite: boolean;
 }) {
   const win = { fundKey, agentId: agentKey, since: sinceDaysAgo(WINDOW_DAYS) };
   const [summary, log] = await Promise.all([

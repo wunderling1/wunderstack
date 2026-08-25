@@ -39,7 +39,7 @@ export function switchFundHref(pathname: string, fromFundKey: string, toFundKey:
   if (/^\/agents\/[^/]+/.test(rest)) {
     return fundTabHref(toFundKey, "agents");
   }
-  return `/admin/funds/${toFundKey}${rest}` || fundTabHref(toFundKey, "");
+  return `/admin/funds/${toFundKey}${rest}`;
 }
 
 export function isAgentDetailPath(pathname: string, fundKey: string): boolean {
