@@ -27,7 +27,6 @@ export {
 
 export {
   agentQuestionSchema,
-  arboQuestionSchema,
   agentAnswerSchema,
   agentCitationSchema,
   agentUsageSchema,
@@ -39,6 +38,8 @@ export {
   type AgentUsage,
   type AgentStreamEvent,
 } from "./types.js";
+
+export { arboQuestionSchema } from "./arbo/agent.js";
 
 export { fetchPassage, type PassageInput, type PassageResult } from "./runtime/passage.js";
 
