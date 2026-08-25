@@ -41,8 +41,8 @@ API, and migrates theming from the compile-time `[data-fund]` seam to runtime in
    on `control.agent_instances` only. Same Scalingo caveat as the analytics reader (D4): the role is
    provisioned via the platform, not `CREATE ROLE` in a migration.
 
-7. **Console is admin-only (D12).** The distribution panel (`/admin/embed`) — snippet + copy,
-   key show/rotate, CORS editor, theming form — lives in the dashboard admin area; every server action
+7. **Console is admin-only (D12).** Distribution (snippet + copy, key show/rotate, CORS editor)
+   lives on `/admin/funds/[fundKey]/agents/[agentKey]/distribution`; every server action
    re-checks admin access. Fund-role users are denied by the `(admin)` layout.
 
 ## Not in this phase (infra / follow-ups)

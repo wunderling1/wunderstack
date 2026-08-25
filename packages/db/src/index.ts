@@ -1,5 +1,5 @@
 export * from "./schema/index.js";
-export { getDb, getWriterDb, closeDb, type Database } from "./client.js";
+export { getDb, getWriterDb, getProvisionerDb, closeDb, type Database } from "./client.js";
 export { assertFundKey, quoteIdent, quoteLiteral, FUND_KEY_RE, SCHEMA_NAME_RE } from "./ident.js";
 export {
   assertOpaqueConnectionKey,
@@ -10,6 +10,7 @@ export { withSearchPath, withFundContext } from "./search-path.js";
 export {
   withFundSchema,
   listActiveFunds,
+  findFundsWithoutSchema,
   registerFund,
   ensureFundTables,
   copyPublicCorpusIntoFund,
@@ -23,6 +24,7 @@ export {
   dropPublicCorpusSql,
   publicCorpusTablesSql,
   appliedMigrationsSql,
+  recordMigrationSql,
   countTableSql,
   createSchemaSql,
   createDocumentsLikeSql,
@@ -37,8 +39,56 @@ export {
   revokePublicFundSchemaSql,
   assertNoAnnOrPartitionSql,
 } from "./fund-ddl.js";
+export {
+  grantReaderOnControlSql,
+  grantReaderOnFundSchemaSql,
+  grantOwnerOnFundSchemaSql,
+} from "./grants.js";
 export { canDropPublicCorpus, type FundCopyCheck, type DropPublicDecision } from "./drop-public-corpus.js";
 export { recordAuditEvent, AUDIT_ACTIONS, type AuditAction } from "./audit-events.js";
+export {
+  createFundEnvironment,
+  buildFundEnvironmentStatements,
+  FundExistsError,
+  type CreateFundEnvironmentInput,
+  type CreateFundEnvironmentResult,
+  type CreatedAgentInstance,
+} from "./fund-environment.js";
+export {
+  createFundUser,
+  updateUserPassword,
+  UserExistsError,
+  UserNotFoundError,
+  resetFundUserPassword,
+  updateFundUserEmail,
+  listFundUsers,
+  type FundUserPublic,
+} from "./dashboard-users.js";
+export {
+  getFund,
+  getLatestFundDump,
+  countFundDumps,
+  updateFundDisplayName,
+  getFundTheme,
+  updateFundTheme,
+  addFundAgent,
+  openFundDump,
+  deactivateFund,
+  assertDeactivateAllowed,
+  buildPgDumpArgs,
+  redactSecrets,
+  FundNotFoundError,
+  FundInactiveError,
+  DumpRequiredError,
+  ConfirmationMismatchError,
+  AgentInstanceExistsError,
+  PgDumpMissingError,
+  PgDumpFailedError,
+  FundSchemaMissingError,
+  type FundDumpAudit,
+  type FundDumpStream,
+  type AddedAgentInstance,
+} from "./fund-lifecycle.js";
 export {
   resolveInstanceByPublicKey,
   resolveInstanceByFundAgent,
@@ -61,6 +111,8 @@ export {
   listInstances,
   listTenantConfigs,
   upsertTenantConfig,
+  updateTenantConfig,
+  createAgentInstance,
   rotateTenantKey,
   type TenantConfigInput,
   type TenantConfig,
@@ -69,7 +121,7 @@ export { getAgentConfig, parseAgentConfigData } from "./agent-config.js";
 
 // Re-export the query operators consumers need, so the ORM stays behind this seam
 // (no package/script imports drizzle-orm directly). Extend as new operators are needed.
-export { eq, and, asc, desc, gte, inArray, isNotNull, sql } from "drizzle-orm";
+export { eq, and, asc, desc, gte, inArray, isNotNull, count, sql } from "drizzle-orm";
 // pgvector distance helper used by retrieval (Fase 5). Kept here so the ORM stays behind
 // this seam; add l2Distance/innerProduct here too if a later phase needs them.
 export { cosineDistance } from "drizzle-orm";

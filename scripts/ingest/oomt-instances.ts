@@ -4,7 +4,14 @@
  *
  * Run: pnpm seed:oomt
  */
-import { agentConfig, closeDb, getWriterDb, upsertTenantConfig } from "@wunderstack/db";
+import {
+  agentConfig,
+  closeDb,
+  createAgentInstance,
+  getInstance,
+  getWriterDb,
+  updateTenantConfig,
+} from "@wunderstack/db";
 
 const TENANT_ID = "oomt";
 
@@ -69,9 +76,21 @@ const ARBO_CONFIG = {
   },
 };
 
+async function ensureInstance(input: {
+  tenantId: string;
+  agentKey: string;
+  texts?: typeof ARBO_TEXTS;
+}) {
+  const existing = await getInstance(input.tenantId, input.agentKey);
+  if (existing) {
+    return updateTenantConfig(input);
+  }
+  return createAgentInstance(input);
+}
+
 async function main(): Promise<void> {
-  const cao = await upsertTenantConfig({ tenantId: TENANT_ID, agentKey: "cao" });
-  const arbo = await upsertTenantConfig({
+  const cao = await ensureInstance({ tenantId: TENANT_ID, agentKey: "cao" });
+  const arbo = await ensureInstance({
     tenantId: TENANT_ID,
     agentKey: "arbo",
     texts: ARBO_TEXTS,

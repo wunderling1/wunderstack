@@ -10,6 +10,8 @@ let client: ReturnType<typeof postgres> | undefined;
 let cached: Database | undefined;
 let writerClient: ReturnType<typeof postgres> | undefined;
 let writerCached: Database | undefined;
+let provisionerClient: ReturnType<typeof postgres> | undefined;
+let provisionerCached: Database | undefined;
 
 /**
  * The single access point to the database (the seam that keeps swapping providers cheap).
@@ -57,6 +59,36 @@ export function getWriterDb(): Database {
 }
 
 /**
+ * Resolve the provisioner connection URL. Never falls back to DATABASE_URL — missing
+ * PROVISIONER_DATABASE_URL fails visibly. Exported for unit tests.
+ */
+export function resolveProvisionerUrl(
+  provisionerUrl: string | undefined,
+): string {
+  if (!provisionerUrl) {
+    throw new Error(
+      "PROVISIONER_DATABASE_URL is not set. Configure it (see .env.example) before creating a fund environment. There is no fallback to DATABASE_URL.",
+    );
+  }
+  return provisionerUrl;
+}
+
+/**
+ * Provisioner connection for createFundEnvironment (CREATE SCHEMA + write on control.*).
+ * Never falls back to DATABASE_URL — missing PROVISIONER_DATABASE_URL fails visibly.
+ */
+export function getProvisionerDb(): Database {
+  if (provisionerCached) {
+    return provisionerCached;
+  }
+
+  const url = resolveProvisionerUrl(env.PROVISIONER_DATABASE_URL);
+  provisionerClient = postgres(url, { max: 5 });
+  provisionerCached = drizzle(provisionerClient, { schema });
+  return provisionerCached;
+}
+
+/**
  * Close the pooled connection so a short-lived process (ingest script, eval run) can exit cleanly.
  * The postgres.js pool keeps open sockets that otherwise hold the event loop open forever. No-op when
  * the DB was never used. Long-lived servers never need this — they keep the pool for the process.
@@ -71,5 +103,10 @@ export async function closeDb(): Promise<void> {
     await writerClient.end({ timeout: 5 });
     writerClient = undefined;
     writerCached = undefined;
+  }
+  if (provisionerClient) {
+    await provisionerClient.end({ timeout: 5 });
+    provisionerClient = undefined;
+    provisionerCached = undefined;
   }
 }

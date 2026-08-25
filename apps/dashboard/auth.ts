@@ -6,7 +6,7 @@ import { getUserByEmail } from "@/lib/users";
 
 /**
  * Auth.js (NextAuth v5) for the dashboard. Sovereign Credentials login against our own `users` table;
- * JWT sessions carry `role` + `tenantId` so route gates and tenant-scoped queries need no DB round-trip
+ * JWT sessions carry `role` + `tenantId` + `mustChangePassword` so route gates need no DB round-trip
  * per request. No adapter/DB session store, no external IdP (see DECISION-dashboard-auth.md).
  */
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -28,6 +28,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           name: user.name,
           role: user.role,
           tenantId: user.tenantId,
+          mustChangePassword: user.mustChangePassword,
         };
       },
     }),
@@ -37,13 +38,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user) {
         token.role = user.role;
         token.tenantId = user.tenantId;
+        token.mustChangePassword = user.mustChangePassword;
       }
       return token;
     },
     session({ session, token }) {
-      // token is typed loosely by @auth/core; role/tenantId were set in the jwt callback above.
       session.user.role = token.role as DashboardRole;
       session.user.tenantId = (token.tenantId ?? null) as string | null;
+      session.user.mustChangePassword = Boolean(token.mustChangePassword);
       return session;
     },
   },

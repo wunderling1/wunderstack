@@ -1,4 +1,4 @@
-import { getAgentConfig, parseAgentConfigData } from "@wunderstack/db";
+import { getAgentConfig, getFundTheme, parseAgentConfigData } from "@wunderstack/db";
 import {
   DEFAULT_ARTICLE_50_NOTICE,
   tenantPublicConfigSchema,
@@ -52,7 +52,12 @@ export async function GET(request: Request): Promise<Response> {
   }
   const agentKey = scope.agentKey;
   const fund = scope.fund;
-  const theme = tenantThemeSchema.parse(config?.theme ?? {});
+  // Theme is fund-level (S1). Use this instance's tenantId (= fund whose widget is embedded),
+  // not scope.fund (corpus fund), so a multi-fund runtime still serves the host fund's branding.
+  const fundTheme = config?.tenantId
+    ? await getFundTheme(config.tenantId).catch(() => ({}))
+    : {};
+  const theme = tenantThemeSchema.parse(fundTheme);
   const parsedTexts = tenantTextsSchema.parse(config?.texts ?? {});
   const agentRow = await getAgentConfig(agentKey, fund).catch(() => null);
   const agentData = parseAgentConfigData(agentRow?.config);

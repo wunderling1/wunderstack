@@ -7,7 +7,15 @@
  */
 
 import { env } from "@wunderstack/shared";
-import { closeDb, getDb, quoteIdent, quoteLiteral, SCHEMA_NAME_RE, sql } from "@wunderstack/db";
+import {
+  closeDb,
+  getDb,
+  grantReaderOnControlSql,
+  grantReaderOnFundSchemaSql,
+  quoteLiteral,
+  SCHEMA_NAME_RE,
+  sql,
+} from "@wunderstack/db";
 
 const ROLE_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
@@ -38,17 +46,14 @@ async function main(): Promise<void> {
     return;
   }
 
-  const qRole = quoteIdent(role);
-  await getDb().execute(sql.raw(`GRANT USAGE ON SCHEMA "control" TO ${qRole}`));
-  await getDb().execute(sql.raw(`GRANT SELECT ON ALL TABLES IN SCHEMA "control" TO ${qRole}`));
-  await getDb().execute(
-    sql.raw(`ALTER DEFAULT PRIVILEGES IN SCHEMA "control" GRANT SELECT ON TABLES TO ${qRole}`),
-  );
+  for (const statement of grantReaderOnControlSql(role)) {
+    await getDb().execute(sql.raw(statement));
+  }
 
   for (const schemaName of await listFundSchemas()) {
-    const qSchema = quoteIdent(schemaName);
-    await getDb().execute(sql.raw(`GRANT USAGE ON SCHEMA ${qSchema} TO ${qRole}`));
-    await getDb().execute(sql.raw(`GRANT SELECT ON ALL TABLES IN SCHEMA ${qSchema} TO ${qRole}`));
+    for (const statement of grantReaderOnFundSchemaSql(role, schemaName)) {
+      await getDb().execute(sql.raw(statement));
+    }
   }
 
   console.log(`Granted SELECT on control + fund_* schemas to ${role} (not PUBLIC).`);

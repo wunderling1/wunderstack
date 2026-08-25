@@ -113,6 +113,20 @@
       "when": 1787345000000,
       "tag": "0015_audit_events",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1787649840444,
+      "tag": "0016_fund_environment",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1787655000000,
+      "tag": "0017_fund_theme",
+      "breakpoints": true
     }
   ]
 }

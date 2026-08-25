@@ -29,7 +29,7 @@ export function quoteIdent(ident: string): string {
   return `"${ident.replaceAll('"', '""')}"`;
 }
 
-/** Quote a SQL string literal (fund keys, after `assertFundKey`). */
+/** Quote a SQL string literal (fund keys and schema names, after `assertFundKey`). */
 export function quoteLiteral(value: string): string {
   return `'${value.replaceAll("'", "''")}'`;
 }

@@ -24,9 +24,18 @@ const envSchema = z.object({
   // back to DATABASE_URL when unset. Env name kept as TENANT_CONFIG_WRITER_DATABASE_URL (deploy alias).
   // In deployment this is a DB user granted write on agent_instances only.
   TENANT_CONFIG_WRITER_DATABASE_URL: optional(z.url()),
+  // Optional provisioner connection for createFundEnvironment (CREATE SCHEMA + write on control.*).
+  // No fallback to DATABASE_URL — missing env fails the action visibly. Local: same value as
+  // DATABASE_URL; deploy: a Scalingo login granted CREATE on the database and write on control.*.
+  PROVISIONER_DATABASE_URL: optional(z.url()),
   // Optional Postgres role name for the dashboard/reader login (scripts/db/grant-reader.ts).
   // Never GRANT TO PUBLIC; this named role receives explicit SELECT on control + fund_* schemas.
   DB_READER_ROLE: optional(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/)),
+  // Optional Postgres role that owns/writes fund schemas after provisioner CREATE SCHEMA (ingest +
+  // runtime DATABASE_URL login). Without this grant, a provisioner-owned schema is unreadable/unwritable
+  // by the addon owner in deployment. Unset → createFundEnvironment logs and skips (local OK when
+  // provisioner === owner).
+  DB_OWNER_ROLE: optional(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/)),
   // Provider credentials for the sovereign default path (@wunderstack/ai).
   // Optional at parse time; each is asserted where it is actually used.
   MISTRAL_API_KEY: optional(z.string().min(1)),

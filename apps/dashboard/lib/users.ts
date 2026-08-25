@@ -8,9 +8,10 @@ export interface AuthUser {
   passwordHash: string;
   role: DashboardRole;
   tenantId: string | null;
+  mustChangePassword: boolean;
 }
 
-/** Look up a dashboard user by email (login). Read-only; the dashboard never writes users. */
+/** Look up a dashboard user by email (login). Read-only; the dashboard never writes users here. */
 export async function getUserByEmail(email: string): Promise<AuthUser | null> {
   const [row] = await getDb()
     .select()
@@ -25,5 +26,6 @@ export async function getUserByEmail(email: string): Promise<AuthUser | null> {
     passwordHash: row.passwordHash,
     role: row.role === "admin" ? "admin" : "fund",
     tenantId: row.tenantId,
+    mustChangePassword: row.mustChangePassword,
   };
 }

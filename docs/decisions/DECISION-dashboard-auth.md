@@ -1,7 +1,7 @@
 # DECISION — dashboard-auth & toegangsmodel (Fase 3)
 
-**Status:** besloten (JW, 2026-07-22) · **Gerelateerd:** `PLAN-ui-ecosystem.md` (Fase 3, D1/D2/D4),
-`DECISION-analytics-retention.md` (read-only DB-rol)
+**Status:** besloten (JW, 2026-07-22) · **Geamendeerd:** 25 augustus 2026 (fondsbeheer / provisioner) ·
+**Gerelateerd:** `PLAN-ui-ecosystem.md` (Fase 3, D1/D2/D4), `DECISION-analytics-retention.md`
 
 ## Context
 Het `apps/dashboard` heeft twee gezichten (fund + admin, D2) op één origin
@@ -19,14 +19,17 @@ read-only lezen (D4). Auth was nog geen concrete keuze; dit legt hem vast.
      dus geen "dagenoude major" (100-stack). Herzien als v5 stable uitkomt (upgrade) of als een
      e-mail/SSO-eis binnenkomt.
 
-2. **JWT-sessies (geen DB-adapter).** De sessie draagt `role` + `tenantId`, zodat route-gates en
-   tenant-scoping geen DB-round-trip per request nodig hebben. Login doet één SELECT op `users`.
+2. **JWT-sessies (geen DB-adapter).** De sessie draagt `role` + `tenantId` + `mustChangePassword`,
+   zodat route-gates en tenant-scoping geen DB-round-trip per request nodig hebben. Login doet één
+   SELECT op `users`. Na een verplichte wachtwoordwissel wordt opnieuw `signIn` gedaan zodat de JWT
+   de vlag `false` draagt.
 
 3. **Toegang server-side per area-layout via een pure `decideAccess`-functie** (`lib/authz.ts`), niet
    via edge-middleware. Reden: robuuster met env (de DB/secret laadt in het node-proces via
    `next.config`), en de pure functie is **unit-testbaar** — dat is het DoD-bewijs "admin-routes
    aantoonbaar geweigerd" (`lib/authz.test.ts`). Een fund-sessie op `/admin` wordt geredirect naar `/`;
-   anoniem → `/login`.
+   anoniem → `/login`. Is `mustChangePassword` waar, dan is de enige toegestane route `/password`
+   (ook voor admin).
 
 4. **Tenant-isolatie op query-niveau (v1), procesgrens D15.** KPI-queries filteren op `tenant_id` uit
    de sessie (`@wunderstack/analytics`). Geamendeerd 21 augustus 2026: het control plane mag
@@ -34,10 +37,16 @@ read-only lezen (D4). Auth was nog geen concrete keuze; dit legt hem vast.
    tak B). DB-RLS-per-tenant / SET ROLE is geen vervanging in deze reeks; de read-only Scalingo-user
    + de bestaande RLS op `interaction_events` (zie DECISION-analytics-retention) blijven de basis.
 
-5. **Read-only in deployment.** De dashboard-`DATABASE_URL` wijst naar de read-only DB-user (D4). De
-   enige schrijver is het `create-user`-seed-script met de read-write URL (out-of-band). Lokaal
-   hergebruikt het dashboard de root-`DATABASE_URL` (dev-gemak; de read-only-weigering is al live
-   bewezen in DECISION-analytics-retention).
+5. **Drie database-connecties.**
+   - **Reader** (`DATABASE_URL` → `getDb()`): SELECT voor login, KPI's, corpus. In deploy: read-only
+     Scalingo-login (D4).
+   - **Tenant-config writer** (`TENANT_CONFIG_WRITER_DATABASE_URL` → `getWriterDb()`, valt terug op
+     `DATABASE_URL`): schrijven op `control.agent_instances` (embed-console).
+   - **Provisioner** (`PROVISIONER_DATABASE_URL` → `getProvisionerDb()`, **geen** terugval):
+     `createFundEnvironment` (CREATE SCHEMA + control.*) en wachtwoordwissel, dump-audit, soft-delete
+     van `control.funds`. Lokaal: zelfde waarde als `DATABASE_URL`. Out-of-band blijft `create-user`
+     het CLI-pad voor ad-hoc accounts (upsert toegestaan); de UI mag nooit stil andermans wachtwoord
+     overschrijven. Extra fondsaccounts via `/admin/funds/<key>` (platform-admin).
 
 6. **Admin-manifest via een getypte naad met eerlijke stub.** Release-tag, gate-status, goldenset-/
    corpus-/profiel-/invariantversie en threshold-afwijkingen komen uit het release-manifest dat het
@@ -47,5 +56,5 @@ read-only lezen (D4). Auth was nog geen concrete keuze; dit legt hem vast.
    waartegen de view al rendert; alleen de provider hoeft te wisselen als §7 landt.
 
 ## Bewust niet nu
-Wachtwoord-reset-flow · e-mail/SSO · RBAC-delegatie naar fondsen · DB-RLS-per-tenant · console-beheer
-(embed/keys/theming — Fase 4, D12) · DNS/TLS-provisioning (infra-actie, buiten de repo).
+Wachtwoord-vergeten-flow · e-mail/SSO · uitnodigingstokens · DB-RLS-per-tenant · DNS/TLS-provisioning
+(infra-actie, buiten de repo). Hard delete (`DROP SCHEMA`) en restore.

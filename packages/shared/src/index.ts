@@ -58,6 +58,14 @@ export {
 export { parseCaoFunds, isFundScopeConfigured } from "./config/funds.js";
 
 export {
+  AGENT_KEYS,
+  AGENT_KEY_LABELS,
+  agentKeySchema,
+  isAgentKey,
+  type AgentKey,
+} from "./config/agent-keys.js";
+
+export {
   tenantThemeSchema,
   tenantTextsSchema,
   tenantPublicConfigSchema,

@@ -13,7 +13,7 @@ import {
   recordMigrationSql,
   truncateFundTablesSql,
 } from "./fund-ddl.js";
-import { assertFundKey } from "./ident.js";
+import { assertFundKey, quoteLiteral } from "./ident.js";
 import { funds } from "./schema/control/funds.js";
 import { withSearchPath } from "./search-path.js";
 import { fundSchemaName } from "./agent-instances.js";
@@ -41,6 +41,24 @@ export async function listActiveFunds(): Promise<ActiveFund[]> {
     .from(funds)
     .where(eq(funds.status, "active"))
     .orderBy(funds.key);
+}
+
+/**
+ * Keys of `funds` whose physical schema is absent. `SET search_path` accepts a schema that does
+ * not exist, so an unqualified `documents`/`interaction_events` then resolves against `public`
+ * instead of failing — a control row without a schema would read the public corpus and look like
+ * an empty but healthy fund. Callers that walk `control.funds` check this first.
+ */
+export async function findFundsWithoutSchema(funds: ActiveFund[]): Promise<string[]> {
+  if (funds.length === 0) {
+    return [];
+  }
+  const wanted = funds.map((fund) => quoteLiteral(fund.schemaName)).join(", ");
+  const rows = (await getDb().execute(
+    sql.raw(`SELECT nspname FROM pg_namespace WHERE nspname IN (${wanted})`),
+  )) as unknown as Array<{ nspname: string }>;
+  const present = new Set(rows.map((row) => row.nspname));
+  return funds.filter((fund) => !present.has(fund.schemaName)).map((fund) => fund.key);
 }
 
 /** Register a fund in `control.funds` so the migrator and ingest share one registry. */

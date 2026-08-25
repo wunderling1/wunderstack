@@ -142,6 +142,20 @@ jobs:
         env:
           DATABASE_URL: ${{ env.GATE_DATABASE_URL }}
 
+      # Fund-environment seam (createFundEnvironment atomicity + analytics against a real schema).
+      # PROVISIONER_DATABASE_URL has no fallback — point it at the same throwaway gate DB.
+      - name: Fund environment integration
+        if: env.GATE_DB == 'true'
+        # A test file that leaves a postgres.js pool open never exits; without this the run
+        # burns the six-hour job limit instead of reporting a failure.
+        timeout-minutes: 10
+        run: |
+          pnpm --filter @wunderstack/db test:unit
+          pnpm --filter @wunderstack/analytics test:unit
+        env:
+          DATABASE_URL: ${{ env.GATE_DATABASE_URL }}
+          PROVISIONER_DATABASE_URL: ${{ env.GATE_DATABASE_URL }}
+
       # Ingest every corpus the gates score against, from the repo, into the fresh database. All five
       # sources are committed, so the gate's input is fully declared by this commit:
       #   eval-fixtures  <- fixtures/golden-passages.jsonl (base layer + fund set "etd")
