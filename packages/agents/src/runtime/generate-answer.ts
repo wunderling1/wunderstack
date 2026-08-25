@@ -7,7 +7,6 @@ import {
   type HardFactAgentKey,
 } from "../hard-facts.js";
 import { parseGenerationOutput } from "./parse-generation.js";
-import { NOT_FOUND_MESSAGE as CAO_NOT_FOUND_MESSAGE } from "../cao/prompt.js";
 import { verifyCitations } from "./verify-citations.js";
 
 /**
@@ -122,8 +121,8 @@ const PENALTY_PER_BAD_MARKER = 10;
 export function assessCitationContract(
   raw: string,
   chunkContentById: Map<string, string>,
-  userSupplied = "",
-  agentKey: HardFactAgentKey = "cao",
+  userSupplied: string,
+  agentKey: HardFactAgentKey,
 ): ContractAssessment {
   const parsed = parseGenerationOutput(raw);
   const proseMarkers = extractCitationMarkers(parsed.answerMarkdown);
@@ -195,9 +194,18 @@ export function isProRataViolation(reason: string, previous: string, userSupplie
 function buildRepairMessages(
   previous: string,
   reason: string,
-  strippedQuotes: string[] = [],
-  userSupplied = "",
-  notFoundMessage: string = CAO_NOT_FOUND_MESSAGE,
+  strippedQuotes: string[],
+  userSupplied: string,
+  /**
+   * Refusal sentence coached on the repair turn. Always the calling profile's `notFoundMessage`
+   * ("not in this catalog" / CAO not-found) — never a scope refusal.
+   *
+   * Why only that one: repair fires when retrieval already returned context but the generation
+   * violated the citation contract (ungrounded fact, bad quote). Scope refusals (Arbowet / CAO /
+   * individual advice) follow from the *question*, not from a failed retrieval attempt; coaching
+   * them here would teach the model to refuse in-scope catalog answers.
+   */
+  notFoundMessage: string,
 ): ChatMessage[] {
   // Echo the exact quotes that failed verbatim verification so the repair turn fixes those specific
   // spans instead of re-guessing. The most common recoverable failure is a quote that stitched two
@@ -274,7 +282,7 @@ function addUsage(a: TokenUsage | undefined, b: TokenUsage | undefined): TokenUs
 function isUnverifiableContentAnswer(
   raw: string,
   chunkContentById: Map<string, string>,
-  agentKey: HardFactAgentKey = "cao",
+  agentKey: HardFactAgentKey,
 ): boolean {
   const parsed = parseGenerationOutput(raw);
   const asserts =
@@ -311,22 +319,20 @@ export async function generateAnswerWithRepair(args: {
   /** The user's question + history: grounding for hard facts (a user-supplied number is a premise). */
   userSupplied?: string;
   /**
-   * Hard-fact pattern set for repair assessment. Defaults to `"cao"` so existing tests and the eval
-   * stay pinned. Serve-time (`createGroundedAgent`) passes `profile.agentKey`. The repair *coaching
-   * sentence* still defaults to the CAO refusal (B4); only the patterns follow the profile.
+   * Hard-fact pattern set for repair assessment. Required — no silent CAO default.
+   * Serve-time (`createGroundedAgent`) passes `profile.agentKey`.
    */
-  agentKey?: HardFactAgentKey;
+  agentKey: HardFactAgentKey;
   /** Total generation attempts (>= 1). Default 2 = one generation + one repair (legacy behaviour). */
   maxAttempts?: number;
   /**
-   * Refusal sentence coached on the repair turn. Defaults to the CAO not-found message — keep that
-   * default for arbo until a dedicated behaviour PR (shared-runtime B4).
+   * Refusal sentence coached on the repair turn. Required — always the calling profile's
+   * `notFoundMessage` (catalog miss). Scope refusals are not coached here; see `buildRepairMessages`.
    */
-  notFoundMessage?: string;
+  notFoundMessage: string;
 }): Promise<AnswerWithRepairResult> {
   const userSupplied = args.userSupplied ?? "";
-  const notFoundMessage = args.notFoundMessage ?? CAO_NOT_FOUND_MESSAGE;
-  const agentKey = args.agentKey ?? "cao";
+  const { notFoundMessage, agentKey } = args;
   const budget = Math.max(1, Math.trunc(args.maxAttempts ?? 2));
 
   let usage: TokenUsage = ZERO_USAGE;

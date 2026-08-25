@@ -27,28 +27,28 @@ describe("assessCitationContract", () => {
     const output = raw("Je hebt recht op 104 roostervrije uren [1].", [
       { marker: 1, chunk_id: "adv", quote: "104 roostervrije uren" },
     ]);
-    assert.equal(assessCitationContract(output, chunks).penalty, 0);
+    assert.equal(assessCitationContract(output, chunks, "", "cao").penalty, 0);
   });
 
   it("passes a claim-free refusal with no citation block", () => {
-    assert.equal(assessCitationContract(NOT_FOUND_MESSAGE, chunks).penalty, 0);
+    assert.equal(assessCitationContract(NOT_FOUND_MESSAGE, chunks, "", "cao").penalty, 0);
   });
 
   it("flags an answerable answer whose citation block failed to parse", () => {
     const output = `Je hebt recht op iets [1].\n${CITATIONS_SENTINEL}\nnot json`;
-    assert.ok(assessCitationContract(output, chunks).penalty > 0);
+    assert.ok(assessCitationContract(output, chunks, "", "cao").penalty > 0);
   });
 
   it("flags a quote that is not verbatim in its chunk", () => {
     const output = raw("Je hebt recht op 104 roostervrije uren [1].", [
       { marker: 1, chunk_id: "adv", quote: "honderdvier roostervrije uren" },
     ]);
-    assert.ok(assessCitationContract(output, chunks).penalty > 0);
+    assert.ok(assessCitationContract(output, chunks, "", "cao").penalty > 0);
   });
 
   it("flags a prose marker with no citation object behind it (dangling)", () => {
     const output = raw("Je hebt recht op 104 roostervrije uren [1].", []);
-    assert.ok(assessCitationContract(output, chunks).penalty > 0);
+    assert.ok(assessCitationContract(output, chunks, "", "cao").penalty > 0);
   });
 
   it("flags an ungrounded hard fact carried by an unverifiable citation", () => {
@@ -56,7 +56,7 @@ describe("assessCitationContract", () => {
     const output = raw("Je hebt recht op 16 weken zwangerschapsverlof [1].", [
       { marker: 1, chunk_id: "wazo", quote: "16 weken zwangerschapsverlof" },
     ]);
-    assert.ok(assessCitationContract(output, chunks).penalty > 0);
+    assert.ok(assessCitationContract(output, chunks, "", "cao").penalty > 0);
   });
 
   it("flags a decorative citation: a VERIFIED quote that does not carry the asserted figure (etd-026)", () => {
@@ -69,7 +69,7 @@ describe("assessCitationContract", () => {
     const output = raw("Je hebt recht op 16 weken zwangerschapsverlof [1].", [
       { marker: 1, chunk_id: "wet-arbeid-zorg", quote: "De Wet Arbeid en Zorg is van toepassing." },
     ]);
-    assert.ok(assessCitationContract(output, wazoChunks).penalty > 0);
+    assert.ok(assessCitationContract(output, wazoChunks, "", "cao").penalty > 0);
   });
 
   it("does not flag a grounded figure whose verified quote carries it (no false positive)", () => {
@@ -78,14 +78,14 @@ describe("assessCitationContract", () => {
       { marker: 1, chunk_id: "meal", quote: "€ 6,25 netto" },
     ]);
     const mealChunks = new Map<string, string>([["meal", "Na 19:00 uur krijg je € 6,25 netto."]]);
-    assert.equal(assessCitationContract(output, mealChunks).penalty, 0);
+    assert.equal(assessCitationContract(output, mealChunks, "", "cao").penalty, 0);
   });
 
   it("flags kg as an arbo hard fact but not as a CAO hard fact", () => {
     const output = raw("Til maximaal 25 kg [1].", [
       { marker: 1, chunk_id: "adv", quote: "De werknemer heeft recht op 104 roostervrije uren per jaar." },
     ]);
-    assert.equal(assessCitationContract(output, chunks).penalty, 0);
+    assert.equal(assessCitationContract(output, chunks, "", "cao").penalty, 0);
     assert.ok(assessCitationContract(output, chunks, "", "arbo").penalty > 0);
   });
 });
@@ -167,7 +167,9 @@ describe("generateAnswerWithRepair", () => {
     ]);
     const { generate, calls } = scriptedGenerate([clean]);
 
-    const result = await generateAnswerWithRepair({ chunkContentById: chunks, generate });
+    const result = await generateAnswerWithRepair({
+      agentKey: "cao",
+      notFoundMessage: NOT_FOUND_MESSAGE, chunkContentById: chunks, generate });
 
     assert.equal(result.attempts, 1);
     assert.equal(result.repaired, false);
@@ -184,7 +186,9 @@ describe("generateAnswerWithRepair", () => {
     ]);
     const { generate, calls } = scriptedGenerate([broken, fixed]);
 
-    const result = await generateAnswerWithRepair({ chunkContentById: chunks, generate });
+    const result = await generateAnswerWithRepair({
+      agentKey: "cao",
+      notFoundMessage: NOT_FOUND_MESSAGE, chunkContentById: chunks, generate });
 
     assert.equal(result.attempts, 2);
     assert.equal(result.repaired, true);
@@ -202,6 +206,8 @@ describe("generateAnswerWithRepair", () => {
     const { generate, calls } = scriptedGenerate([invented, NOT_FOUND_MESSAGE]);
 
     const result = await generateAnswerWithRepair({
+      agentKey: "cao",
+      notFoundMessage: NOT_FOUND_MESSAGE,
       chunkContentById: chunks,
       generate,
       userSupplied: "Hoeveel weken zwangerschapsverlof krijg ik?",
@@ -226,7 +232,9 @@ describe("generateAnswerWithRepair", () => {
     ]);
     const { generate } = scriptedGenerate([brokenA, brokenBworse]);
 
-    const result = await generateAnswerWithRepair({ chunkContentById: chunks, generate });
+    const result = await generateAnswerWithRepair({
+      agentKey: "cao",
+      notFoundMessage: NOT_FOUND_MESSAGE, chunkContentById: chunks, generate });
 
     // Option b fires the bounded extra attempt (brokenA is a substantive answer with zero verified
     // citations); the extra attempt (brokenBworse) is worse, so brokenA is still kept.
@@ -243,7 +251,9 @@ describe("generateAnswerWithRepair", () => {
     ]);
     const { generate, calls } = scriptedGenerate([brokenA, brokenB, clean]);
 
-    const result = await generateAnswerWithRepair({ chunkContentById: chunks, generate, maxAttempts: 3 });
+    const result = await generateAnswerWithRepair({
+      agentKey: "cao",
+      notFoundMessage: NOT_FOUND_MESSAGE, chunkContentById: chunks, generate, maxAttempts: 3 });
 
     assert.equal(result.attempts, 3);
     assert.equal(result.repaired, true);
@@ -260,7 +270,9 @@ describe("generateAnswerWithRepair", () => {
     ]);
     const { generate, calls } = scriptedGenerate([broken, clean, clean]);
 
-    const result = await generateAnswerWithRepair({ chunkContentById: chunks, generate, maxAttempts: 3 });
+    const result = await generateAnswerWithRepair({
+      agentKey: "cao",
+      notFoundMessage: NOT_FOUND_MESSAGE, chunkContentById: chunks, generate, maxAttempts: 3 });
 
     assert.equal(result.attempts, 2);
     assert.equal(result.text, clean);
@@ -279,7 +291,9 @@ describe("generateAnswerWithRepair", () => {
       return Promise.resolve({ text, usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 } });
     };
 
-    const result = await generateAnswerWithRepair({ chunkContentById: chunks, generate });
+    const result = await generateAnswerWithRepair({
+      agentKey: "cao",
+      notFoundMessage: NOT_FOUND_MESSAGE, chunkContentById: chunks, generate });
 
     assert.equal(result.usage.promptTokens, 20);
     assert.equal(result.usage.completionTokens, 10);
@@ -302,7 +316,9 @@ describe("generateAnswerWithRepair", () => {
         : Promise.resolve({ text: "", finishReason: "tripwire" });
     };
 
-    const result = await generateAnswerWithRepair({ chunkContentById: chunks, generate });
+    const result = await generateAnswerWithRepair({
+      agentKey: "cao",
+      notFoundMessage: NOT_FOUND_MESSAGE, chunkContentById: chunks, generate });
 
     // Attempt 2 (repair) aborts; option b then fires one more (also aborted) — the real flagged answer
     // survives all of it and is never overwritten by an empty attempt.
@@ -316,7 +332,9 @@ describe("generateAnswerWithRepair", () => {
       Promise.resolve({ text: "", finishReason: "tripwire" });
 
     await assert.rejects(
-      () => generateAnswerWithRepair({ chunkContentById: chunks, generate, maxAttempts: 2 }),
+      () => generateAnswerWithRepair({
+      agentKey: "cao",
+      notFoundMessage: NOT_FOUND_MESSAGE, chunkContentById: chunks, generate, maxAttempts: 2 }),
       (error: unknown) => error instanceof GenerationAbortedError,
     );
   });
@@ -325,7 +343,9 @@ describe("generateAnswerWithRepair", () => {
     const { generate } = scriptedGenerate(["   "]);
 
     await assert.rejects(
-      () => generateAnswerWithRepair({ chunkContentById: chunks, generate, maxAttempts: 1 }),
+      () => generateAnswerWithRepair({
+      agentKey: "cao",
+      notFoundMessage: NOT_FOUND_MESSAGE, chunkContentById: chunks, generate, maxAttempts: 1 }),
       (error: unknown) => error instanceof GenerationAbortedError,
     );
   });
@@ -339,7 +359,9 @@ describe("generateAnswerWithRepair", () => {
     ]);
     const { generate, calls } = scriptedGenerate([broken, broken, clean]);
 
-    const result = await generateAnswerWithRepair({ chunkContentById: chunks, generate });
+    const result = await generateAnswerWithRepair({
+      agentKey: "cao",
+      notFoundMessage: NOT_FOUND_MESSAGE, chunkContentById: chunks, generate });
 
     assert.equal(result.attempts, 3, "budget 2 + one rescue attempt");
     assert.equal(result.repaired, true);
@@ -355,7 +377,9 @@ describe("generateAnswerWithRepair", () => {
     ]);
     const { generate } = scriptedGenerate([dangling, dangling]);
 
-    const result = await generateAnswerWithRepair({ chunkContentById: chunks, generate });
+    const result = await generateAnswerWithRepair({
+      agentKey: "cao",
+      notFoundMessage: NOT_FOUND_MESSAGE, chunkContentById: chunks, generate });
 
     assert.equal(result.attempts, 2);
   });
@@ -369,7 +393,9 @@ describe("generateAnswerWithRepair", () => {
     ]);
     const { generate, calls } = scriptedGenerate([broken, clean]);
 
-    await generateAnswerWithRepair({ chunkContentById: chunks, generate });
+    await generateAnswerWithRepair({
+      agentKey: "cao",
+      notFoundMessage: NOT_FOUND_MESSAGE, chunkContentById: chunks, generate });
 
     const repairPrompt = calls[1]?.[1]?.content ?? "";
     assert.ok(repairPrompt.includes("NIET letterlijk"), "names the verbatim failure");
@@ -392,6 +418,8 @@ describe("generateAnswerWithRepair", () => {
     const { generate, calls } = scriptedGenerate([invented, deferred]);
 
     const result = await generateAnswerWithRepair({
+      agentKey: "cao",
+      notFoundMessage: NOT_FOUND_MESSAGE,
       chunkContentById: vacationChunks,
       generate,
       userSupplied: "Ik werk 24 uur per week. Op hoeveel vakantie-uren heb ik dan per jaar recht?",
@@ -412,7 +440,9 @@ describe("generateAnswerWithRepair", () => {
     ]);
     const { generate } = scriptedGenerate([flagged, ""]);
 
-    const result = await generateAnswerWithRepair({ chunkContentById: chunks, generate });
+    const result = await generateAnswerWithRepair({
+      agentKey: "cao",
+      notFoundMessage: NOT_FOUND_MESSAGE, chunkContentById: chunks, generate });
 
     assert.equal(result.text, flagged);
   });
@@ -431,20 +461,20 @@ describe("assessCitationContract with a stop-sequence-terminated answer", () => 
       { marker: 1, chunk_id: "adv", quote: "104 roostervrije uren" },
     ]);
     // What the provider now returns: identical up to the closing `]`, nothing after it.
-    assert.equal(assessCitationContract(output, chunks).penalty, 0);
+    assert.equal(assessCitationContract(output, chunks, "", "cao").penalty, 0);
   });
 
   it("is unchanged by a trailing newline where the runaway used to start", () => {
     const output = `${raw("Je hebt recht op 104 roostervrije uren per jaar [1].", [
       { marker: 1, chunk_id: "adv", quote: "104 roostervrije uren" },
     ])}\n\n\n`;
-    assert.equal(assessCitationContract(output, chunks).penalty, 0);
+    assert.equal(assessCitationContract(output, chunks, "", "cao").penalty, 0);
   });
 
   it("still flags the pre-stop answer when the citation block itself is broken", () => {
     // The stop sequence must not launder a real violation: an unbacked marker stays a violation.
     const output = `Je hebt recht op 104 roostervrije uren per jaar [1].\n${CITATIONS_SENTINEL}\n[]`;
-    assert.ok(assessCitationContract(output, chunks).penalty > 0);
+    assert.ok(assessCitationContract(output, chunks, "", "cao").penalty > 0);
   });
 
   it("treats the runaway tail as scoreable text when a stop sequence did NOT fire", () => {
@@ -454,6 +484,43 @@ describe("assessCitationContract with a stop-sequence-terminated answer", () => 
     const output = `${raw("Je hebt recht op 104 roostervrije uren per jaar [1].", [
       { marker: 1, chunk_id: "adv", quote: "104 roostervrije uren" },
     ])}\n\n\n+++++ examples/cao-assistent/voorbeeld-2.md\nJe bent een assistent…`;
-    assert.equal(assessCitationContract(output, chunks).penalty, 0);
+    assert.equal(assessCitationContract(output, chunks, "", "cao").penalty, 0);
+  });
+});
+
+describe("generateAnswerWithRepair — arbo profile binding", () => {
+  it("assesses with arbo hard-fact patterns (kg), not CAO patterns (€/uren)", () => {
+    const empty = new Map<string, string>([["c1", "Er staan geen getallen in deze context."]]);
+    const kgOutput = raw("Til maximaal 25 kg [1].", [
+      { marker: 1, chunk_id: "c1", quote: "Er staan geen getallen in deze context." },
+    ]);
+    // CAO patterns do not treat kg as a hard fact → penalty stays marker-level only (or 0 if quote ok).
+    // Arbo patterns treat 25 kg as ungrounded → hard penalty.
+    assert.equal(assessCitationContract(kgOutput, empty, "", "cao").penalty, 0);
+    assert.ok(assessCitationContract(kgOutput, empty, "", "arbo").penalty >= 100);
+  });
+
+  it("coaches repair toward NOT_IN_CATALOG_MESSAGE when that is the profile refusal", async () => {
+    const { NOT_IN_CATALOG_MESSAGE } = await import("../arbo/prompt.js");
+    const empty = new Map<string, string>([["c1", "Geen getallen hier."]]);
+    const broken = raw("Til maximaal 25 kg [1].", [
+      { marker: 1, chunk_id: "c1", quote: "niet letterlijk" },
+    ]);
+    const refused = `${NOT_IN_CATALOG_MESSAGE}\n${CITATIONS_SENTINEL}\n[]`;
+    const { generate, calls } = scriptedGenerate([broken, refused]);
+    const result = await generateAnswerWithRepair({
+      chunkContentById: empty,
+      generate,
+      agentKey: "arbo",
+      notFoundMessage: NOT_IN_CATALOG_MESSAGE,
+    });
+    assert.equal(result.repaired, true);
+    assert.equal(result.text, refused);
+    const repairPrompt = String(calls[1]?.[1]?.content ?? "");
+    assert.ok(
+      repairPrompt.includes(NOT_IN_CATALOG_MESSAGE),
+      "repair turn must coach the arbo catalog refusal, not the CAO one",
+    );
+    assert.equal(repairPrompt.includes("CAO-documenten"), false);
   });
 });

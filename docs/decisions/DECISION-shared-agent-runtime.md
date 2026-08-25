@@ -30,9 +30,9 @@ default + `agent_config` override).
 
 ## Wat bewust niet
 
-Gedragswijzigingen (clarify voor arbo, repair-coaching-zin op arbo-refusal, hernoemen van
-`cao-retrieval` span) — aparte PRs met evalbewijs.
+Gedragswijzigingen (clarify voor arbo, hernoemen van `cao-retrieval` span) — aparte PRs met
+evalbewijs.
 
-Repair-assessment volgt wél `profile.agentKey` voor hard-fact-patronen (kg/dB voor arbo); de
-gecoachte refusal-zin blijft de CAO-tekst tot die gedrag-PR. Overige `runtime/` → `cao/`-imports:
-registry (verwacht), retrieval-types in `profile.ts` (historisch thuis), `NOT_FOUND_MESSAGE`-default.
+Repair-assessment volgt `profile.agentKey` voor hard-fact-patronen en `profile.notFoundMessage`
+voor de gecoachte refusal-zin. Scope-weigerzinnen horen niet in repair-coaching: die volgen uit
+de vraag, niet uit een mislukte retrieval. Retrieval-types leven in `runtime/retrieval.ts`.
