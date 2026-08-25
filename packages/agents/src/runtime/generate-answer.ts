@@ -1,7 +1,11 @@
 import type { ChatMessage, TokenUsage } from "@wunderstack/ai";
 
 import { extractCitationMarkers } from "./build-citations.js";
-import { containsHardFact, findUngroundedFacts } from "../cao/hard-facts.js";
+import {
+  containsHardFact,
+  findUngroundedFacts,
+  type HardFactAgentKey,
+} from "../hard-facts.js";
 import { parseGenerationOutput } from "./parse-generation.js";
 import { NOT_FOUND_MESSAGE as CAO_NOT_FOUND_MESSAGE } from "../cao/prompt.js";
 import { verifyCitations } from "./verify-citations.js";
@@ -111,7 +115,7 @@ const PENALTY_PER_BAD_MARKER = 10;
  *     behind it, is a marker-level violation;
  *   - a load-bearing fact (money / percentage / quantity) that is not grounded in the chunk content is
  *     a hard violation — the SAME `findUngroundedFacts` decision as the production hard-fact guard
- *     (agent.ts, E13) and the eval's hard-hallucination scorer (judge.ts), so a citation must carry
+ *     (`create-agent.ts`) and the eval's hard-hallucination scorer (judge.ts), so a citation must carry
  *     the figure, not merely sit next to it (the etd-026 "decorative citation" gap). `userSupplied`
  *     (question + history) is grounding: a number the user provided is a premise, not a fabrication.
  */
@@ -119,10 +123,11 @@ export function assessCitationContract(
   raw: string,
   chunkContentById: Map<string, string>,
   userSupplied = "",
+  agentKey: HardFactAgentKey = "cao",
 ): ContractAssessment {
   const parsed = parseGenerationOutput(raw);
   const proseMarkers = extractCitationMarkers(parsed.answerMarkdown);
-  const asserts = proseMarkers.length > 0 || containsHardFact(parsed.answerMarkdown);
+  const asserts = proseMarkers.length > 0 || containsHardFact(parsed.answerMarkdown, agentKey);
 
   if (parsed.citationParseFailed) {
     if (!asserts) {
@@ -151,7 +156,7 @@ export function assessCitationContract(
     reasons.push(`${unbacked.length} [n]-verwijzing(en) in de tekst hadden geen geverifieerd citaat`);
   }
   const grounding = [...chunkContentById.values()].join(" ");
-  const ungroundedFacts = findUngroundedFacts(parsed.answerMarkdown, grounding, userSupplied);
+  const ungroundedFacts = findUngroundedFacts(parsed.answerMarkdown, grounding, userSupplied, agentKey);
   if (ungroundedFacts.length > 0) {
     penalty += PENALTY_UNGROUNDED_FACT;
     reasons.push(
@@ -266,9 +271,14 @@ function addUsage(a: TokenUsage | undefined, b: TokenUsage | undefined): TokenUs
  * (option b): it fires ONLY here, so latency/cost rise by at most one call and only on the case that
  * would otherwise be served sourceless.
  */
-function isUnverifiableContentAnswer(raw: string, chunkContentById: Map<string, string>): boolean {
+function isUnverifiableContentAnswer(
+  raw: string,
+  chunkContentById: Map<string, string>,
+  agentKey: HardFactAgentKey = "cao",
+): boolean {
   const parsed = parseGenerationOutput(raw);
-  const asserts = extractCitationMarkers(parsed.answerMarkdown).length > 0 || containsHardFact(parsed.answerMarkdown);
+  const asserts =
+    extractCitationMarkers(parsed.answerMarkdown).length > 0 || containsHardFact(parsed.answerMarkdown, agentKey);
   if (!asserts) {
     return false;
   }
@@ -300,6 +310,12 @@ export async function generateAnswerWithRepair(args: {
   generate: AnswerGenerate;
   /** The user's question + history: grounding for hard facts (a user-supplied number is a premise). */
   userSupplied?: string;
+  /**
+   * Hard-fact pattern set for repair assessment. Defaults to `"cao"` so existing tests and the eval
+   * stay pinned. Serve-time (`createGroundedAgent`) passes `profile.agentKey`. The repair *coaching
+   * sentence* still defaults to the CAO refusal (B4); only the patterns follow the profile.
+   */
+  agentKey?: HardFactAgentKey;
   /** Total generation attempts (>= 1). Default 2 = one generation + one repair (legacy behaviour). */
   maxAttempts?: number;
   /**
@@ -310,6 +326,7 @@ export async function generateAnswerWithRepair(args: {
 }): Promise<AnswerWithRepairResult> {
   const userSupplied = args.userSupplied ?? "";
   const notFoundMessage = args.notFoundMessage ?? CAO_NOT_FOUND_MESSAGE;
+  const agentKey = args.agentKey ?? "cao";
   const budget = Math.max(1, Math.trunc(args.maxAttempts ?? 2));
 
   let usage: TokenUsage = ZERO_USAGE;
@@ -342,7 +359,7 @@ export async function generateAnswerWithRepair(args: {
       continue;
     }
 
-    const assessment = assessCitationContract(attempt.text, args.chunkContentById, userSupplied);
+    const assessment = assessCitationContract(attempt.text, args.chunkContentById, userSupplied, agentKey);
 
     // `<=` so a later attempt wins ties (it acted on the feedback); strict improvements always win.
     if (best === undefined || assessment.penalty <= best.assessment.penalty) {
@@ -363,7 +380,10 @@ export async function generateAnswerWithRepair(args: {
   // optimises the penalty; this rescue optimises the specific "sourceless answer" failure that the
   // penalty alone does not distinguish (a single stripped marker and an all-stripped answer can carry
   // the same penalty). Fires at most once, only on this state, so cost is +1 call on the worst case.
-  if (best.assessment.penalty > 0 && isUnverifiableContentAnswer(best.attempt.text, args.chunkContentById)) {
+  if (
+    best.assessment.penalty > 0 &&
+    isUnverifiableContentAnswer(best.attempt.text, args.chunkContentById, agentKey)
+  ) {
     attemptsRun += 1;
     const rescue = await args.generate(
       buildRepairMessages(
@@ -376,7 +396,7 @@ export async function generateAnswerWithRepair(args: {
     );
     usage = addUsage(usage, rescue.usage);
     if (!isUnusableAttempt(rescue)) {
-      const assessment = assessCitationContract(rescue.text, args.chunkContentById, userSupplied);
+      const assessment = assessCitationContract(rescue.text, args.chunkContentById, userSupplied, agentKey);
       // `<=` keeps the rescue on a tie: it acted on the feedback and, at equal penalty, is more likely
       // to have split the offending quote into a verifiable span.
       if (assessment.penalty <= best.assessment.penalty) {

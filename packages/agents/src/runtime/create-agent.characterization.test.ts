@@ -3,8 +3,9 @@ import { describe, it } from "node:test";
 
 import { arboProfile } from "../arbo/profile.js";
 import { NOT_IN_CATALOG_MESSAGE } from "../arbo/prompt.js";
+import { caoProfile } from "../cao/profile.js";
 import type { AgentStreamEvent } from "../types.js";
-import { createGroundedAgent } from "./create-agent.js";
+import { createGroundedAgent, followUpSpanName } from "./create-agent.js";
 import type { AgentRuntimeProfile, RetrievalOutput } from "./profile.js";
 
 /**
@@ -83,8 +84,8 @@ describe("arbo characterization — empty retrieval stream", () => {
 
 describe("Langfuse follow-up span names (unchanged)", () => {
   it("cao profile yields cao-follow-ups; arbo yields arbo-follow-ups", () => {
-    // Documented contract: create-agent uses `${profile.agentKey}-follow-ups`.
-    assert.equal(`${"cao"}-follow-ups`, "cao-follow-ups");
-    assert.equal(`${arboProfile.agentKey}-follow-ups`, "arbo-follow-ups");
+    // Production helper used at create-agent.ts startModelCall — do not inline a different format.
+    assert.equal(followUpSpanName(caoProfile.agentKey), "cao-follow-ups");
+    assert.equal(followUpSpanName(arboProfile.agentKey), "arbo-follow-ups");
   });
 });

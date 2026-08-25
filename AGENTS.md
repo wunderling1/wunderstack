@@ -40,8 +40,10 @@ Pijl-regel: apps importeren uit packages, nooit andersom (CI-afgedwongen).
 ## Bewust NIET in v1
 Temporal · LangGraph · losse agent-runtime · interne gateway · gedeelde runtime over
 fondsen (D15-collapse) · Supabase Auth/RLS · Inngest. Schema-per-fonds en een gedeeld
-dashboard wél: zie `docs/architecture/ADR-multitenant-database.md`. Wil je iets van de
-verbodslijst toevoegen: motiveer eerst tegen de regels.
+dashboard wél: zie `docs/architecture/ADR-multitenant-database.md`.  
+**Let op (24 augustus 2026):** de *agent*-runtime (`createGroundedAgent` + `AGENT_PROFILES`) is
+iets anders dan een gedeelde *fonds*-runtime — zie `docs/decisions/DECISION-shared-agent-runtime.md`.
+Wil je iets van de verbodslijst toevoegen: motiveer eerst tegen de regels.
 
 ## Waar te beginnen
 Lees `.cursor/rules/000-core.mdc` eerst. Daarna 100 (stack), 200 (architectuur). De glob-

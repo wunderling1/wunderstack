@@ -30,11 +30,14 @@ and does not count toward the rule of three.
    for widgets that can show multiple instances; it must be validated against what the key allows and
    never overrides agent choice.
 
-4. **Rule of three: copy, don't abstract.** The arbo module is a copy-and-adapt of the CAO module.
-   No generic `RagAgent` / `BaseAgent`. Shared infrastructure stays in `packages/rag` (retrieve →
-   threshold → LLM → verbatim quote-check → refuse without source), embeddings (`qwen3-embedding-8b`
-   @ 4096), Mistral, Langfuse, and the catalog seam. Not shared per agent: chunker, prompt, hard-facts,
-   query-rewrite glossary, golden set, `minScore`.
+4. **Rule of three → shared pipeline at agent 3 (amended 24 August 2026).** At agent 2 the
+   decision was correctly "copy, don't abstract" — no generic `RagAgent` / `BaseAgent`. Agent 3
+   (the third arbocatalogus) reaches the rule of three: the shared answer pipeline lives behind
+   `createGroundedAgent(profile)` in `packages/agents/src/runtime/`. A new agent is a profile row
+   (`AgentRuntimeProfile`), not a third copy of `agent.ts`. Still not shared per agent: chunker,
+   prompt, hard-fact patterns, query-rewrite glossary, golden set, `minScore`. Still forbidden:
+   class inheritance, plugin frameworks, a supervisor/router across surfaces (decision 1).
+   Owner: Wunderstack-maintainers. See `DECISION-shared-agent-runtime.md`.
 
 5. **`agent_config(agent_key, fund_key)` holds tuning knobs only.** `minScore`, starters, corpus
    version / validity date. Prompts and refusal sentences stay in code.
