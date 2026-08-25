@@ -1,45 +1,21 @@
-import { retrieveContext, type RetrievedChunk } from "@wunderstack/rag";
-import { citationSchema } from "@wunderstack/shared";
-import { z } from "zod";
+import { retrieveContext } from "@wunderstack/rag";
 
+import {
+  retrievalInputSchema,
+  retrievalMetaSchema,
+  type RetrievalInput,
+  type RetrievalOutput,
+} from "../runtime/retrieval.js";
 import { ARBO_QUERY_EXPANSIONS, rewriteArboQuery } from "./rewrite.js";
 
-export const retrievalInputSchema = z.object({
-  query: z.string().min(1),
-  additionalQueries: z.array(z.string().min(1)).max(2).optional(),
-  fund: z.string().min(1),
-  topK: z.number().int().positive().max(50).default(5),
-  minScore: z.number().min(0).max(1).default(0),
-});
-
-export type RetrievalInput = z.input<typeof retrievalInputSchema>;
-
-export const retrievalHitSchema = z.object({
-  chunkId: z.string(),
-  ordinal: z.number().int(),
-  score: z.number(),
-  title: z.string(),
-});
-
-export const retrievalMetaSchema = z.object({
-  context: z.string(),
-  citations: z.array(citationSchema),
-  hits: z.array(retrievalHitSchema),
-  timings: z.object({
-    rewriteMs: z.number(),
-    embedMs: z.number(),
-    searchMs: z.number(),
-    rerankMs: z.number(),
-    totalMs: z.number(),
-  }),
-});
-
-export type RetrievalMeta = z.infer<typeof retrievalMetaSchema>;
-
-export interface RetrievalOutput extends RetrievalMeta {
-  chunks: RetrievedChunk[];
-  fullChunkContent: [string, string][];
-}
+export {
+  retrievalInputSchema,
+  retrievalHitSchema,
+  retrievalMetaSchema,
+  type RetrievalInput,
+  type RetrievalMeta,
+  type RetrievalOutput,
+} from "../runtime/retrieval.js";
 
 export async function runRetrieval(input: RetrievalInput): Promise<RetrievalOutput> {
   const parsed = retrievalInputSchema.parse(input);

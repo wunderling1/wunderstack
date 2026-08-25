@@ -67,7 +67,7 @@ import { detectClarification } from "../cao/clarify.js";
 import { condenseQuery, isElliptical, retrievalQueriesForFollowUp } from "../runtime/condense.js";
 import { generateAnswerWithRepair } from "../runtime/generate-answer.js";
 import { verifyAndBuild } from "../cao/agent.js";
-import { type RetrievalOutput } from "../cao/tools.js";
+import type { RetrievalOutput } from "../cao/tools.js";
 import { agentQuestionSchema } from "../types.js";
 import { CAO_SYSTEM_INSTRUCTIONS, NOT_FOUND_MESSAGE, buildAnswerPrompt } from "../cao/prompt.js";
 import {
@@ -1224,6 +1224,8 @@ async function multiTurnServeChecks(): Promise<Check[]> {
     const generated = await generateAnswerWithRepair({
       chunkContentById: new Map(passages.map((passage) => [passage.id, passage.content])),
       userSupplied,
+      agentKey: "cao",
+      notFoundMessage: NOT_FOUND_MESSAGE,
       maxAttempts: env.EVAL_GENERATION_SAMPLES ?? 2,
       generate: (extraMessages) =>
         retryWithBackoff(
@@ -1467,6 +1469,8 @@ async function answerQualityChecks(): Promise<Check[]> {
     const generated = await generateAnswerWithRepair({
       chunkContentById,
       userSupplied,
+      agentKey: "cao",
+      notFoundMessage: NOT_FOUND_MESSAGE,
       // Best-of-N over the citation contract; raise on the merge queue/nightly to tame single-sample
       // generation variance on the zero-tolerance count gates. Defaults to 2 (= production behaviour).
       maxAttempts: env.EVAL_GENERATION_SAMPLES ?? 2,

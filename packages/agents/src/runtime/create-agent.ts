@@ -364,8 +364,9 @@ export function createGroundedAgent(profile: AgentRuntimeProfile): GroundedAgent
       chunkContentById: new Map(args.retrieval.fullChunkContent),
       userSupplied: args.userSupplied,
       agentKey: resolveHardFactAgentKey(profile.agentKey),
-      // B4: omit notFoundMessage so generate-answer keeps coaching the CAO refusal (pre-existing
-      // arbo leak). Serve-time refusals still use profile.notFoundMessage.
+      // Repair coaches only notFoundMessage (catalog miss). Scope refusals follow from the question,
+      // not from a failed retrieval — see buildRepairMessages.
+      notFoundMessage: profile.notFoundMessage,
       generate: async (extraMessages) => {
         // Mastra's message union is the AI SDK discriminated CoreMessage type; our ChatMessage
         // (role is a union, content a string) is structurally a subset, so cast at this boundary.

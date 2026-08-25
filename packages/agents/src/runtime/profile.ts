@@ -1,8 +1,6 @@
 import type { ZodType } from "zod";
 
-// Retrieval shapes currently live next to the CAO tools module (agent-neutral types, historical
-// home). Do not import cao *behaviour* from here — see DECISION-shared-agent-runtime.
-import type { RetrievalInput, RetrievalOutput } from "../cao/tools.js";
+import type { RetrievalInput, RetrievalOutput } from "./retrieval.js";
 
 /**
  * Data + function fields that specialise the shared grounded-agent pipeline.
