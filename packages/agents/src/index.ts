@@ -16,6 +16,14 @@ export {
 } from "./catalog.js";
 
 export {
+  AGENT_PROFILES,
+  isAgentKey,
+  listAgentProfiles,
+  requireAgentProfile,
+  type AgentKey,
+} from "./runtime/registry.js";
+
+export {
   recordFeedbackScore,
   recordNumericTraceScore,
   feedbackScoreSchema,
@@ -39,7 +47,7 @@ export {
   type AgentStreamEvent,
 } from "./types.js";
 
-export { arboQuestionSchema } from "./arbo/agent.js";
+export { arboQuestionSchema } from "./arbo/profile.js";
 
 export { fetchPassage, type PassageInput, type PassageResult } from "./runtime/passage.js";
 

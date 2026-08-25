@@ -117,6 +117,12 @@ const envSchema = z.object({
   // fires first and the route can emit a clean timeout error.
   RUNTIME_CHAT_TURN_BUDGET_MS: optional(z.coerce.number().int().positive().max(300_000)),
   RUNTIME_CHAT_HEARTBEAT_MS: optional(z.coerce.number().int().positive().max(60_000)),
+  /**
+   * Explicit agent for the unconfigured-open path (0 active agent_instances, no public key).
+   * Validated against the agent registry at runtime boot — unknown values fail startup.
+   * Unset → chat/passage return 400 `no_agent_instance` (no silent CAO default).
+   */
+  RUNTIME_UNCONFIGURED_AGENT: optional(z.string().min(1)),
 });
 
 export type Env = z.infer<typeof envSchema>;

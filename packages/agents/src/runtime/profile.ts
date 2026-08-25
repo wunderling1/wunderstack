@@ -1,16 +1,18 @@
 import type { ZodType } from "zod";
 
-import type { HardFactAgentKey } from "../hard-facts.js";
 import type { RetrievalInput, RetrievalOutput } from "../cao/tools.js";
 
 /**
  * Data + function fields that specialise the shared grounded-agent pipeline.
  * A new agent is one of these objects — not a new `agent.ts` copy (see DECISION-shared-agent-runtime).
  *
+ * `agentKey` is typed as string here to avoid an import cycle with the registry; registered profiles
+ * use literal keys that match {@link AgentKey}.
+ *
  * Do not put `if (agentKey === "…")` in the pipeline: put the difference in a profile field.
  */
 export interface AgentRuntimeProfile {
-  agentKey: HardFactAgentKey;
+  agentKey: string;
   label: string;
   description: string;
   systemInstructions: string;

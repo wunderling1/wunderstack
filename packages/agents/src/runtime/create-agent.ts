@@ -15,7 +15,7 @@ import {
   type AgentStreamEvent,
   type AgentUsage,
 } from "../types.js";
-import { containsHardFact, hasUngroundedHardFact } from "../hard-facts.js";
+import { containsHardFact, hasUngroundedHardFact, resolveHardFactAgentKey } from "../hard-facts.js";
 import { buildVerifiedCitations, extractCitationMarkers } from "./build-citations.js";
 import { condenseQuery, isElliptical, retrievalQueriesForFollowUp } from "./condense.js";
 import { generateAnswerWithRepair } from "./generate-answer.js";
@@ -157,7 +157,8 @@ export function verifyAndBuild(
   const verificationFailed = parsed.citationParseFailed || verification.strippedMarkers.length > 0;
 
   const grounding = [...fullContentById.values()].join(" ");
-  if (hasUngroundedHardFact(answer, grounding, userSupplied, profile.agentKey)) {
+  const hardFactKey = resolveHardFactAgentKey(profile.agentKey);
+  if (hasUngroundedHardFact(answer, grounding, userSupplied, hardFactKey)) {
     return {
       answer: profile.notFoundMessage,
       citations: [],
@@ -170,7 +171,7 @@ export function verifyAndBuild(
 
   const asserts =
     extractCitationMarkers(parsed.answerMarkdown).length > 0 ||
-    containsHardFact(parsed.answerMarkdown, profile.agentKey);
+    containsHardFact(parsed.answerMarkdown, hardFactKey);
   if (asserts && citations.length === 0) {
     return {
       answer: profile.unverifiableMessage,
