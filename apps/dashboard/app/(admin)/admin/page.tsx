@@ -69,8 +69,14 @@ export default async function AdminOverview() {
           </p>
         </div>
         <Link
-          href="/admin/embed"
+          href="/admin/funds"
           className="ml-auto whitespace-nowrap text-sm text-primary hover:underline"
+        >
+          Fondsen →
+        </Link>
+        <Link
+          href="/admin/embed"
+          className="whitespace-nowrap text-sm text-primary hover:underline"
         >
           Embed &amp; distributie →
         </Link>

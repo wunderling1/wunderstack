@@ -7,11 +7,13 @@ declare module "next-auth" {
       role: DashboardRole;
       /** Null for admin (cross-tenant); the scoped tenant for a fund user (D15 key). */
       tenantId: string | null;
+      mustChangePassword: boolean;
     } & DefaultSession["user"];
   }
   interface User {
     role: DashboardRole;
     tenantId: string | null;
+    mustChangePassword: boolean;
   }
 }
 
@@ -19,6 +21,7 @@ declare module "next-auth/jwt" {
   interface JWT {
     role: DashboardRole;
     tenantId: string | null;
+    mustChangePassword?: boolean;
   }
 }
 
@@ -28,5 +31,6 @@ declare module "@auth/core/adapters" {
   interface AdapterUser {
     role: DashboardRole;
     tenantId: string | null;
+    mustChangePassword: boolean;
   }
 }

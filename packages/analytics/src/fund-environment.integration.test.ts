@@ -1,0 +1,91 @@
+import assert from "node:assert/strict";
+import { after, describe, it } from "node:test";
+
+import {
+  closeDb,
+  createFundEnvironment,
+  eq,
+  funds,
+  getDb,
+  listActiveFunds,
+  sql,
+  users,
+} from "@wunderstack/db";
+import { getAgentActivity, getCorpusOverview, getKpiSummary } from "./index.js";
+
+/**
+ * Requires PROVISIONER_DATABASE_URL + DATABASE_URL at process start (shared env parse).
+ * GATE_DB / local: set both to the same Postgres URL.
+ */
+const ready = Boolean(process.env.PROVISIONER_DATABASE_URL && process.env.DATABASE_URL);
+
+describe("fund environment ↔ analytics seam", { skip: !ready }, () => {
+  const fundKey = `gate-proef-${Date.now().toString(36)}`;
+
+  after(async () => {
+    try {
+      const db = getDb();
+      await db.execute(sql.raw(`DROP SCHEMA IF EXISTS "fund_${fundKey}" CASCADE`));
+      await db.delete(users).where(eq(users.tenantId, fundKey));
+      await db.delete(funds).where(eq(funds.key, fundKey));
+      // orphan key used by the negative test
+      await db.delete(funds).where(eq(funds.key, `${fundKey}-orphan`));
+    } finally {
+      await closeDb();
+    }
+  });
+
+  it("createFundEnvironment yields empty KPIs and does not break getAgentActivity", async () => {
+    const result = await createFundEnvironment({
+      fundKey,
+      name: "Gate proefonds",
+      agentKeys: ["cao", "arbo"],
+    });
+
+    assert.equal(result.instances.length, 2);
+    assert.notEqual(result.instances[0]?.publicKey, result.instances[1]?.publicKey);
+
+    const active = await listActiveFunds();
+    assert.ok(active.some((fund) => fund.key === fundKey));
+
+    const summary = await getKpiSummary({
+      tenantId: fundKey,
+      since: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+    });
+    assert.equal(summary.total, 0);
+
+    const corpus = await getCorpusOverview(fundKey);
+    assert.equal(corpus.length, 0);
+
+    const activity = await getAgentActivity(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+    assert.ok(Array.isArray(activity));
+
+    const publicGrant = (await getDb().execute(
+      sql.raw(`
+        SELECT COALESCE((
+          SELECT bool_or(acl.grantee = 0)
+          FROM pg_class c
+          JOIN pg_namespace n ON n.oid = c.relnamespace
+          LEFT JOIN LATERAL aclexplode(c.relacl) AS acl ON true
+          WHERE n.nspname = 'fund_${fundKey}' AND c.relkind = 'r'
+        ), false) AS public_grant
+      `),
+    )) as unknown as Array<{ public_grant: boolean }>;
+    assert.equal(publicGrant[0]?.public_grant, false);
+  });
+
+  it("getAgentActivity throws when control.funds has a row without a schema (why createFundEnvironment is atomic)", async () => {
+    const orphanKey = `${fundKey}-orphan`;
+    await getDb().insert(funds).values({
+      key: orphanKey,
+      name: "Orphan",
+      schemaName: `fund_${orphanKey}`,
+      status: "active",
+    });
+
+    await assert.rejects(
+      () => getAgentActivity(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)),
+      (error: unknown) => error instanceof Error,
+    );
+  });
+});

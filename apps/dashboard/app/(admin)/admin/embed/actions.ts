@@ -1,9 +1,8 @@
 "use server";
 
-import { getInstance, rotateTenantKey, upsertTenantConfig } from "@wunderstack/db";
-import { tenantTextsSchema, tenantThemeSchema } from "@wunderstack/shared";
+import { getInstance, rotateTenantKey, updateTenantConfig } from "@wunderstack/db";
+import { agentKeySchema, tenantTextsSchema, tenantThemeSchema } from "@wunderstack/shared";
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 import { auth } from "@/auth";
 import { decideAccess } from "@/lib/authz";
 
@@ -11,6 +10,7 @@ import { decideAccess } from "@/lib/authz";
  * Embed-console server actions (Fase 4, admin-only, D12). Writes go through the agent-instances
  * writer connection (getWriterDb inside @wunderstack/db); reads elsewhere use the read connection.
  * Every action re-checks admin access server-side — never trust the client to have hidden the form.
+ * Instances are created only via /admin/funds (createFundEnvironment); this console only updates.
  */
 
 async function assertAdmin(): Promise<void> {
@@ -20,14 +20,12 @@ async function assertAdmin(): Promise<void> {
   }
 }
 
-const agentKeySchema = z.enum(["cao", "arbo"]);
-
 function str(value: FormDataEntryValue | null): string | undefined {
   const text = typeof value === "string" ? value.trim() : "";
   return text.length > 0 ? text : undefined;
 }
 
-function parseAgentKey(value: FormDataEntryValue | null): "cao" | "arbo" | undefined {
+function parseAgentKey(value: FormDataEntryValue | null) {
   const parsed = agentKeySchema.safeParse(str(value) ?? "cao");
   return parsed.success ? parsed.data : undefined;
 }
@@ -36,15 +34,6 @@ function clean<T extends Record<string, unknown>>(input: T): Partial<T> {
   return Object.fromEntries(
     Object.entries(input).filter(([, value]) => value !== undefined),
   ) as Partial<T>;
-}
-
-export async function createTenantConfig(formData: FormData): Promise<void> {
-  await assertAdmin();
-  const tenantId = str(formData.get("tenantId"));
-  const agentKey = parseAgentKey(formData.get("agentKey"));
-  if (!tenantId || !agentKey) return;
-  await upsertTenantConfig({ tenantId, agentKey });
-  revalidatePath("/admin/embed");
 }
 
 export async function rotateKey(formData: FormData): Promise<void> {
@@ -65,7 +54,7 @@ export async function updateCors(formData: FormData): Promise<void> {
     .split(/[\n,]/)
     .map((origin) => origin.trim())
     .filter((origin) => origin.length > 0);
-  await upsertTenantConfig({ tenantId, agentKey, corsAllowlist });
+  await updateTenantConfig({ tenantId, agentKey, corsAllowlist });
   revalidatePath("/admin/embed");
 }
 
@@ -75,8 +64,6 @@ export async function updateTheme(formData: FormData): Promise<void> {
   const agentKey = parseAgentKey(formData.get("agentKey"));
   if (!tenantId || !agentKey) return;
 
-  // Validate against the same shared schemas the runtime serves, so the console cannot write config
-  // the embed would reject (single source of truth for the token subset).
   const theme = tenantThemeSchema.parse(
     clean({
       primary: str(formData.get("primary")),
@@ -95,6 +82,6 @@ export async function updateTheme(formData: FormData): Promise<void> {
     }),
   });
 
-  await upsertTenantConfig({ tenantId, agentKey, theme, texts });
+  await updateTenantConfig({ tenantId, agentKey, theme, texts });
   revalidatePath("/admin/embed");
 }

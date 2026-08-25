@@ -67,7 +67,10 @@ export function instanceFromRow(
   };
 }
 
-/** Public key → instance. Null when the key is unknown (not a secret; uniqueness is the lookup). */
+/**
+ * Public key → instance. Null when the key is unknown or the instance is inactive (soft-deleted
+ * fund). Inactive rows stay in the table; they must not resolve on the request path.
+ */
 export async function resolveInstanceByPublicKey(publicKey: string): Promise<ResolvedInstance | null> {
   const [row] = await getDb()
     .select({
@@ -77,7 +80,7 @@ export async function resolveInstanceByPublicKey(publicKey: string): Promise<Res
       connectionKey: agentInstances.connectionKey,
     })
     .from(agentInstances)
-    .where(eq(agentInstances.publicKey, publicKey))
+    .where(and(eq(agentInstances.publicKey, publicKey), eq(agentInstances.status, "active")))
     .limit(1);
   return row ? instanceFromRow(row) : null;
 }
@@ -98,7 +101,13 @@ export async function resolveInstanceByFundAgent(
       connectionKey: agentInstances.connectionKey,
     })
     .from(agentInstances)
-    .where(and(eq(agentInstances.tenantId, fundKey), eq(agentInstances.agentKey, agentKey)))
+    .where(
+      and(
+        eq(agentInstances.tenantId, fundKey),
+        eq(agentInstances.agentKey, agentKey),
+        eq(agentInstances.status, "active"),
+      ),
+    )
     .limit(1);
   return row ? instanceFromRow(row) : null;
 }

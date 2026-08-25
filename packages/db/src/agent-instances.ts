@@ -75,33 +75,46 @@ export interface TenantConfigInput {
 }
 
 /**
- * Create or update an agent instance. On first create a public key is generated. Only provided fields
- * are updated; missing fields are left untouched. Writer connection.
+ * Update an existing agent instance. Does **not** insert — fund onboarding creates rows via
+ * createFundEnvironment; the OOMT seed uses createAgentInstance. Writer connection.
  */
-export async function upsertTenantConfig(input: TenantConfigInput): Promise<AgentInstance> {
+export async function updateTenantConfig(input: TenantConfigInput): Promise<AgentInstance> {
   const agentKey = input.agentKey ?? "cao";
   const db = getWriterDb();
-  const existing = await db
-    .select({ tenantId: agentInstances.tenantId })
-    .from(agentInstances)
+  const [row] = await db
+    .update(agentInstances)
+    .set({
+      ...(input.corsAllowlist !== undefined ? { corsAllowlist: input.corsAllowlist } : {}),
+      ...(input.theme !== undefined ? { theme: input.theme } : {}),
+      ...(input.texts !== undefined ? { texts: input.texts } : {}),
+      updatedAt: new Date(),
+    })
     .where(and(eq(agentInstances.tenantId, input.tenantId), eq(agentInstances.agentKey, agentKey)))
-    .limit(1);
-
-  if (existing[0]) {
-    const [row] = await db
-      .update(agentInstances)
-      .set({
-        ...(input.corsAllowlist !== undefined ? { corsAllowlist: input.corsAllowlist } : {}),
-        ...(input.theme !== undefined ? { theme: input.theme } : {}),
-        ...(input.texts !== undefined ? { texts: input.texts } : {}),
-        updatedAt: new Date(),
-      })
-      .where(and(eq(agentInstances.tenantId, input.tenantId), eq(agentInstances.agentKey, agentKey)))
-      .returning();
-    if (!row) throw new Error(`Failed to update agent instance for ${input.tenantId}/${agentKey}`);
-    return row;
+    .returning();
+  if (!row) {
+    throw new Error(
+      `No agent instance for ${input.tenantId}/${agentKey}. Create the fund via /admin/funds first.`,
+    );
   }
+  return row;
+}
 
+/**
+ * @deprecated Prefer createFundEnvironment (dashboard) or createAgentInstance (seed). Kept as an
+ * alias of updateTenantConfig so callers that only update keep compiling; insert is no longer
+ * performed here (closes the half-fund path).
+ */
+export async function upsertTenantConfig(input: TenantConfigInput): Promise<AgentInstance> {
+  return updateTenantConfig(input);
+}
+
+/**
+ * Insert a new agent instance. Dashboard uses addFundAgent (checks the fund is active first).
+ * Seed scripts may call this directly.
+ */
+export async function createAgentInstance(input: TenantConfigInput): Promise<AgentInstance> {
+  const agentKey = input.agentKey ?? "cao";
+  const db = getWriterDb();
   const [row] = await db
     .insert(agentInstances)
     .values({

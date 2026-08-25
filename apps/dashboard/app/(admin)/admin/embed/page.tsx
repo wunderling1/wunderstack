@@ -2,12 +2,13 @@ import { listTenantConfigs, type TenantConfig } from "@wunderstack/db";
 import { Button, Card, Field, Textarea } from "@wunderstack/ui";
 import Link from "next/link";
 import { env } from "@/lib/env";
-import { createTenantConfig, rotateKey, updateCors, updateTheme } from "./actions";
+import { rotateKey, updateCors, updateTheme } from "./actions";
 import { EmbedSnippet } from "./snippet";
 
 /**
  * Embed & distribution console (Fase 4, admin-only, D12). Per tenant: snippets per agent instance,
- * tenant-key display + rotation, CORS allowlist, and the curated theming subset (D17).
+ * tenant-key display + rotate, CORS allowlist, and the curated theming subset (D17).
+ * New funds are created at /admin/funds — this page only configures existing instances.
  */
 export const dynamic = "force-dynamic";
 
@@ -27,7 +28,12 @@ export default async function EmbedConsole() {
           <h2 className="font-display text-lg font-semibold">Embed &amp; distributie</h2>
           <p className="text-sm text-text-muted">
             Snippet per agent-instance (CAO + arbocatalogus), tenant-key, CORS-allowlist en theming.
-            De key beslist welke agent draait; <code>data-agent</code> is alleen een hint.
+            De key beslist welke agent draait; <code>data-agent</code> is alleen een hint. Nieuwe
+            fondsen maak je onder{" "}
+            <Link href="/admin/funds" className="text-primary hover:underline">
+              Fondsen
+            </Link>
+            .
           </p>
         </div>
         <Link href="/admin" className="ml-auto whitespace-nowrap text-sm text-text-muted hover:text-text">
@@ -35,23 +41,14 @@ export default async function EmbedConsole() {
         </Link>
       </div>
 
-      <Card className="p-5">
-        <h3 className="text-sm font-semibold">Nieuwe tenant-config (CAO-instance)</h3>
-        <p className="mt-1 text-sm text-text-muted">
-          Maakt een CAO-instance met een verse tenant-key. Voor arbocatalogus: tweede instance met agent
-          <code className="mx-1">arbo</code> via seed-script of DB.
-        </p>
-        <form action={createTenantConfig} className="mt-3 flex items-end gap-2">
-          <label className="flex flex-1 flex-col gap-1 text-sm">
-            <span className="text-text-muted">Tenant-id</span>
-            <Field name="tenantId" required placeholder="oomt" />
-          </label>
-          <Button type="submit">Aanmaken</Button>
-        </form>
-      </Card>
-
       {grouped.length === 0 ? (
-        <p className="text-sm text-text-muted">Nog geen tenant-configs. Maak er hierboven een aan.</p>
+        <p className="text-sm text-text-muted">
+          Nog geen agent-instances. Maak eerst een fonds aan via{" "}
+          <Link href="/admin/funds" className="text-primary hover:underline">
+            /admin/funds
+          </Link>
+          .
+        </p>
       ) : (
         grouped.map((group) => <TenantGroupCard key={group.tenantId} group={group} base={base} />)
       )}
@@ -129,7 +126,9 @@ function TenantGroupCard({ group, base }: { group: TenantGroup; base: string }) 
               placeholder="https://www.fonds.nl"
             />
           </label>
-          <Button type="submit" variant="ghost" size="default" className="self-start">Opslaan</Button>
+          <Button type="submit" variant="ghost" size="default" className="self-start">
+            Opslaan
+          </Button>
         </form>
       </div>
 

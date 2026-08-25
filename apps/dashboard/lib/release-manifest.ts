@@ -11,6 +11,7 @@
  * the typed shape below is the contract the admin view already renders against.
  */
 
+import { AGENT_KEY_LABELS, AGENT_KEYS, type AgentKey } from "@wunderstack/shared";
 import { env } from "@/lib/env";
 
 export type GateStatus = "green" | "amber" | "red" | "unknown";
@@ -36,20 +37,19 @@ export interface ReleaseManifest {
 }
 
 export interface KnownAgent {
-  id: string;
+  id: AgentKey;
   label: string;
 }
 
 /**
- * Minimal known-agents list so the admin overview shows the catalog even before any activity is
- * logged. Kept local (id + label only) so the dashboard never imports `@wunderstack/agents` and thus
- * never drags the Mastra runtime into a read-only surface. When §7 ships, the manifest becomes the
- * source of the agent list.
+ * Catalog for the admin overview before any activity is logged. Derived from AGENT_KEYS in
+ * @wunderstack/shared so the dashboard never imports `@wunderstack/agents` (no-dashboard-to-agents)
+ * and never becomes a fourth hand-maintained copy.
  */
-export const KNOWN_AGENTS: KnownAgent[] = [
-  { id: "cao", label: "CAO-agent" },
-  { id: "arbo", label: "Arbocatalogus-agent" },
-];
+export const KNOWN_AGENTS: KnownAgent[] = AGENT_KEYS.map((id) => ({
+  id,
+  label: AGENT_KEY_LABELS[id],
+}));
 
 export function agentLabel(agentId: string): string {
   return KNOWN_AGENTS.find((agent) => agent.id === agentId)?.label ?? agentId;

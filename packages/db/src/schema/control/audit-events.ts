@@ -9,7 +9,7 @@ import { control } from "./schema.js";
 export const auditEvents = control.table("audit_events", {
   id: uuid("id").primaryKey().defaultRandom(),
   occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
-  /** fund_deleted | fund_restored | fund_promoted */
+  /** fund_created | fund_dumped | fund_deactivated | fund_deleted | fund_restored | fund_promoted */
   action: text("action").notNull(),
   fundKey: text("fund_key").notNull(),
   actor: text("actor").notNull().default("runbook"),
