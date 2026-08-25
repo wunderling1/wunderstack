@@ -238,8 +238,14 @@ const NO_TIMINGS: RetrievalTimings = {
 };
 
 /** Gate C context, built with the exact production assembler (single source of truth). */
-export function assembleEvalContext(passages: GoldenPassage[]): string {
-  return assemble(passages.map(passageToHit), NO_TIMINGS).context;
+export function assembleEvalContext(
+  passages: GoldenPassage[],
+  agentKey: "cao" | "arbo" = "cao",
+): string {
+  return assemble(
+    passages.map((passage) => passageToHit(passage, agentKey)),
+    NO_TIMINGS,
+  ).context;
 }
 
 function extractCitationRefs(answer: string): number[] {
@@ -336,17 +342,25 @@ function hasScopeNegation(text: string): boolean {
 /**
  * Whether an answer is a refusal rather than a substantive answer.
  *
- * The template `NOT_FOUND_MESSAGE` and "niet terugvinden" remain the production contract. A
- * grounded scope-refusal (the CAO does not determine X, with no entitlement granted after that
- * negation) also counts — etd-025's own `referenceAnswer` is that form, and scoring only the
- * template made the golden set and the gate reward opposite behaviour.
+ * `refusalMessages` are the production templates for the agent under test (CAO: one
+ * `NOT_FOUND_MESSAGE`; arbo: catalog-miss + out-of-scope). "niet terugvinden" remains a
+ * paraphrase hedge. A grounded scope-refusal (the CAO does not determine X, with no entitlement
+ * granted after that negation) also counts — etd-025's own `referenceAnswer` is that form, and
+ * scoring only the template made the golden set and the gate reward opposite behaviour.
  *
  * A scope-negation that then assigns an adjacent right (etd-032: no fietsplan, then travel
  * reimbursement from the same distractor) is NOT a refusal. Hard-hallucination stays absolute:
  * a fabricated fact in the pre-sentinel prose still fails that gate even when this returns true.
  */
-export function answerRefuses(answer: string, notFoundMessage: string): boolean {
-  if (answer.includes(notFoundMessage) || /niet terugvinden/i.test(answer)) {
+export function answerRefuses(
+  answer: string,
+  refusalMessages: string | readonly string[],
+): boolean {
+  const messages = typeof refusalMessages === "string" ? [refusalMessages] : refusalMessages;
+  if (messages.some((message) => message.length > 0 && answer.includes(message))) {
+    return true;
+  }
+  if (/niet terugvinden/i.test(answer)) {
     return true;
   }
   if (!hasScopeNegation(answer)) {
@@ -355,8 +369,12 @@ export function answerRefuses(answer: string, notFoundMessage: string): boolean 
   return !GRANTS_ENTITLEMENT.test(answer);
 }
 
-export function scoreRefusalCalibration(answer: string, testCase: GoldenCase, notFoundMessage: string): number {
-  const refused = answerRefuses(answer, notFoundMessage);
+export function scoreRefusalCalibration(
+  answer: string,
+  testCase: GoldenCase,
+  refusalMessages: string | readonly string[],
+): number {
+  const refused = answerRefuses(answer, refusalMessages);
 
   if (testCase.category === "refusal") {
     return refused ? 1 : 0;
@@ -485,20 +503,21 @@ export async function scoreAnswerCase(
   testCase: GoldenCase,
   passages: GoldenPassage[],
   answer: string,
-  notFoundMessage: string,
+  refusalMessages: string | readonly string[],
+  agentKey: HardFactAgentKey = "cao",
 ): Promise<CaseScores> {
-  const context = assembleEvalContext(passages);
+  const context = assembleEvalContext(passages, agentKey === "arbo" ? "arbo" : "cao");
 
   // Split the citation block off the prose; all prose-level scorers see the answer as the user does.
   const { verification, orphanRate, danglingMarkerRate, prose } = scoreCitationVerification(answer, testCase, passages);
 
   const citationCorrectness = scoreCitationCorrectness(prose, testCase, passages);
-  const refusalCalibration = scoreRefusalCalibration(prose, testCase, notFoundMessage);
-  const refused = answerRefuses(prose, notFoundMessage);
+  const refusalCalibration = scoreRefusalCalibration(prose, testCase, refusalMessages);
+  const refused = answerRefuses(prose, refusalMessages);
   // User-supplied numbers (this turn's question + prior history) count as grounding: a `derived` case
   // like "en bij 24 uur?" must not flag the agent for echoing the 24 the user provided.
   const userSupplied = [testCase.question, ...(testCase.history ?? []).map((message) => message.content)].join(" ");
-  const hardHallucination = scoreHardHallucination(prose, passages, userSupplied).score;
+  const hardHallucination = scoreHardHallucination(prose, passages, userSupplied, agentKey).score;
 
   if (testCase.category === "refusal") {
     // Refusal cases now receive a real generated answer (against near-miss distractor context), so

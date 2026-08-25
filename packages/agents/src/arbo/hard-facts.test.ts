@@ -30,4 +30,62 @@ describe("findUngroundedFacts (arbo)", () => {
       true,
     );
   });
+
+  it("flags an ungrounded Arbowet article number (positive)", () => {
+    const invented = findUngroundedFacts(
+      "Dit volgt uit Arbowet artikel 3.",
+      "Draag klasse-0 handschoenen bij HV-werk.",
+      "welke PBM?",
+    );
+    assert.ok(
+      invented.some((fact) => /Arbowet/i.test(fact)),
+      `expected Arbowet fact, got ${JSON.stringify(invented)}`,
+    );
+  });
+
+  it("accepts an Arbowet article when it is literally in the passage (negative)", () => {
+    const grounding = "Zie Arbowet artikel 3 voor de zorgplicht van de werkgever.";
+    assert.deepEqual(
+      findUngroundedFacts("Dit volgt uit Arbowet artikel 3.", grounding, "wat zegt de catalogus?"),
+      [],
+    );
+  });
+
+  it("flags an ungrounded 60V claim (positive)", () => {
+    const invented = findUngroundedFacts(
+      "Boven 60V is het systeem gevaarlijk.",
+      "Werk spanningsloos aan het HV-systeem.",
+      "wanneer is het veilig?",
+    );
+    assert.ok(invented.some((fact) => /60\s?V/i.test(fact)), JSON.stringify(invented));
+  });
+
+  it("accepts 60V when grounded in the passage (negative)", () => {
+    const grounding = "Boven 60V gelden aanvullende maatregelen.";
+    assert.deepEqual(
+      findUngroundedFacts("Boven 60V gelden aanvullende maatregelen.", grounding, "spanningsgrens?"),
+      [],
+    );
+  });
+
+  it("flags an ungrounded age-18 claim when neither catalog nor user stated 18 (positive)", () => {
+    // Catalog mentions 18; this case uses a catalog WITHOUT 18 to isolate the pattern.
+    const invented = findUngroundedFacts(
+      "Jongeren onder de 18 jaar mogen niet alleen werken.",
+      "Alleen aangewezen personen mogen aan het HV-systeem werken.",
+      "mag een stagiair dit doen?",
+    );
+    assert.ok(invented.some((fact) => /18\s?jaar/i.test(fact)), JSON.stringify(invented));
+  });
+
+  it("accepts age 18 when grounded in the catalog (negative)", () => {
+    assert.deepEqual(
+      findUngroundedFacts(
+        "Jongeren onder de 18 jaar zijn per definitie leek.",
+        catalog,
+        "mag een stagiair dit doen?",
+      ),
+      [],
+    );
+  });
 });

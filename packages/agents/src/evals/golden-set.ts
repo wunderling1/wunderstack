@@ -229,14 +229,23 @@ export function passagesForCase(testCase: GoldenCase): GoldenPassage[] {
     .filter((passage): passage is GoldenPassage => passage !== undefined);
 }
 
-/** Anchor shown in context, mirroring production sourceRef: "Artikel 3" / "Bijlage 1". */
+/** Anchor shown in context: CAO "Artikel N" / arbo chapter heading or explicit sourceRef. */
 function sourceRefFor(passage: GoldenPassage): string | null {
+  if (passage.sourceRef) return passage.sourceRef;
+  if (passage.chapter) return passage.chapter;
   if (!passage.article) return null;
   return /^bijlage/i.test(passage.article) ? passage.article : `Artikel ${passage.article}`;
 }
 
-/** Map a fixture passage to the production hit shape so Gate C can use assemble(). */
-export function passageToHit(passage: GoldenPassage): RetrievedChunk {
+/**
+ * Map a fixture passage to the production hit shape so Gate C can use assemble().
+ * `agentKey` defaults to cao for the CAO base layer; arbo G2 fixtures pass `"arbo"`.
+ */
+export function passageToHit(
+  passage: GoldenPassage,
+  agentKey: "cao" | "arbo" = "cao",
+): RetrievedChunk {
+  const version = passage.corpusVersion ?? GOLDEN_CORPUS_VERSION;
   return {
     chunkId: passage.id,
     ordinal: 0,
@@ -247,12 +256,12 @@ export function passageToHit(passage: GoldenPassage): RetrievedChunk {
       title: passage.source,
       sourceUri: "",
       fund: "eval",
-      agentKey: "cao",
+      agentKey,
       schemaName: "fund_eval",
-      version: GOLDEN_CORPUS_VERSION,
+      version,
     },
     structure: {
-      chapter: null,
+      chapter: passage.chapter ?? null,
       article: passage.article ?? null,
       lid: passage.lid ?? null,
       sourceRef: sourceRefFor(passage),
