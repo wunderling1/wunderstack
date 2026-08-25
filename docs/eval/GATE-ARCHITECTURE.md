@@ -72,7 +72,7 @@ productie (`cao/agent.ts`), niet in de eval-harness, en is daarom géén registr
 | `G1-contract` | G1 | — | Gate A + Gate D-contract |
 | `G2-retrieval` | G2 | Scaleway | Gate B |
 | `G2-multi-turn` | G2 | Scaleway + Mistral | Gate B2 (nu case-categorie van G2-retrieval) |
-| `G2-answer` | G2 | Scaleway + Mistral | Gate C |
+| `G2-answer` | G2 | Scaleway + Mistral | Gate C — **per agent** (`perAgentSet`: cao base + arbo G2 fixtures) |
 | `G3-pipeline` | G3 | DB + Scaleway | Gate B-integration |
 | `G3-fund` | G3 | DB + Scaleway + Mistral | Gate F (één report per fonds-set) |
 | `G3-isolation` | G3 | DB + Scaleway | Gate D-integration |
@@ -113,8 +113,8 @@ op latency blijft backlog (`cao.eval.ts`), niet in dit model.
 | Veld | Inhoud |
 |---|---|
 | **Faalscenario's** | (a) Retrieval vindt het juiste artikel/lid niet — ook niet in multi-turn-gesprekken. (b) Antwoorden hallucineren, citeren fout, weigeren te veel of te weinig. |
-| **Checks** | **G2-retrieval:** recall@k + MRR op golden passages; productie-`rerank()` zonder failures; MRR-delta ≥ 0. Bevat case-categorie `multi-turn` (elliptical-detectie → condensatie → retrieval), gerapporteerd als aparte regel binnen dezelfde gate. **G2-answer:** absolute floors op hardHallucination, softFaithfulness, relevance, citationCorrectness, completeness, refusalCalibration, citationVerification, orphan/dangling, over/underRefusal. |
-| **Bewijst niet** | Iets over een **echt CAO-corpus**. G2 scoort 31 handgecureerde fixture-passages die `scripts/ingest/fixtures.ts` rechtstreeks uit `golden-passages.jsonl` laadt — zonder PDF-parse en zonder `chunk.ts`. Parse-kwaliteit, chunkgrenzen en structuurankers liggen dus volledig buiten bereik. Aangetoond in Fase 3 van het ingest-herstelplan: G2 stond groen terwijl de productie-ingest 0 van 107 chunks van een echte CAO-PDF ankerde. |
+| **Checks** | **G2-retrieval:** recall@k + MRR op golden passages; productie-`rerank()` zonder failures; MRR-delta ≥ 0. Bevat case-categorie `multi-turn` (elliptical-detectie → condensatie → retrieval), gerapporteerd als aparte regel binnen dezelfde gate. **G2-answer:** absolute floors op hardHallucination, softFaithfulness, relevance, citationCorrectness, completeness, refusalCalibration, citationVerification, orphan/dangling, over/underRefusal — **per agent** (`perAgentSet`: cao base-fixtures + arbo G2-passages). Arbo voegt deterministische Beleidsregel-asserties (`G5-*`) toe; soft judge-scores blokkeren arbo niet (generator == judge). |
+| **Bewijst niet** | Iets over een **echt CAO-corpus**. G2 scoort handgecureerde fixture-passages (cao: `golden-passages.jsonl`; arbo: `golden-passages.arbo.oomt.jsonl` geëxporteerd uit de gate-DB) — zonder PDF-parse en zonder `chunk.ts` op het hot path. Parse-kwaliteit, chunkgrenzen en structuurankers liggen dus volledig buiten bereik van deze gate. Aangetoond in Fase 3 van het ingest-herstelplan: G2 stond groen terwijl de productie-ingest 0 van 107 chunks van een echte CAO-PDF ankerde. Agent 3 mag pas ná een groene arbo-answergate; de arbo-set blijft 'starter'. |
 | **Drempels** | Zie §4. Bronlabel per drempel verplicht. |
 | **Regressie** | G2-answer toetst óók ±tolerance vs baseline (nu op de PR-hot-path; zie besluit B2). `refusalCalibration` en under-refusal-*rate* zitten **niet** in de regressieband — te noisy bij N=3 refusal-fixtures; de absolute floor ≥ 0.90 en de under-refusal-**count**-gate ≤ 1 blijven de bescherming. |
 | **Blocking** | CI bij same-repo (`EVAL_REQUIRE_ALL=1`). Fork-PR: `skipped`, nooit `passed`. |

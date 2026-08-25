@@ -35,6 +35,8 @@ export interface GateSpec {
   readonly requires: GateRequirement;
   /** True when this gate expands to one report per discovered fund set (G3-fund). */
   readonly perFundSet?: boolean;
+  /** True when this gate expands to one report per answer-gate agent profile (G2-answer). */
+  readonly perAgentSet?: boolean;
 }
 
 /**
@@ -66,6 +68,7 @@ export const GATE_SPECS = [
     layer: "G2",
     requires: "scaleway+mistral",
     title: "answer-level quality",
+    perAgentSet: true,
   },
   {
     id: "G3-pipeline",

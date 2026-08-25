@@ -12,6 +12,11 @@ export interface EvalCheck {
   name: string;
   ok: boolean;
   detail?: string;
+  /**
+   * Explicit "niet van toepassing" — neither pass nor skip. Excluded from gate pass/fail
+   * aggregation; printed as `[N/A]` (used for G5 corpus-metadata gaps).
+   */
+  na?: boolean;
 }
 
 export interface GateGroup {
@@ -77,11 +82,11 @@ export function createEvalHarness(options: EvalHarnessOptions): EvalHarness {
     const id = suffix === undefined ? spec.id : `${spec.id} [${suffix}]`;
     console.log(`\n${spec.layer} · ${id} — ${spec.title}:`);
     for (const check of checks) {
-      console.log(
-        `  [${check.ok ? "PASS" : "FAIL"}] ${check.name}${check.detail ? ` — ${check.detail}` : ""}`,
-      );
+      const tag = check.na === true ? "N/A" : check.ok ? "PASS" : "FAIL";
+      console.log(`  [${tag}] ${check.name}${check.detail ? ` — ${check.detail}` : ""}`);
     }
-    const passed = checks.every((check) => check.ok);
+    const scored = checks.filter((check) => check.na !== true);
+    const passed = scored.every((check) => check.ok);
     gateResults.push({
       id,
       layer: spec.layer,
@@ -89,8 +94,9 @@ export function createEvalHarness(options: EvalHarnessOptions): EvalHarness {
       status: passed ? "passed" : "failed",
       checks: checks.map((check) => ({
         name: check.name,
-        ok: check.ok,
+        ok: check.na === true ? true : check.ok,
         ...(check.detail === undefined ? {} : { detail: check.detail }),
+        ...(check.na === true ? { na: true } : {}),
       })),
     });
     return passed;

@@ -97,7 +97,13 @@ import {
 import { ANSWER_THRESHOLDS, MULTI_TURN_SERVE_THRESHOLDS, answerFloorFailures } from "./answer-floors.js";
 import { acquireEvalLock, EvalAlreadyRunningError } from "./eval-lock.js";
 import { appendFundRecords, fundRecordsFromReport, resolveCommitSha } from "./fund-ledger.js";
-import { extraPromptContractChecks } from "./agent-profile.js";
+import {
+  answerGateCorpusLabel,
+  answerGateProfiles,
+  extraPromptContractChecks,
+  type AgentEvalProfile,
+} from "./agent-profile.js";
+import { arboDeterministicAnswerChecks } from "./arbo-g5.js";
 import { corpusIsolationContractChecks, corpusIsolationLiveChecks } from "./corpus-isolation.js";
 import { createEvalHarness, type EvalCheck as Check, type GateGroup, type GateRunResult } from "./harness.js";
 import { GATE_SPECS, type GateId, type GateSpec } from "./gates.js";
@@ -1446,31 +1452,26 @@ function answerRegressionChecks(aggregate: AggregateScores): Check[] {
   ];
 }
 
-async function answerQualityChecks(): Promise<Check[]> {
+async function runAnswerQualityForProfile(
+  profile: AgentEvalProfile,
+): Promise<{ checks: Check[]; caseScores: AnswerCaseReport[]; aggregate: AggregateScores }> {
   const caseScores: AnswerCaseReport[] = [];
   let repairCount = 0;
 
-  for (const testCase of goldenCases) {
+  for (const testCase of profile.goldenCases) {
     // Every case — including refusals — runs the real generation path. Refusal cases are given
     // near-miss distractor context (see golden-set.ts), so the model must actually refuse instead
     // of receiving a hardcoded refusal. This is what makes the under-refusal rate measurable.
-    const passages = passagesForCase(testCase);
-    const context = assembleEvalContext(passages);
+    const passages = profile.passagesForCase(testCase);
+    const context = assembleEvalContext(passages, profile.agentKey === "arbo" ? "arbo" : "cao");
     const question = await evalQuestion(testCase);
-    // One citation-contract repair retry (generate-answer.ts): a genuinely grounded answer that
-    // mis-formatted its citations, or an ungrounded assertion, gets a single targeted second attempt.
-    // This is what collapses the run-to-run generator variance that dominates Gate C. The chosen raw
-    // text is scored unchanged, so the metric still holds the model to the contract.
     const chunkContentById = new Map(passages.map((passage) => [passage.id, passage.content]));
-    // User-supplied numbers (this turn's question + history) are grounding for the hard-fact trigger,
-    // exactly as scoreHardHallucination treats them — so a `derived` case echoing the user's own hours
-    // is not re-asked as an ungrounded fact.
     const userSupplied = [testCase.question, ...(testCase.history ?? []).map((message) => message.content)].join(" ");
     const generated = await generateAnswerWithRepair({
       chunkContentById,
       userSupplied,
-      agentKey: "cao",
-      notFoundMessage: NOT_FOUND_MESSAGE,
+      agentKey: profile.agentKey,
+      notFoundMessage: profile.notFoundMessage,
       // Best-of-N over the citation contract; raise on the merge queue/nightly to tame single-sample
       // generation variance on the zero-tolerance count gates. Defaults to 2 (= production behaviour).
       maxAttempts: env.EVAL_GENERATION_SAMPLES ?? 2,
@@ -1480,8 +1481,8 @@ async function answerQualityChecks(): Promise<Check[]> {
             generateText({
               model: EVAL_LLM_MODEL,
               messages: [
-                { role: "system", content: CAO_SYSTEM_INSTRUCTIONS },
-                { role: "user", content: buildAnswerPrompt(context, question) },
+                { role: "system", content: profile.systemInstructions },
+                { role: "user", content: profile.buildAnswerPrompt(context, question) },
                 ...extraMessages,
               ],
               // Single source of truth: packages/shared/src/config/generation.ts (same as production agent).
@@ -1502,10 +1503,13 @@ async function answerQualityChecks(): Promise<Check[]> {
     const answer = generated.text;
     await sleep(2000);
 
-    const scores = await scoreAnswerCase(testCase, passages, answer, NOT_FOUND_MESSAGE);
-    // Persist id/question/answerRaw + finishReason/answerChars so a failed under-refusal, citation,
-    // or truncation case is inspectable from the run artefact without regenerating (Tier B / Gate C
-    // close-out etd-012 diagnostic).
+    const scores = await scoreAnswerCase(
+      testCase,
+      passages,
+      answer,
+      profile.refusalMessages,
+      profile.agentKey,
+    );
     caseScores.push({
       ...scores,
       id: testCase.id,
@@ -1516,42 +1520,85 @@ async function answerQualityChecks(): Promise<Check[]> {
     });
   }
 
-  // Keep the repair-retry frequency visible as a trend (mirrors the judge parse-retry log): a rising
-  // rate means the generator's first-pass citation discipline is degrading, even when the gate stays green.
-  console.log(`[generation] citation-repair retries fired: ${String(repairCount)}/${String(goldenCases.length)}`);
+  console.log(
+    `[generation:${profile.agentKey}] citation-repair retries fired: ${String(repairCount)}/${String(profile.goldenCases.length)}`,
+  );
 
   const aggregate = aggregateScores(caseScores);
-  answerReport = { aggregate, cases: caseScores };
-  if (env.EVAL_WRITE_BASELINE === "1" || env.EVAL_WRITE_BASELINE === "true") {
-    // Fase G2 guard: refuse to record a baseline from a run that does not itself clear the absolute
-    // floors. Recording a red run would silently lower the regression reference — the exact
-    // bar-erosion the plan forbids. Fix the reds first, then re-record.
-    const floorFailures = answerFloorFailures(aggregate);
-    if (floorFailures.length > 0) {
-      console.warn(
-        `  baseline: NOT recorded — the answer run misses ${String(floorFailures.length)} absolute floor(s) ` +
-          `(Fase G2 guard): ${floorFailures.join(", ")}. A baseline may only capture a run that itself passes.\n`,
-      );
-    } else {
-      const answerBaseline: AnswerBaseline = {
-        hardHallucination: aggregate.hardHallucination,
-        faithfulness: aggregate.faithfulness,
-        relevance: aggregate.relevance,
-        citationCorrectness: aggregate.citationCorrectness,
-        completeness: aggregate.completeness,
-        refusalCalibration: aggregate.refusalCalibration,
-        citationVerification: aggregate.citationVerification,
-        orphanRate: aggregate.orphanRate,
-        danglingMarkerRate: aggregate.danglingMarkerRate,
-        overRefusalRate: aggregate.overRefusalRate,
-        underRefusalRate: aggregate.underRefusalRate,
-      };
-      updateBaselineSection({ corpusVersion: GOLDEN_CORPUS_VERSION, fixtureHash: GOLDEN_FIXTURE_HASH, answer: answerBaseline });
-      console.log("  baseline: answer section recorded.\n");
-    }
+  const checks: Check[] =
+    profile.agentKey === "cao"
+      ? answerLevelChecks(aggregate)
+      : [
+          // Arbo: count floors only (B3) — no relative regression band until N≥25 + 14 nightlies.
+          ...answerFloorFailures(aggregate).map((label) => ({
+            name: `arbo answer floor: ${label}`,
+            ok: false,
+            detail: label,
+          })),
+          ...(answerFloorFailures(aggregate).length === 0
+            ? [{ name: "arbo answer floors: all absolute count floors clear", ok: true }]
+            : []),
+          ...arboDeterministicAnswerChecks(caseScores, answerGateCorpusLabel(profile)),
+        ];
+
+  // Soft judge metrics run for diagnostics but must not block arbo release (B4): generator == judge.
+  if (profile.agentKey === "arbo") {
+    console.log(
+      `[arbo G2-answer] soft judge (non-blocking): faithfulness=${aggregate.faithfulness.toFixed(3)} ` +
+        `relevance=${aggregate.relevance.toFixed(3)} completeness=${aggregate.completeness.toFixed(3)} ` +
+        `(judge=${JUDGE_MODEL} == generator; see GATE-ARCHITECTURE P4-retired)`,
+    );
   }
 
-  return answerLevelChecks(aggregate);
+  return { checks, caseScores, aggregate };
+}
+
+/**
+ * G2-answer — one GateGroup per agent with hasBaseGoldenSet (cao base + arbo G2 fixtures).
+ * CAO aggregate stays in `answerReport` so the baseline / ijkpunt path is unchanged.
+ */
+async function answerQualityGroups(): Promise<GateGroup[]> {
+  const groups: GateGroup[] = [];
+  for (const profile of answerGateProfiles()) {
+    const { checks, caseScores, aggregate } = await runAnswerQualityForProfile(profile);
+    if (profile.agentKey === "cao") {
+      answerReport = { aggregate, cases: caseScores };
+      if (env.EVAL_WRITE_BASELINE === "1" || env.EVAL_WRITE_BASELINE === "true") {
+        const floorFailures = answerFloorFailures(aggregate);
+        if (floorFailures.length > 0) {
+          console.warn(
+            `  baseline: NOT recorded — the answer run misses ${String(floorFailures.length)} absolute floor(s) ` +
+              `(Fase G2 guard): ${floorFailures.join(", ")}. A baseline may only capture a run that itself passes.\n`,
+          );
+        } else {
+          const answerBaseline: AnswerBaseline = {
+            hardHallucination: aggregate.hardHallucination,
+            faithfulness: aggregate.faithfulness,
+            relevance: aggregate.relevance,
+            citationCorrectness: aggregate.citationCorrectness,
+            completeness: aggregate.completeness,
+            refusalCalibration: aggregate.refusalCalibration,
+            citationVerification: aggregate.citationVerification,
+            orphanRate: aggregate.orphanRate,
+            danglingMarkerRate: aggregate.danglingMarkerRate,
+            overRefusalRate: aggregate.overRefusalRate,
+            underRefusalRate: aggregate.underRefusalRate,
+          };
+          updateBaselineSection({
+            corpusVersion: GOLDEN_CORPUS_VERSION,
+            fixtureHash: GOLDEN_FIXTURE_HASH,
+            answer: answerBaseline,
+          });
+          console.log("  baseline: answer section recorded.\n");
+        }
+      }
+    }
+    groups.push({
+      suffix: `${profile.agentKey} (corpus ${answerGateCorpusLabel(profile)})`,
+      checks,
+    });
+  }
+  return groups;
 }
 
 /**
@@ -1570,7 +1617,7 @@ const GATE_RUNS: Record<GateId, () => GateRunResult | Promise<GateRunResult>> = 
   ],
   "G2-retrieval": retrievalAndRerankChecks,
   "G2-multi-turn": multiTurnChecks,
-  "G2-answer": answerQualityChecks,
+  "G2-answer": answerQualityGroups,
   "G3-pipeline": retrievalIntegrationChecks,
   "G3-fund": fundLayerGroups,
   "G3-isolation": corpusIsolationLiveChecks,
@@ -1595,7 +1642,7 @@ async function runGate(spec: GateSpec): Promise<boolean> {
     return pushUnavailable(spec, requirementLabel(spec.requires));
   }
   const result = await GATE_RUNS[spec.id as GateId]();
-  if (spec.perFundSet === true) {
+  if (spec.perFundSet === true || spec.perAgentSet === true) {
     let passed = true;
     for (const group of result as GateGroup[]) {
       passed = pushGate(spec, group.checks, group.suffix) && passed;

@@ -27,13 +27,24 @@ export const CAO_HARD_FACT_PATTERNS: RegExp[] = [
   /\b\d+(?:,\d+)?\s?(?:[a-z]+-)*(?:uur|uren|week|weken|maand|maanden|dag|dagen|jaar|jaren|kilometer|km|trede|treden|periodiek|periodieke|periodieken|vakantieuren|vakantiedagen|vakantiedag|verlofuren|verlofdagen|verlofdag)\b/gi,
 ];
 
-/** Arbocatalogus hard-fact families: physical limits and safety thresholds. */
+/**
+ * Arbocatalogus hard-fact families: physical limits, safety thresholds, and Beleidsregel
+ * release-blockers (art. 2 sub b grondslag — no Arbowet article unless grounded; 60V; age 18).
+ * Source: docs/compliance/arbo-agent-compliance-actieplan.md Deel B4.
+ */
 export const ARBO_HARD_FACT_PATTERNS: RegExp[] = [
   /\b\d+(?:[.,]\d+)?\s?(?:kg|kilogram|kilogrammen)\b/gi,
   /\b\d+(?:[.,]\d+)?\s?(?:dB|decibel)\b/gi,
   /\b\d+(?:[.,]\d+)?\s?ppm\b/gi,
   /\b\d+(?:[.,]\d+)?\s?°C\b/g,
   /\b\d+(?:[.,]\d+)?\s?(?:uur|uren|dag|dagen|week|weken|maand|maanden|jaar|jaren)\b/gi,
+  // Voltage threshold (incl. spaced / VDC variants).
+  /\b\d+(?:[.,]\d+)?\s?(?:V|volt|VDC|VAC)\b/gi,
+  // Age threshold (Beleidsregel-linked catalog rules for jongeren).
+  /\b\d{1,2}\s?jaar\b/gi,
+  // Statute article numbers — only allowed when literally present in the retrieved passage.
+  /\b(?:Arbowet|Arbobesluit)\s*(?:art(?:ikel)?\.?\s*)?\d+[a-z]?(?:\s*(?:lid|onder)\s*\d+[a-z]?)?\b/gi,
+  /\bart(?:ikel)?\.?\s*\d+[a-z]?\s+(?:van\s+)?(?:de\s+)?(?:Arbowet|Arbobesluit)\b/gi,
 ];
 
 const HARD_FACT_PATTERNS_BY_AGENT: Record<AgentKey, RegExp[]> = {

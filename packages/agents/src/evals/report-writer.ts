@@ -34,6 +34,8 @@ export interface ReportCheck {
   name: string;
   ok: boolean;
   detail?: string;
+  /** Explicit N/A (neither pass nor skip) — see EvalCheck.na. */
+  na?: boolean;
 }
 
 /** Gate outcome. `skipped` is a first-class status — a gate that could not run is NEVER `passed`. */

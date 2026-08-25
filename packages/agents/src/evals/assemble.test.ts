@@ -47,7 +47,10 @@ describe("assembleEvalContext", () => {
   it("matches production assemble on the same adapted hits", () => {
     const passages = [articlePassage, bijlagePassage];
     const viaEval = assembleEvalContext(passages);
-    const viaProduction = assemble(passages.map(passageToHit), NO_TIMINGS).context;
+    const viaProduction = assemble(
+      passages.map((passage) => passageToHit(passage)),
+      NO_TIMINGS,
+    ).context;
     assert.equal(viaEval, viaProduction);
   });
 });
