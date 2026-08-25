@@ -173,3 +173,7 @@ Code review 2026-08-21 20:30. Eigenaar: Wunderstack-maintainers. Datum: 21 augus
 
 CI: `scripts/check-grants.sh` faalt op nieuwe `TO PUBLIC` in migraties en `fund-ddl.ts`.
 
+**Unconfigured-open agent (24 augustus 2026):** `pickUnkeyedInstance` blijft 0 → open / 1 → die
+instance / 2+ → 401. Op het nul-instances-pad is er geen stille `?? "cao"` meer: de agent komt
+alleen uit `RUNTIME_UNCONFIGURED_AGENT` (dev/tenant-zero), anders `400 no_agent_instance`.
+

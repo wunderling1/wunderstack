@@ -1,13 +1,17 @@
 /**
  * Per-agent eval profile — the seam that keeps gate *content* agent-generic.
  *
- * A new agent = a profile entry + (optional) base golden set + fund fixtures in FUND_SET_META.
- * Do not add a third `*.eval.ts`. G2-retrieval / G2-answer run only for profiles with
- * `hasBaseGoldenSet` (today: cao). G1 prompt checks and G3-fund (via set.agentKey) cover every
- * registered agent in one process / one `eval-report.json`.
+ * A new agent = an {@link AGENT_PROFILES} entry + an eval profile here + (optional) base golden set
+ * + fund fixtures in FUND_SET_META. Do not add a third `*.eval.ts`. G2-retrieval / G2-answer run only
+ * for profiles with `hasBaseGoldenSet` (today: cao). G1 prompt checks and G3-fund (via set.agentKey)
+ * cover every registered agent in one process / one `eval-report.json`.
+ *
+ * `Record<AgentKey, …>` makes this exhaustive: registering an agent without an eval profile is a
+ * type error (same compiler trick as `Record<GateId, …>` in gates.ts).
  */
 
 import type { EvalCheck } from "./harness.js";
+import type { AgentKey } from "../runtime/registry.js";
 import type { HardFactAgentKey } from "../hard-facts.js";
 
 import {
@@ -51,15 +55,17 @@ function arboPromptContractChecks(): EvalCheck[] {
 }
 
 /** Registered agents. Add agent 3 here — not as a third eval entrypoint. */
-export const AGENT_EVAL_PROFILES: readonly AgentEvalProfile[] = [
-  { agentKey: "cao", hasBaseGoldenSet: true },
-  {
+export const AGENT_EVAL_PROFILES: Record<AgentKey, AgentEvalProfile> = {
+  cao: { agentKey: "cao", hasBaseGoldenSet: true },
+  arbo: {
     agentKey: "arbo",
     hasBaseGoldenSet: false,
     extraPromptContractChecks: arboPromptContractChecks,
   },
-];
+};
 
 export function extraPromptContractChecks(): EvalCheck[] {
-  return AGENT_EVAL_PROFILES.flatMap((profile) => profile.extraPromptContractChecks?.() ?? []);
+  return Object.values(AGENT_EVAL_PROFILES).flatMap(
+    (profile) => profile.extraPromptContractChecks?.() ?? [],
+  );
 }

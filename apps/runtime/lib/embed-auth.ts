@@ -8,6 +8,8 @@ import { getTenantId } from "@wunderstack/tenant";
  *
  * Enforcement model:
  *  - Unconfigured tenant (no instance / no key): open + rate-limited (tenant zero demo, local dev).
+ *    Agent choice on that path is NOT a silent `"cao"` default — it requires
+ *    `RUNTIME_UNCONFIGURED_AGENT` (see `lib/agent.ts` / `lib/instance-scope.ts`). Unset → 400.
  *  - Browser cross-origin (an `Origin` header is present): the key is REQUIRED and must match an
  *    instance for this tenant; the route additionally gates the origin via the CORS allowlist.
  *  - Non-browser callers (no `Origin`: the fund's own server-side proxy, curl): trusted path — a key
@@ -23,6 +25,7 @@ import { getTenantId } from "@wunderstack/tenant";
  *
  * No public key, non-browser: exactly one active instance may resolve (D1, public demo). Two or more
  * active instances without a key is 401 — never default to cao and never pick the first row.
+ * Zero active instances stays open (config null); the agent is then only from RUNTIME_UNCONFIGURED_AGENT.
  *
  * Track B: D15 is the isolation wall. A key whose `tenantId` is not this process is 403. Do not
  * collapse this check (ADR-multitenant-database). SET ROLE is not a substitute.

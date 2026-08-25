@@ -1,11 +1,14 @@
 import { z } from "zod";
 
-import { createCaoAgent } from "./cao/agent.js";
-import { createArboAgent } from "./arbo/agent.js";
+import { createGroundedAgent } from "./runtime/create-agent.js";
+import {
+  listAgentProfiles,
+  resolveRegisteredProfile,
+} from "./runtime/registry.js";
 import type { GroundedAgent } from "./types.js";
 
 /**
- * Agent catalog — control-plane registry of available agents.
+ * Agent catalog — control-plane listing derived from {@link AGENT_PROFILES}.
  * Apps list agents via `listAgents()` and obtain a runtime instance via `getAgent(id)`.
  */
 
@@ -17,35 +20,21 @@ export const agentDescriptorSchema = z.object({
 
 export type AgentDescriptor = z.infer<typeof agentDescriptorSchema>;
 
-const AGENT_CATALOG: AgentDescriptor[] = [
-  {
-    id: "cao",
-    label: "CAO-agent",
-    description: "Antwoorden met bronvermelding uit CAO-teksten",
-  },
-  {
-    id: "arbo",
-    label: "Arbocatalogus-agent",
-    description: "Antwoorden met bronvermelding uit de sectorale arbocatalogus",
-  },
-];
-
-const agentFactories: Record<string, () => GroundedAgent> = {
-  cao: createCaoAgent,
-  arbo: createArboAgent,
-};
-
 let cachedAgents = new Map<string, GroundedAgent>();
 
 /** List all agents available in the catalog. */
 export function listAgents(): AgentDescriptor[] {
-  return [...AGENT_CATALOG];
+  return listAgentProfiles().map((profile) => ({
+    id: profile.agentKey,
+    label: profile.label,
+    description: profile.description,
+  }));
 }
 
 /** Resolve an agent by id; throws when unknown. */
 export function getAgent(id: string): GroundedAgent {
-  const descriptor = AGENT_CATALOG.find((entry) => entry.id === id);
-  if (!descriptor) {
+  const profile = resolveRegisteredProfile(id);
+  if (!profile) {
     throw new Error(`Unknown agent: ${id}`);
   }
 
@@ -54,12 +43,7 @@ export function getAgent(id: string): GroundedAgent {
     return cached;
   }
 
-  const factory = agentFactories[id];
-  if (!factory) {
-    throw new Error(`No factory registered for agent: ${id}`);
-  }
-
-  const instance = factory();
+  const instance = createGroundedAgent(profile);
   cachedAgents.set(id, instance);
   return instance;
 }
