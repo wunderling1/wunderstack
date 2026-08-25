@@ -16,19 +16,23 @@ import {
  * citations rate, top themes and the unanswered-questions roadmap signal. No latency/token/model
  * metrics (those stay in Langfuse for internal use).
  *
- * TENANT ISOLATION (D15, track B — ADR-multitenant-database).
- * Every fund-scoped query below filters by `tenantId` in the WHERE clause. That scoping is
- * enforced ONLY at this application layer (the caller passes `session.user.tenantId`). It is NOT
- * enforced at the database: the RLS policy on `interaction_events` is `FOR SELECT TO PUBLIC USING
- * (true)` (see packages/db/migrations/0007_analytics_reader_policy.sql), which lets the read-only
- * login user read ALL rows. That remains acceptable while a runtime process serves one fund (D15)
- * and this table holds that fund's rows. CREATE ROLE is unavailable on the addon, so do not collapse
- * D15. Cross-fund aggregation belongs on control-plane counters, never a SQL join across fund
- * schemas. `getAgentActivity` is the deliberate cross-tenant exception and is admin-gated at the route.
+ * FUND SCHEMA ISOLATION (D15, track B — ADR-multitenant-database).
+ * Every fund-scoped query below opens the fund schema via `withFundSchema(fundKey, …)`. That
+ * schema IS the scope: every row in `fund_<key>.interaction_events` belongs to that fund.
+ * `tenant_id` on the row is deployment provenance (which runtime wrote it) and MUST NOT filter
+ * KPIs — a multi-fund runtime writes its own tenant key while storing events in the answering
+ * fund's schema. Filtering on `tenant_id` would drop those rows (F1). Isolation is NOT enforced
+ * at the database: the RLS policy on `interaction_events` is `FOR SELECT TO PUBLIC USING (true)`
+ * (see packages/db/migrations/0007_analytics_reader_policy.sql). CREATE ROLE is unavailable on
+ * the addon, so do not collapse D15. Cross-fund aggregation belongs on control-plane counters,
+ * never a SQL join across fund schemas. `getAgentActivity` is the deliberate cross-fund
+ * exception and is admin-gated at the route; it returns `fundKey` (= schema source) so callers
+ * never guess which fund a row belongs to.
  */
 
 export interface KpiWindow {
-  tenantId: string;
+  /** Fund whose schema to open (`withFundSchema`). Not a column filter. */
+  fundKey: string;
   /** Only count events at or after this instant. */
   since: Date;
   /** When set, scope KPIs to a single agent instance. */
@@ -36,10 +40,7 @@ export interface KpiWindow {
 }
 
 function windowScope(window: KpiWindow) {
-  const parts = [
-    eq(interactionEvents.tenantId, window.tenantId),
-    gte(interactionEvents.occurredAt, window.since),
-  ];
+  const parts = [gte(interactionEvents.occurredAt, window.since)];
   if (window.agentId !== undefined) {
     parts.push(eq(interactionEvents.agentId, window.agentId));
   }
@@ -61,11 +62,11 @@ function toNumber(value: unknown): number {
   return typeof value === "number" ? value : Number(value ?? 0);
 }
 
-/** Aggregate outcome counts for a tenant over a time window. */
+/** Aggregate outcome counts for a fund over a time window. */
 export async function getKpiSummary(window: KpiWindow): Promise<KpiSummary> {
   const scope = windowScope(window);
 
-  const [row] = await withFundSchema(window.tenantId, (db) =>
+  const [row] = await withFundSchema(window.fundKey, (db) =>
     db
       .select({
         total: sql<number>`count(*)`,
@@ -97,7 +98,7 @@ export interface ThemeCount {
 
 /** Top themes by volume (null until a classifier populates `theme`; returns [] meanwhile). */
 export async function getTopThemes(window: KpiWindow, limit = 10): Promise<ThemeCount[]> {
-  const rows = await withFundSchema(window.tenantId, (db) =>
+  const rows = await withFundSchema(window.fundKey, (db) =>
     db
       .select({ theme: interactionEvents.theme, count: sql<number>`count(*)` })
       .from(interactionEvents)
@@ -124,12 +125,12 @@ export interface InteractionLogRow {
   citationCount: number;
 }
 
-/** Recent interactions for a tenant — the fund query-log panel. */
+/** Recent interactions for a fund — the fund query-log panel. */
 export async function getRecentInteractions(
   window: KpiWindow,
   limit = 50,
 ): Promise<InteractionLogRow[]> {
-  const rows = await withFundSchema(window.tenantId, (db) =>
+  const rows = await withFundSchema(window.fundKey, (db) =>
     db
       .select({
         occurredAt: interactionEvents.occurredAt,
@@ -152,6 +153,9 @@ export async function getRecentInteractions(
 }
 
 export interface AgentActivityRow {
+  /** Schema the row was read from — the fund this activity belongs to. */
+  fundKey: string;
+  /** Deployment provenance (which runtime wrote the event). Not fund identity. */
   tenantId: string;
   agentId: string;
   fund: string;
@@ -163,9 +167,10 @@ export interface AgentActivityRow {
 }
 
 /**
- * Cross-tenant agent activity since an instant — the admin agent-overview. Grouped by
+ * Cross-fund agent activity since an instant — the admin agent-overview. Grouped by
  * (tenant, agent, fund); ordered by volume. Admin-only data (the dashboard gates the route).
  * Aggregated in the app, one query per fund schema — never a SQL join across schemas.
+ * `fundKey` is the schema source so callers never re-derive fund membership from tenantId.
  */
 export async function getAgentActivity(since: Date): Promise<AgentActivityRow[]> {
   const funds = await listActiveFunds();
@@ -189,6 +194,7 @@ export async function getAgentActivity(since: Date): Promise<AgentActivityRow[]>
     );
     for (const row of rows) {
       all.push({
+        fundKey: fund.key,
         tenantId: row.tenantId,
         agentId: row.agentId,
         fund: row.fund,
@@ -217,7 +223,7 @@ export async function getUnansweredQuestions(
   window: KpiWindow,
   limit = 50,
 ): Promise<UnansweredQuestion[]> {
-  const rows = await withFundSchema(window.tenantId, (db) =>
+  const rows = await withFundSchema(window.fundKey, (db) =>
     db
       .select({ question: interactionEvents.question, occurredAt: interactionEvents.occurredAt })
       .from(interactionEvents)

@@ -44,6 +44,7 @@ export default async function AdminOverview() {
   // Show known agents that logged nothing this window as "offline", so the catalog is always visible.
   const seen = new Set(activity.map((row) => row.agentId));
   const missing: AdminRow[] = KNOWN_AGENTS.filter((agent) => !seen.has(agent.id)).map((agent) => ({
+    fundKey: "—",
     tenantId: "—",
     agentId: agent.id,
     fund: "—",
@@ -75,10 +76,10 @@ export default async function AdminOverview() {
           Fondsen →
         </Link>
         <Link
-          href="/admin/embed"
+          href="/admin/agents"
           className="whitespace-nowrap text-sm text-primary hover:underline"
         >
-          Embed &amp; distributie →
+          Agenttypes →
         </Link>
       </div>
 
@@ -86,7 +87,7 @@ export default async function AdminOverview() {
         <TableHeader>
           <TableRow>
             <TableHead>Agent</TableHead>
-            <TableHead>Tenant / fonds</TableHead>
+            <TableHead>Fonds</TableHead>
             <TableHead>Vragen</TableHead>
             <TableHead>Beantwoord*</TableHead>
             <TableHead>Status</TableHead>
@@ -100,8 +101,10 @@ export default async function AdminOverview() {
             <TableRow key={`${row.agentId}-${row.tenantId}-${index}`}>
               <TableCell className="font-medium">{agentLabel(row.agentId)}</TableCell>
               <TableCell className="text-text-muted">
-                {row.tenantId}
-                {row.fund !== "—" && row.fund !== row.tenantId ? ` · ${row.fund}` : ""}
+                <div>{row.fundKey === "—" ? "—" : row.fundKey}</div>
+                {row.tenantId !== "—" && row.tenantId !== row.fundKey ? (
+                  <div className="text-xs text-text-subtle">runtime {row.tenantId}</div>
+                ) : null}
               </TableCell>
               <TableCell>{num(row.total)}</TableCell>
               <TableCell>{row.total === 0 ? "—" : pct(row.rate)}</TableCell>

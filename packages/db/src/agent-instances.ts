@@ -70,6 +70,7 @@ export interface TenantConfigInput {
   tenantId: string;
   agentKey?: string;
   corsAllowlist?: string[];
+  /** @deprecated Theme lives on control.funds (S1). Ignored by updateTenantConfig. */
   theme?: TenantTheme;
   texts?: TenantTexts;
 }
@@ -77,6 +78,7 @@ export interface TenantConfigInput {
 /**
  * Update an existing agent instance. Does **not** insert — fund onboarding creates rows via
  * createFundEnvironment; the OOMT seed uses createAgentInstance. Writer connection.
+ * Theme is not written here (fund-level via updateFundTheme).
  */
 export async function updateTenantConfig(input: TenantConfigInput): Promise<AgentInstance> {
   const agentKey = input.agentKey ?? "cao";
@@ -85,7 +87,6 @@ export async function updateTenantConfig(input: TenantConfigInput): Promise<Agen
     .update(agentInstances)
     .set({
       ...(input.corsAllowlist !== undefined ? { corsAllowlist: input.corsAllowlist } : {}),
-      ...(input.theme !== undefined ? { theme: input.theme } : {}),
       ...(input.texts !== undefined ? { texts: input.texts } : {}),
       updatedAt: new Date(),
     })

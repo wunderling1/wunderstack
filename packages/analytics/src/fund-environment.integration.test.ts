@@ -12,6 +12,7 @@ import {
   users,
 } from "@wunderstack/db";
 import { getAgentActivity, getCorpusOverview, getKpiSummary } from "./index.js";
+import { recordInteractionEvent } from "./record.js";
 
 /**
  * Requires PROVISIONER_DATABASE_URL + DATABASE_URL at process start (shared env parse).
@@ -49,7 +50,7 @@ describe("fund environment ↔ analytics seam", { skip: !ready }, () => {
     assert.ok(active.some((fund) => fund.key === fundKey));
 
     const summary = await getKpiSummary({
-      tenantId: fundKey,
+      fundKey,
       since: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
     });
     assert.equal(summary.total, 0);
@@ -72,6 +73,46 @@ describe("fund environment ↔ analytics seam", { skip: !ready }, () => {
       `),
     )) as unknown as Array<{ public_grant: boolean }>;
     assert.equal(publicGrant[0]?.public_grant, false);
+  });
+
+  it("getKpiSummary counts both tenant_ids in one fund schema (multi-fonds-runtime)", async () => {
+    // A multi-fund runtime writes tenant_id = its own deployment key while storing the row
+    // in the answering fund's schema. Filtering KPIs on tenant_id would drop those rows (F1).
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const recordedDemo = await recordInteractionEvent({
+      tenantId: "demo",
+      agentId: "cao",
+      fund: fundKey,
+      sessionId: `sess-demo-${fundKey}`,
+      outcome: "answered",
+      citationCount: 1,
+      question: "multi-runtime demo tenant",
+    });
+    const recordedOwn = await recordInteractionEvent({
+      tenantId: fundKey,
+      agentId: "cao",
+      fund: fundKey,
+      sessionId: `sess-own-${fundKey}`,
+      outcome: "answered",
+      citationCount: 1,
+      question: "multi-runtime fund tenant",
+    });
+    assert.equal(recordedDemo.recorded, true);
+    assert.equal(recordedOwn.recorded, true);
+
+    const summary = await getKpiSummary({ fundKey, since });
+    assert.equal(summary.total, 2);
+
+    const activity = await getAgentActivity(since);
+    const forThisFund = activity.filter((row) => row.fundKey === fundKey);
+    const activityTotal = forThisFund.reduce((sum, row) => sum + row.total, 0);
+    assert.equal(activityTotal, 2);
+    assert.ok(forThisFund.every((row) => row.fundKey === fundKey));
+
+    // Agent-page KPIs use the same source as the fund overview: sum over agents == fund total.
+    const cao = await getKpiSummary({ fundKey, agentId: "cao", since });
+    const arbo = await getKpiSummary({ fundKey, agentId: "arbo", since });
+    assert.equal(cao.total + arbo.total, summary.total);
   });
 
   it("getAgentActivity throws when control.funds has a row without a schema (why createFundEnvironment is atomic)", async () => {

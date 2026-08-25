@@ -9,8 +9,10 @@ fondsschema’s ([ADR-multitenant-database.md](../../docs/architecture/ADR-multi
 ## Regels
 - **DB-toegang alleen via `@wunderstack/db`** (400-data-rag): geen eigen `pg`-client. De tabel
   (`interaction_events`) leeft in `packages/db/schema.ts`; deze package schrijft/leest via de seam.
-- **Identiteit (D15):** `tenantId` = instance-sleutel, `fund` = domeinwoord. 1-op-1 **per
-  runtime-proces** (tak B: D15 niet gecollapseerd). `sessionId` is gedeeld met de Langfuse-trace.
+- **Identiteit (D15):** het fondsschema is de KPI-scope (`withFundSchema`). `tenant_id` op de rij
+  is deployment-herkomst (welke runtime schreef), geen filter. `fund` = domeinwoord wiens corpus
+  antwoordde. 1-op-1 **per runtime-proces** (tak B: D15 niet gecollapseerd). `sessionId` is gedeeld
+  met de Langfuse-trace.
 - **AVG:** `question` wordt gelogd voor de "onbeantwoorde vragen"-roadmapsignaal; retentie 90 dagen,
   geen user-identificatie in embed v1 (zie `docs/decisions/DECISION-analytics-retention.md`).
 - **Best-effort schrijven:** een falende of niet-geconfigureerde DB mag nooit een antwoord breken;

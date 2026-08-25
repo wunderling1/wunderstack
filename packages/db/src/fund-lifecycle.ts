@@ -189,6 +189,35 @@ export async function updateFundDisplayName(input: { fundKey: string; name: stri
   return row;
 }
 
+/** Read fund-level theme (reader connection). Empty object when unset. */
+export async function getFundTheme(
+  fundKey: string,
+  db: Database = getDb(),
+): Promise<Record<string, unknown>> {
+  const fund = await getFund(fundKey, db);
+  if (!fund) {
+    throw new FundNotFoundError(assertFundKey(fundKey));
+  }
+  return (fund.theme ?? {}) as Record<string, unknown>;
+}
+
+/** Write fund-level theme (provisioner — control.*). Validated by the caller with tenantThemeSchema. */
+export async function updateFundTheme(input: {
+  fundKey: string;
+  theme: Record<string, unknown>;
+}): Promise<Fund> {
+  const key = assertFundKey(input.fundKey);
+  const [row] = await getProvisionerDb()
+    .update(funds)
+    .set({ theme: input.theme })
+    .where(eq(funds.key, key))
+    .returning();
+  if (!row) {
+    throw new FundNotFoundError(key);
+  }
+  return row;
+}
+
 export interface AddedAgentInstance {
   agentKey: AgentKey;
   publicKey: string;

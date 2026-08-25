@@ -68,6 +68,8 @@ export {
   getLatestFundDump,
   countFundDumps,
   updateFundDisplayName,
+  getFundTheme,
+  updateFundTheme,
   addFundAgent,
   openFundDump,
   deactivateFund,

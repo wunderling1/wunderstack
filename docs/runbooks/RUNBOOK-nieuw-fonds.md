@@ -79,7 +79,8 @@ DB_OWNER_ROLE=<addon-owner login, zodat ingest na CREATE SCHEMA mag schrijven>
      --fund <fundKey> --agent arbo --version <tag> --prune
    ```
 
-3. **Embed / playground:** keys uit het resultaatscherm (of `/admin/embed` na aanmaken).
+3. **Embed / playground:** keys uit het resultaatscherm (of Distributie-tab op
+   `/admin/funds/<key>/agents/<agent>`).
 4. **Fonds-login:** e-mail uit het formulier + eenmalig wachtwoord → `/password` → fondsdashboard.
 
 ---

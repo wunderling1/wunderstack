@@ -19,16 +19,8 @@ import {
 import { agentKeySchema } from "@wunderstack/shared";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { auth } from "@/auth";
-import { decideAccess } from "@/lib/authz";
+import { assertAdmin } from "@/lib/assert-admin";
 import { generatePassword, hashPassword } from "@/lib/password";
-
-async function assertAdmin(): Promise<void> {
-  const session = await auth();
-  if (!decideAccess(session, "admin").allow) {
-    throw new Error("forbidden");
-  }
-}
 
 function str(value: FormDataEntryValue | null): string {
   return typeof value === "string" ? value.trim() : "";
@@ -53,6 +45,10 @@ export type AddAgentState =
 
 function revalidateFund(fundKey: string): void {
   revalidatePath(`/admin/funds/${fundKey}`);
+  revalidatePath(`/admin/funds/${fundKey}/agents`);
+  revalidatePath(`/admin/funds/${fundKey}/branding`);
+  revalidatePath(`/admin/funds/${fundKey}/accounts`);
+  revalidatePath(`/admin/funds/${fundKey}/manage`);
   revalidatePath("/admin/funds");
 }
 

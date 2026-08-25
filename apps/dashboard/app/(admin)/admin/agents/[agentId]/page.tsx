@@ -1,4 +1,5 @@
 import { getAgentActivity } from "@wunderstack/analytics";
+import { getFund, listActiveFunds, listInstances } from "@wunderstack/db";
 import {
   AgentStatusBadge,
   buttonVariants,
@@ -37,20 +38,45 @@ export default async function AgentDetail({
 }) {
   const { agentId } = await params;
   const manifest = getReleaseManifest(agentId);
-  const activity = (await getAgentActivity(sinceDaysAgo(WINDOW_DAYS))).filter(
-    (row) => row.agentId === agentId,
-  );
+  const since = sinceDaysAgo(WINDOW_DAYS);
+  const [activity, activeFunds] = await Promise.all([
+    getAgentActivity(since),
+    listActiveFunds(),
+  ]);
 
-  const total = activity.reduce((sum, row) => sum + row.total, 0);
-  const errors = activity.reduce((sum, row) => sum + row.errors, 0);
-  const answered = activity.reduce((sum, row) => sum + row.answeredWithCitations, 0);
+  const agentActivity = activity.filter((row) => row.agentId === agentId);
+  const total = agentActivity.reduce((sum, row) => sum + row.total, 0);
+  const errors = agentActivity.reduce((sum, row) => sum + row.errors, 0);
+  const answered = agentActivity.reduce((sum, row) => sum + row.answeredWithCitations, 0);
   const status = deriveStatus(total, errors);
+
+  const whereItRuns = (
+    await Promise.all(
+      activeFunds.map(async (fundRow) => {
+        const [instances, fund] = await Promise.all([
+          listInstances(fundRow.key),
+          getFund(fundRow.key),
+        ]);
+        const instance = instances.find((row) => row.agentKey === agentId);
+        if (!instance) return null;
+        const fundRows = agentActivity.filter((row) => row.fundKey === fundRow.key);
+        const fundTotal = fundRows.reduce((sum, row) => sum + row.total, 0);
+        const fundErrors = fundRows.reduce((sum, row) => sum + row.errors, 0);
+        return {
+          fundKey: fundRow.key,
+          fundName: fund?.name ?? fundRow.key,
+          questions: fundTotal,
+          status: deriveStatus(fundTotal, fundErrors),
+        };
+      }),
+    )
+  ).filter((row): row is NonNullable<typeof row> => row !== null);
 
   return (
     <div className="flex flex-col gap-8">
       <div className="flex items-center gap-3">
-        <Link href="/admin" className="text-sm text-text-muted hover:underline">
-          ← Overzicht
+        <Link href="/admin/agents" className="text-sm text-text-muted hover:underline">
+          ← Agenttypes
         </Link>
       </div>
 
@@ -77,7 +103,11 @@ export default async function AgentDetail({
             <ManifestRow label="Release-tag" value={nnb(manifest.releaseTag)} />
             <ManifestRow
               label="Gate-status"
-              value={<Chip variant="refusal">{manifest.gateStatus === "unknown" ? "n.n.b." : manifest.gateStatus}</Chip>}
+              value={
+                <Chip variant="refusal">
+                  {manifest.gateStatus === "unknown" ? "n.n.b." : manifest.gateStatus}
+                </Chip>
+              }
             />
             <ManifestRow label="Goldenset-versie" value={nnb(manifest.goldensetVersion)} />
             <ManifestRow label="Corpus-versie" value={nnb(manifest.corpusVersion)} />
@@ -142,45 +172,59 @@ export default async function AgentDetail({
       </section>
 
       <section>
-        <SectionTitle>Activiteit ({WINDOW_DAYS} dagen)</SectionTitle>
-        {activity.length === 0 ? (
-          <p className="text-sm text-text-subtle">Geen activiteit in deze periode.</p>
+        <SectionTitle>Waar draait deze agent</SectionTitle>
+        <p className="mb-3 text-sm text-text-muted">
+          Read-only overzicht van plaatsingen. Distributie en sleutels beheer je per fonds.
+        </p>
+        {whereItRuns.length === 0 ? (
+          <p className="text-sm text-text-subtle">Nog geen fondsen met deze agent.</p>
         ) : (
-          <>
-            <div className="mb-3 text-sm text-text-muted">
-              Totaal {num(total)} vragen · {total === 0 ? "—" : pct(answered / total)} beantwoord met
-              geverifieerde citaties.
-            </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Tenant</TableHead>
-                  <TableHead>Fonds</TableHead>
-                  <TableHead>Vragen</TableHead>
-                  <TableHead>Beantwoord*</TableHead>
-                  <TableHead>Fouten</TableHead>
-                  <TableHead>Laatste activiteit</TableHead>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Fonds</TableHead>
+                <TableHead>Vragen ({WINDOW_DAYS}d)</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {whereItRuns.map((row) => (
+                <TableRow key={row.fundKey}>
+                  <TableCell>
+                    <div className="font-medium">{row.fundName}</div>
+                    <div className="font-mono text-xs text-text-muted">{row.fundKey}</div>
+                  </TableCell>
+                  <TableCell>{num(row.questions)}</TableCell>
+                  <TableCell>
+                    <AgentStatusBadge status={row.status} />
+                  </TableCell>
+                  <TableCell>
+                    <Link
+                      href={`/admin/funds/${row.fundKey}/agents/${agentId}`}
+                      className="text-sm text-primary hover:underline"
+                    >
+                      Open
+                    </Link>
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {activity.map((row, index) => (
-                  <TableRow key={`${row.tenantId}-${row.fund}-${index}`}>
-                    <TableCell>{row.tenantId}</TableCell>
-                    <TableCell>{row.fund}</TableCell>
-                    <TableCell>{num(row.total)}</TableCell>
-                    <TableCell>
-                      {row.total === 0 ? "—" : pct(row.answeredWithCitations / row.total)}
-                    </TableCell>
-                    <TableCell>{num(row.errors)}</TableCell>
-                    <TableCell className="whitespace-nowrap text-text-muted">
-                      {dateTime.format(row.lastOccurredAt)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </>
+              ))}
+            </TableBody>
+          </Table>
         )}
+        {total > 0 && agentActivity[0] ? (
+          <p className="mt-3 text-sm text-text-muted">
+            Totaal {num(total)} vragen · {pct(answered / total)} beantwoord met geverifieerde
+            citaties. Laatste activiteit{" "}
+            {dateTime.format(
+              agentActivity.reduce(
+                (latest, row) => (row.lastOccurredAt > latest ? row.lastOccurredAt : latest),
+                agentActivity[0].lastOccurredAt,
+              ),
+            )}
+            .
+          </p>
+        ) : null}
       </section>
     </div>
   );

@@ -19,12 +19,14 @@
       </p>
       <pre><code>npx serve scripts/embed-test -l 4173</code></pre>
       <p>
-        Zet daarna in het console (<code>/admin/embed</code>) de CORS-allowlist van de tenant op
+        Zet daarna op de Distributie-tab van de agent
+        (<code>/admin/funds/&lt;fonds&gt;/agents/&lt;agent&gt;/distribution</code>) de
+        CORS-allowlist op
         <code>http://localhost:4173</code> en plak de gegenereerde snippet hieronder in (vervang de
         <code>data-key</code>). De widget verschijnt rechtsonder.
       </p>
 
-      <!-- Plak hier de snippet uit /admin/embed (met de echte data-key): -->
+      <!-- Plak hier de snippet uit Distributie (met de echte data-key): -->
       <script
         src="http://localhost:3000/embed.js"
         data-key="pk_REPLACE_ME"

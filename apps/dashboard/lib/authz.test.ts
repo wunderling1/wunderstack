@@ -52,3 +52,22 @@ test("password area redirects away once the flag is cleared", () => {
     { allow: false, redirectTo: "/admin" },
   );
 });
+
+test("fund face routes stay fund-scoped: fund user may enter fund area, never admin", () => {
+  // Fund routes (/ and /agents/[agentKey]) use session.tenantId only — no fundKey in the URL.
+  // decideAccess("fund") is the gate; a fund user of A cannot open admin to reach fund B.
+  const fundA = { user: { role: "fund" as const, tenantId: "fonds-a" } };
+  assert.deepEqual(decideAccess(fundA, "fund"), { allow: true });
+  assert.deepEqual(decideAccess(fundA, "admin"), { allow: false, redirectTo: "/" });
+});
+
+test("fund user of fonds-a is still denied admin (no path to fonds-b data via admin)", () => {
+  const fundA = { user: { role: "fund" as const, tenantId: "fonds-a" } };
+  const fundB = { user: { role: "fund" as const, tenantId: "fonds-b" } };
+  assert.equal(decideAccess(fundA, "admin").allow, false);
+  assert.equal(decideAccess(fundB, "admin").allow, false);
+  assert.equal(decideAccess(fundA, "fund").allow, true);
+  assert.equal(decideAccess(fundB, "fund").allow, true);
+  // Isolation of KPI data is enforced by pages reading session.user.tenantId only
+  // (see app/(fund)/agents/[agentKey]/page.tsx) — never a URL fundKey.
+});

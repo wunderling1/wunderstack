@@ -41,9 +41,7 @@ export default async function FundsAdminPage() {
         listInstances(fund.key),
         getDb().select({ n: count() }).from(users).where(eq(users.tenantId, fund.key)),
       ]);
-      const fundActivity = activity.filter(
-        (row) => row.tenantId === fund.key || row.fund === fund.key,
-      );
+      const fundActivity = activity.filter((row) => row.fundKey === fund.key);
       const total = fundActivity.reduce((sum, row) => sum + row.total, 0);
       const errors = fundActivity.reduce((sum, row) => sum + row.errors, 0);
       const { status, label } = deriveFundStatus(total, errors);
