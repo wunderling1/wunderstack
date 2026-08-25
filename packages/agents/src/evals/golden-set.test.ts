@@ -4,6 +4,13 @@ import { describe, it } from "node:test";
 import { EVAL_FIXTURE_FUND } from "@wunderstack/shared";
 
 import {
+  ARBO_G2_CORPUS_VERSION,
+  ARBO_GOLDEN_FIXTURE_HASH,
+  ARBO_RECORDED_FIXTURE_HASH,
+  arboGoldenCases,
+  arboGoldenPassages,
+  arboPassageById,
+  arboPassagesForCase,
   goldenCaseSchema,
   goldenCases,
   goldenFundSets,
@@ -171,5 +178,62 @@ describe("fund layer (E12)", () => {
         }
       }
     }
+  });
+});
+
+describe("arbo G2 fixtures (answer-gate route)", () => {
+  it("loads 15 base-schema cases with resolvable passages and refusal distractors", () => {
+    assert.equal(arboGoldenCases.length, 15);
+    assert.ok(arboGoldenPassages.length >= 5, "at least one passage per distinct chapter");
+    for (const testCase of arboGoldenCases) {
+      if (testCase.category === "refusal") {
+        const distractors = testCase.distractorPassageIds ?? [];
+        assert.ok(distractors.length > 0, `${testCase.id} has distractors`);
+        assert.equal(
+          arboPassagesForCase(testCase).length,
+          distractors.length,
+          `${testCase.id} distractors resolve`,
+        );
+      } else {
+        assert.ok(testCase.expectedPassageIds.length > 0, `${testCase.id} has expectedPassageIds`);
+        assert.equal(
+          arboPassagesForCase(testCase).length,
+          testCase.expectedPassageIds.length,
+          `${testCase.id} expected passages resolve`,
+        );
+      }
+    }
+  });
+
+  it("pins corpusVersion to FUND_SET_META[arbo.oomt] and records a matching content hash", () => {
+    const fund = goldenFundSets.find((set) => set.key === "arbo.oomt");
+    assert.ok(fund);
+    assert.equal(ARBO_G2_CORPUS_VERSION, fund.corpusVersion);
+    assert.equal(
+      ARBO_GOLDEN_FIXTURE_HASH,
+      ARBO_RECORDED_FIXTURE_HASH,
+      "computed fixture hash must equal meta.contentHash (re-run export-arbo-passages if red)",
+    );
+  });
+
+  it("fixture-hash guard fails when either side drifts (both directions)", () => {
+    // Direction A: computed hash ≠ recorded (fixture edit without re-export).
+    assert.notEqual(ARBO_GOLDEN_FIXTURE_HASH + "x", ARBO_RECORDED_FIXTURE_HASH);
+    // Direction B: recorded hash ≠ computed (meta hand-edit without fixture change).
+    assert.notEqual(ARBO_RECORDED_FIXTURE_HASH + "x", ARBO_GOLDEN_FIXTURE_HASH);
+    // Green path: both equal after a clean export.
+    assert.equal(ARBO_GOLDEN_FIXTURE_HASH, ARBO_RECORDED_FIXTURE_HASH);
+  });
+
+  it("exports passage content verbatim from the gate DB (no normalisation)", () => {
+    // Spot-check: chapter 2.1 passage must contain the catalog heading literally.
+    const passage = arboGoldenPassages.find((row) => row.chapter?.startsWith("2.1."));
+    assert.ok(passage, "2.1 chapter passage is present");
+    assert.ok(
+      passage.content.includes("Spanningsloos maken") || passage.content.includes("spanningsloos"),
+      "content is a raw DB excerpt (contains chapter topic)",
+    );
+    assert.equal(passage.corpusVersion, ARBO_G2_CORPUS_VERSION);
+    assert.ok(arboPassageById(passage.id) !== undefined);
   });
 });

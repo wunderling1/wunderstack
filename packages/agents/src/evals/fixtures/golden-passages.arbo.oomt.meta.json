@@ -1,0 +1,10 @@
+{
+  "corpusVersion": "arbo-oomt-2",
+  "fund": "oomt",
+  "agentKey": "arbo",
+  "exportedAt": "2026-08-25T07:56:40.027Z",
+  "passageCount": 5,
+  "caseCount": 15,
+  "contentHash": "9ba863de8a72537473895c8228b90fdcaa6989b0ae0195cc32a1a98a9bd099b8",
+  "runbook": "Re-run after every corpus_version bump: pnpm --filter @wunderstack/eval-scripts export-arbo-passages"
+}
