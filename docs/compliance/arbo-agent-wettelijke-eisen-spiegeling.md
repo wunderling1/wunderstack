@@ -2,6 +2,11 @@
 
 Status: **concept** · Datum: 25 augustus 2026 · Eigenaar: Wunderstack-maintainers
 
+> **G5 is niet geland op `main`.** De ids hieronder zijn gereserveerd. De implementatie
+> (PRs #35/#37/#38) hangt op tag `archive/arbo-answergate-2026-08-25`. Ze staan niet in de
+> gate-registry en niet in `GATE-ARCHITECTURE.md`. Restack later vanaf verse `main` door te
+> *porten*, niet door die tag te mergen. Tot die tijd is G5 geen release-gate.
+
 ## Duurzame bron
 
 Dit document spiegeling de eisen uit de **Beleidsregel arbocatalogi 2019**:
@@ -26,8 +31,9 @@ Beleidsregel verschillen, wint de Beleidsregel.
 
 ## Gate-ids (G5) — artikelverwijzing
 
-Deze ids belanden in assertienamen in de eval en in `GATE-ARCHITECTURE.md`. Ze verwijzen naar
-artikelen in de Beleidsregel hierboven. Zie het actieplan voor de status per id.
+Gereserveerde ids voor deterministische Beleidsregel-asserties onder G2-answer. Ze verwijzen naar
+artikelen in de Beleidsregel hierboven. Zie het actieplan voor de status per id. **Niet** in de
+eval op `main` — zie de statusnoot bovenaan.
 
 | Id | Artikel | Wat de assertie afdwingt |
 |---|---|---|
