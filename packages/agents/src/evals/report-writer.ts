@@ -36,16 +36,25 @@ const reportPath = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "ev
 // v9: `roleplay` — the Fase 6 gate family (G2-roleplay-persona / G2-roleplay-review). Carries every
 //     generated reply verbatim: a persona break or an early reveal is a judgement about a sentence,
 //     and an aggregate count without that sentence is not diagnosable.
-export const EVAL_REPORT_SCHEMA_VERSION = 9;
+// v10: advisory-failed / not-applicable gate statuses + ReportCheck.advisory — scaffold-content
+//     quality floors are measured on the PR path without merge-blocking (content-policy.ts).
+export const EVAL_REPORT_SCHEMA_VERSION = 10;
 
 export interface ReportCheck {
   name: string;
   ok: boolean;
   detail?: string;
+  /** True when a red check is advisory (WARN) rather than merge-blocking. */
+  advisory?: boolean;
 }
 
-/** Gate outcome. `skipped` is a first-class status — a gate that could not run is NEVER `passed`. */
-export type GateStatus = "passed" | "failed" | "skipped";
+/**
+ * Gate outcome. `skipped` is a first-class status — a gate that could not run is NEVER `passed`.
+ * `advisory-failed` means every blocking check passed but at least one advisory check was red —
+ * measured and visible, not merge-blocking. `not-applicable` means the PR path-scope excluded the
+ * gate deliberately.
+ */
+export type GateStatus = "passed" | "failed" | "skipped" | "advisory-failed" | "not-applicable";
 
 export interface GateReport {
   /** Stable G-identifier, e.g. "G2-retrieval" (per-fund gates append " [key]"). */
