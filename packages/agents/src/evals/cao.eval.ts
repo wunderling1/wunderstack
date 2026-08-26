@@ -43,7 +43,7 @@
  * one is in flight exits immediately with a clear message instead of competing for the DB/API.
  */
 
-import { DEFAULT_LLM_MODEL, embed, generateText, isRateLimited } from "@wunderstack/ai";
+import { DEFAULT_LLM_MODEL, embed, generateText, isTransientProviderError } from "@wunderstack/ai";
 import {
   closeDb,
   listCorpusDocuments,
@@ -1888,19 +1888,20 @@ try {
 
 main()
   .catch((error: unknown) => {
-    if (isRateLimited(error)) {
-      // A throttled run has no verdict: every gate after the 429 never ran, so the run says nothing
-      // about the commit. Before this, it was indistinguishable from a regression — same exit 1, same
-      // single line at the end of a 40-minute log (measured on `main` 2026-07-31, run 30639862139).
+    if (isTransientProviderError(error)) {
+      // A throttled or outaged run has no verdict: every gate after the 429/5xx never ran, so the
+      // run says nothing about the commit. Before this, it was indistinguishable from a regression —
+      // same exit 1, same single line at the end of a 40-minute log (429 on `main` 2026-07-31,
+      // run 30639862139; 503 on PR path 2026-08-26).
       console.error(
-        "\nGATE RUN INCOMPLETE — the provider throttled us and the retry budget ran out.\n" +
+        "\nGATE RUN INCOMPLETE — the provider returned a transient fault (429/5xx) and the retry budget ran out.\n" +
           "No verdict: the gates after this point did not run. This is NOT a regression signal.\n" +
           error.message,
       );
       if (env.GITHUB_ACTIONS === "true") {
         console.error(
-          "::error title=Gate run incomplete (provider throttled)::" +
-            "No gate verdict — the run stopped on an HTTP 429, it did not measure a regression.",
+          "::error title=Gate run incomplete (provider 429/5xx)::" +
+            "No gate verdict — the run stopped on a transient provider fault, it did not measure a regression.",
         );
       }
       process.exitCode = EXIT_THROTTLED;
