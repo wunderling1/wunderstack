@@ -2,12 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-
-const AGENT_TABS = [
-  { segment: "", label: "Overzicht" },
-  { segment: "distribution", label: "Distributie" },
-  { segment: "texts", label: "Teksten" },
-] as const;
+import { agentTabHref, agentTabs } from "@/lib/agent-tabs";
 
 export function AgentTabNav({
   fundKey,
@@ -18,6 +13,7 @@ export function AgentTabNav({
 }) {
   const pathname = usePathname();
   const base = `/admin/funds/${fundKey}/agents/${agentKey}`;
+  const tabs = agentTabs(agentKey);
 
   return (
     <div
@@ -25,8 +21,8 @@ export function AgentTabNav({
       aria-label="Agenttabbladen"
       className="inline-flex items-center gap-1 rounded-[var(--radius-control)] border border-border bg-surface-sunk p-1"
     >
-      {AGENT_TABS.map((tab) => {
-        const href = tab.segment === "" ? base : `${base}/${tab.segment}`;
+      {tabs.map((tab) => {
+        const href = agentTabHref(fundKey, agentKey, tab.segment);
         const selected =
           tab.segment === ""
             ? pathname === base || pathname === `${base}/`
