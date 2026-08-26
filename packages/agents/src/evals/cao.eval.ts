@@ -43,7 +43,7 @@
  * one is in flight exits immediately with a clear message instead of competing for the DB/API.
  */
 
-import { DEFAULT_LLM_MODEL, embed, generateText, isRateLimited } from "@wunderstack/ai";
+import { DEFAULT_LLM_MODEL, embed, generateText, isTransientProviderError } from "@wunderstack/ai";
 import {
   closeDb,
   listCorpusDocuments,
@@ -96,6 +96,8 @@ import {
   ANSWER_CHECK_KIND,
   contentGatesBlocking,
   isAdvisory,
+  isPathScopeNone,
+  parsePathScopeIds,
   pathScopeAllowed,
   resolveTier,
   type CheckKind,
@@ -204,13 +206,13 @@ function assertGateFilterAllowed(): void {
 }
 
 /**
- * PR path-scope: which gates the diff can touch. Empty = full registry. Never scopes G1 contracts
- * (offline and free). Refused outside EVAL_TIER=pr so the merge queue always runs everything.
+ * PR path-scope: which gates the diff can touch.
+ * - Empty = full registry (push / merge_group / schedule, or unset locally).
+ * - `["none"]` = docs-/untouched PR: G2 not-applicable; G1 contracts still run.
+ * - Otherwise = the listed gate ids.
+ * Refused outside EVAL_TIER=pr so the merge queue always runs everything.
  */
-const PATH_SCOPE = (env.EVAL_PATH_SCOPE ?? "")
-  .split(",")
-  .map((id) => id.trim())
-  .filter((id) => id.length > 0);
+const PATH_SCOPE = parsePathScopeIds(env.EVAL_PATH_SCOPE);
 
 /** Offline contract gates — always run, never path-scoped. */
 const ALWAYS_RUN_GATES = new Set(["G1-contract", "G1-roleplay-contract"]);
@@ -224,6 +226,10 @@ function assertPathScopeAllowed(): void {
       "EVAL_PATH_SCOPE is alleen toegestaan op EVAL_TIER=pr; de merge-queue loopt altijd het volledige register.",
     );
   }
+  // Sentinel from resolve-path-scope.sh — not a gate id.
+  if (isPathScopeNone(PATH_SCOPE)) {
+    return;
+  }
   const known = new Set<string>(GATE_SPECS.map((spec) => spec.id));
   const unknown = PATH_SCOPE.filter((id) => !known.has(id));
   if (unknown.length > 0) {
@@ -234,8 +240,15 @@ function assertPathScopeAllowed(): void {
 }
 
 function isInPathScope(gateId: string): boolean {
-  if (PATH_SCOPE.length === 0 || ALWAYS_RUN_GATES.has(gateId)) {
+  if (ALWAYS_RUN_GATES.has(gateId)) {
     return true;
+  }
+  // Empty = full registry (merge/push). Sentinel none = G2 not-applicable.
+  if (PATH_SCOPE.length === 0) {
+    return true;
+  }
+  if (isPathScopeNone(PATH_SCOPE)) {
+    return false;
   }
   return PATH_SCOPE.includes(gateId);
 }
@@ -1888,19 +1901,20 @@ try {
 
 main()
   .catch((error: unknown) => {
-    if (isRateLimited(error)) {
-      // A throttled run has no verdict: every gate after the 429 never ran, so the run says nothing
-      // about the commit. Before this, it was indistinguishable from a regression — same exit 1, same
-      // single line at the end of a 40-minute log (measured on `main` 2026-07-31, run 30639862139).
+    if (isTransientProviderError(error)) {
+      // A throttled or outaged run has no verdict: every gate after the 429/5xx never ran, so the
+      // run says nothing about the commit. Before this, it was indistinguishable from a regression —
+      // same exit 1, same single line at the end of a 40-minute log (429 on `main` 2026-07-31,
+      // run 30639862139; 503 on PR path 2026-08-26).
       console.error(
-        "\nGATE RUN INCOMPLETE — the provider throttled us and the retry budget ran out.\n" +
+        "\nGATE RUN INCOMPLETE — the provider returned a transient fault (429/5xx) and the retry budget ran out.\n" +
           "No verdict: the gates after this point did not run. This is NOT a regression signal.\n" +
           error.message,
       );
       if (env.GITHUB_ACTIONS === "true") {
         console.error(
-          "::error title=Gate run incomplete (provider throttled)::" +
-            "No gate verdict — the run stopped on an HTTP 429, it did not measure a regression.",
+          "::error title=Gate run incomplete (provider 429/5xx)::" +
+            "No gate verdict — the run stopped on a transient provider fault, it did not measure a regression.",
         );
       }
       process.exitCode = EXIT_THROTTLED;

@@ -37,6 +37,9 @@ export class ProviderHttpError extends Error {
   }
 }
 
+/** Provider statuses worth retrying: rate limiting (429) and transient upstream faults (5xx). */
+export const TRANSIENT_PROVIDER_STATUSES = new Set([429, 500, 502, 503, 504]);
+
 /**
  * True when the provider rate-limited us and the backoff budget in `fetchWithRetry` ran out. Such a
  * failure says nothing about the code under test: work that never ran has no result.
@@ -45,8 +48,16 @@ export function isRateLimited(error: unknown): error is ProviderHttpError {
   return error instanceof ProviderHttpError && error.status === 429;
 }
 
-/** Provider statuses worth retrying: rate limiting (429) and transient upstream faults (5xx). */
-const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
+/**
+ * True when a provider answered with a transient HTTP fault (429 or retryable 5xx) after retries
+ * ran out. Same "no verdict" meaning as `isRateLimited`, but covers outages (503) as well as
+ * throttling. Eval uses this for exit 75; production callers usually just retry or surface the error.
+ */
+export function isTransientProviderError(error: unknown): error is ProviderHttpError {
+  return error instanceof ProviderHttpError && TRANSIENT_PROVIDER_STATUSES.has(error.status);
+}
+
+const RETRYABLE_STATUSES = TRANSIENT_PROVIDER_STATUSES;
 const MAX_ATTEMPTS = 5;
 const BASE_DELAY_MS = 2_000;
 const MAX_DELAY_MS = 30_000;

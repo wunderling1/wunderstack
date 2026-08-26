@@ -1,13 +1,16 @@
 /**
  * Retry an async operation with exponential backoff. Used by Gate C to survive transient
- * provider hiccups during the full golden-set run — both rate limits (429) AND transient network
- * failures (a dropped socket, DNS blip or TLS/connect timeout during the ~28 min of LLM calls).
+ * provider hiccups during the full golden-set run — rate limits (429), transient upstream faults
+ * (5xx), AND network failures (a dropped socket, DNS blip or TLS/connect timeout during the
+ * ~28 min of LLM calls).
  *
  * Why network errors matter here: `fetch` (undici) surfaces a connection drop as a generic
  * `TypeError: fetch failed` whose REAL reason lives in `error.cause` (e.g. `ECONNRESET`,
  * `UND_ERR_SOCKET`). A single un-retried blip used to abort the whole run mid-flight, so we walk
  * the cause chain and treat these as retryable.
  */
+
+import { ProviderHttpError, TRANSIENT_PROVIDER_STATUSES } from "@wunderstack/ai";
 
 /** Node/undici error codes that signal a transient, worth-retrying network failure. */
 const RETRYABLE_ERROR_CODES = new Set([
@@ -36,11 +39,12 @@ const RETRYABLE_MESSAGE_FRAGMENTS = [
   "connection",
   "econnreset",
   "eai_again",
+  "service unavailable",
 ];
 
 /**
  * Walk the `error.cause` chain (undici nests the real reason there) and decide whether ANY link is
- * a transient rate-limit or network error worth retrying. Guarded against cyclic causes.
+ * a transient rate-limit, 5xx, or network error worth retrying. Guarded against cyclic causes.
  */
 export function isRetryableError(error: unknown): boolean {
   const seen = new Set<unknown>();
@@ -49,22 +53,27 @@ export function isRetryableError(error: unknown): boolean {
   while (current !== null && current !== undefined && !seen.has(current)) {
     seen.add(current);
 
+    // Typed provider faults: 429 + retryable 5xx (503 outages included).
+    if (current instanceof ProviderHttpError && TRANSIENT_PROVIDER_STATUSES.has(current.status)) {
+      return true;
+    }
+
     const message = current instanceof Error ? current.message : String(current);
     const lowered = message.toLowerCase();
 
-    // Rate limits: provider is up but throttling us.
-    if (message.includes("429") || /rate limit/i.test(message)) {
+    // Rate limits and 5xx surfaced only as a message (e.g. before ProviderHttpError existed).
+    if (
+      message.includes("429") ||
+      /rate limit/i.test(message) ||
+      /\b50[0234]\b/.test(message) ||
+      RETRYABLE_MESSAGE_FRAGMENTS.some((fragment) => lowered.includes(fragment))
+    ) {
       return true;
     }
 
     // Transient network failure by error code (Node's `code`, undici's on the cause).
     const code = (current as { code?: unknown }).code;
     if (typeof code === "string" && RETRYABLE_ERROR_CODES.has(code)) {
-      return true;
-    }
-
-    // Transient network failure by message shape (e.g. undici's "fetch failed").
-    if (RETRYABLE_MESSAGE_FRAGMENTS.some((fragment) => lowered.includes(fragment))) {
       return true;
     }
 

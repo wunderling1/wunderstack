@@ -17,8 +17,11 @@ assert_eq() {
   fi
 }
 
-assert_eq "dashboard-only → empty" "" \
+assert_eq "dashboard-only → none" "none" \
   "$(printf 'apps/dashboard/app/page.tsx\n' | "$SCRIPT" 2>/dev/null)"
+
+assert_eq "docs-only → none" "none" \
+  "$(printf 'docs/compliance/arbo-agent-compliance-actieplan.md\n' | "$SCRIPT" 2>/dev/null)"
 
 assert_eq "rag → grounded" "G2-retrieval,G2-multi-turn,G2-answer" \
   "$(printf 'packages/rag/src/retrieve.ts\n' | "$SCRIPT" 2>/dev/null)"

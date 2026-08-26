@@ -74,7 +74,8 @@ jobs:
 
       - name: Resolve eval path scope
         # Only on pull_request: omit expensive G2 gates the diff cannot touch. merge_group / push /
-        # schedule always run the full registry (EVAL_PATH_SCOPE empty).
+        # schedule leave EVAL_PATH_SCOPE empty (= full registry). On PRs the script prints gate ids
+        # or the sentinel "none" (docs-/untouched diff → G2 not-applicable; G1 still runs).
         id: path_scope
         run: |
           if [ "${{ github.event_name }}" != "pull_request" ]; then

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { ProviderHttpError } from "@wunderstack/ai";
+
 import { isRetryableError, retryWithBackoff } from "./retry.js";
 
 /** Reproduce undici's `fetch failed` shape: a TypeError wrapping the real cause. */
@@ -21,6 +23,27 @@ describe("isRetryableError", () => {
   it("retries rate limits (429 and 'rate limit')", () => {
     assert.equal(isRetryableError(new Error("Request failed with status 429")), true);
     assert.equal(isRetryableError(new Error("rate limit exceeded")), true);
+  });
+
+  it("retries ProviderHttpError with 429 and retryable 5xx", () => {
+    assert.equal(isRetryableError(new ProviderHttpError("Mistral request", 429, "throttled")), true);
+    assert.equal(isRetryableError(new ProviderHttpError("Mistral request", 503, "unavailable")), true);
+    assert.equal(isRetryableError(new ProviderHttpError("Mistral request", 502, "bad gateway")), true);
+    assert.equal(isRetryableError(new ProviderHttpError("Mistral request", 500, "internal")), true);
+    assert.equal(isRetryableError(new ProviderHttpError("Mistral request", 504, "timeout")), true);
+  });
+
+  it("retries a 503 surfaced only as a message (no typed status)", () => {
+    assert.equal(
+      isRetryableError(new Error('Mistral request failed (503): {"message":"Service unavailable."}')),
+      true,
+    );
+    assert.equal(isRetryableError(new Error("Service unavailable.")), true);
+  });
+
+  it("does NOT retry a ProviderHttpError that is not transient (4xx other than 429)", () => {
+    assert.equal(isRetryableError(new ProviderHttpError("Mistral request", 400, "bad request")), false);
+    assert.equal(isRetryableError(new ProviderHttpError("Mistral request", 401, "unauthorized")), false);
   });
 
   it("retries undici 'fetch failed' via the message", () => {

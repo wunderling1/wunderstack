@@ -31,6 +31,21 @@ export interface EvalHarnessOptions {
   requireDb: boolean;
 }
 
+/**
+ * Human-readable why a gate was skipped (credentials/DB missing and not required on this job).
+ * Exported so the wording stays testable — the old "required on merge to main" line was wrong for
+ * G3 on push (GATE_DB is false there by policy).
+ */
+export function skipReason(requires: GateRequirement, requirement: string): string {
+  if (requires.startsWith("db")) {
+    return (
+      "DB gates run on nightly/dispatch and on PRs that touch packages/db|rag|tenant — " +
+      "not on every push to main."
+    );
+  }
+  return `Set the credential(s) to run this gate (${requirement}).`;
+}
+
 export interface EvalHarness {
   gateResults: GateReport[];
   pushGate: (spec: GateSpec, checks: EvalCheck[], suffix?: string) => boolean;
@@ -157,15 +172,16 @@ export function createEvalHarness(options: EvalHarnessOptions): EvalHarness {
       });
       return false;
     }
-    console.log(
-      `\n${spec.layer} · ${spec.id}: SKIPPED (${requirement}). Set the credential(s) to run this gate; required on merge to main.`,
-    );
+    // DB gates (G3) are optional on push/merge: GATE_DB is only true on nightly/dispatch and on
+    // PRs that touch packages/db|rag|tenant. Key gates use EVAL_REQUIRE_ALL instead.
+    const skipDetail = skipReason(spec.requires, requirement);
+    console.log(`\n${spec.layer} · ${spec.id}: SKIPPED (${requirement}). ${skipDetail}`);
     gateResults.push({
       id: spec.id,
       layer: spec.layer,
       title: spec.title,
       status: "skipped",
-      checks: [{ name: `SKIPPED: ${requirement}`, ok: true }],
+      checks: [{ name: `SKIPPED: ${requirement}`, ok: true, detail: skipDetail }],
     });
     return true;
   }
