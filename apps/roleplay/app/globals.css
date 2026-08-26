@@ -1,0 +1,4 @@
+@import "@wunderstack/ui/styles.css";
+
+/* Scan UI package for Tailwind class names */
+@source "../../../packages/ui/src";

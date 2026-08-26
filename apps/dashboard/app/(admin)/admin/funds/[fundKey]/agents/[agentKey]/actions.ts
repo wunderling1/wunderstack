@@ -26,6 +26,7 @@ function revalidateAgent(fundKey: string, agentKey: string): void {
   revalidatePath(`/admin/funds/${fundKey}/agents/${agentKey}`);
   revalidatePath(`/admin/funds/${fundKey}/agents/${agentKey}/distribution`);
   revalidatePath(`/admin/funds/${fundKey}/agents/${agentKey}/texts`);
+  revalidatePath(`/admin/funds/${fundKey}/agents/${agentKey}/scenarios`);
   revalidatePath(`/admin/funds/${fundKey}/agents`);
 }
 

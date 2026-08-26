@@ -76,6 +76,32 @@ export default tseslint.config(
     },
   },
   {
+    files: ["apps/roleplay/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: [
+                "@wunderstack/agents",
+                "@wunderstack/agents/**",
+                "@wunderstack/db",
+                "@wunderstack/db/**",
+                "@wunderstack/rag",
+                "@wunderstack/ai",
+                "@wunderstack/analytics",
+                "**/packages/db/src/schema/fund/**",
+              ],
+              message:
+                "apps/roleplay is UI-only: talk to the runtime over HTTP. Do not import the agent seam, db, rag, ai or analytics.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ["packages/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-imports": [

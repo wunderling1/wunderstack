@@ -22,10 +22,13 @@ const schema = z.object({
   EMBED_SCRIPT_BASE: optional(z.url()),
   /** next-auth signing secret; validated for a loud boot error (next-auth reads it directly). */
   AUTH_SECRET: optional(z.string().min(1)),
+  /** Public origin of the learner UI; used to show copyable LTI 1.1 launch URLs. */
+  ROLEPLAY_PUBLIC_URL: optional(z.url()),
 });
 
 export const env = schema.parse({
   LANGFUSE_BASE_URL: process.env.LANGFUSE_BASE_URL,
   EMBED_SCRIPT_BASE: process.env.EMBED_SCRIPT_BASE,
   AUTH_SECRET: process.env.AUTH_SECRET,
+  ROLEPLAY_PUBLIC_URL: process.env.ROLEPLAY_PUBLIC_URL,
 });

@@ -1,13 +1,14 @@
 import { readBodyBounded } from "@/lib/http";
 import { checkRateLimit, clientKey } from "@/lib/rate-limit";
 import { verifyWebhookSignature } from "@/lib/webhook-auth";
-import { webhookAckSchema, webhookEventSchema } from "./contract";
+import { webhookAckSchema, webhookEventRequiresFund, webhookEventSchema } from "./contract";
 
 /**
  * POST /api/webhook — inbound LMS / O&O-fund webhook. Thin controller: rate-limit, bound the body,
  * HMAC-verify the signature over the raw bytes, validate the envelope (Zod), and acknowledge. No
  * business logic or side effects in v1 (see contract.ts) — but the auth seam is built in now so it
- * can never ship unauthenticated (security-audit finding #5).
+ * can never ship unauthenticated (security-audit finding #5). The type enum now includes
+ * `roleplay.result` so a payload we send outbound is a payload this seam can acknowledge.
  */
 export const runtime = "nodejs";
 
@@ -48,10 +49,10 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  // A cao.updated event must name the fund it concerns; a ping need not.
-  if (parsed.data.type === "cao.updated" && !parsed.data.fund) {
+  // Events other than ping name a fund; a ping is a health check and need not.
+  if (webhookEventRequiresFund(parsed.data.type) && !parsed.data.fund) {
     return Response.json(
-      { error: "invalid_webhook", issues: "cao.updated requires a `fund`." },
+      { error: "invalid_webhook", issues: `${parsed.data.type} requires a \`fund\`.` },
       { status: 400 },
     );
   }
