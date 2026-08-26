@@ -116,7 +116,11 @@ import {
   type AnswerCaseReport,
   type AnswerReport,
   type FundCaseDiagnosis,
+  type RoleplayPersonaReport,
+  type RoleplayReviewReport,
 } from "./report-writer.js";
+import { roleplayContractChecks } from "./roleplay-contract.js";
+import { runRoleplayPersonaGate, runRoleplayReviewGate } from "./roleplay-gates.js";
 import { retryWithBackoff, sleep } from "./retry.js";
 
 /**
@@ -150,6 +154,39 @@ type RetrievalThresholds = {
  * so those gates skip rather than fail. This keeps the DB requirement off the fast PR hot path (E11).
  */
 const REQUIRE_DB = env.EVAL_REQUIRE_DB === "1" || env.EVAL_REQUIRE_DB === "true";
+
+/**
+ * Development filter: run only these gate ids. Exists because iterating on one gate should not cost
+ * a full suite run, and a `.only` that lives in a diff is worse than one that lives in the shell.
+ *
+ * It is refused outright on the protected paths (see `assertGateFilterAllowed`). A filter and
+ * "skipped != passed" are the same question asked twice — a run that silently dropped half the
+ * registry is exactly the failure §4.2 exists to prevent — so instead of trying to make them
+ * coexist, the filter is simply unavailable where the gates are required.
+ */
+const GATE_FILTER = (env.EVAL_ONLY ?? "")
+  .split(",")
+  .map((id) => id.trim())
+  .filter((id) => id.length > 0);
+
+function assertGateFilterAllowed(): void {
+  if (GATE_FILTER.length === 0) {
+    return;
+  }
+  if (REQUIRE_ALL || REQUIRE_DB) {
+    throw new Error(
+      "EVAL_ONLY is not allowed together with EVAL_REQUIRE_ALL/EVAL_REQUIRE_DB: a protected run " +
+        "must walk the whole gate registry. Unset EVAL_ONLY.",
+    );
+  }
+  const known = new Set<string>(GATE_SPECS.map((spec) => spec.id));
+  const unknown = GATE_FILTER.filter((id) => !known.has(id));
+  if (unknown.length > 0) {
+    throw new Error(
+      `EVAL_ONLY names unknown gate id(s): ${unknown.join(", ")}. Known ids: ${[...known].join(", ")}.`,
+    );
+  }
+}
 
 const {
   gateResults,
@@ -220,6 +257,8 @@ const RETRIEVAL_THRESHOLDS = {
 let retrievalReport: RetrievalReport | null = null;
 let retrievalIntegrationReport: RetrievalIntegrationReport | null = null;
 let answerReport: AnswerReport | null = null;
+let roleplayPersonaReport: RoleplayPersonaReport | null = null;
+let roleplayReviewReport: RoleplayReviewReport | null = null;
 const fundLayerReports: FundLayerReport[] = [];
 let embeddingModelId: string | null = null;
 let rerankModelId: string | null = null;
@@ -1528,6 +1567,22 @@ async function answerQualityChecks(): Promise<Check[]> {
 }
 
 /**
+ * The two roleplay behavioural gates. The runners live in roleplay-gates.ts; these thin wrappers
+ * exist only to stash the artefact section, the same shape the retrieval and answer gates use.
+ */
+async function roleplayPersonaChecks(): Promise<Check[]> {
+  const { checks, report } = await runRoleplayPersonaGate();
+  roleplayPersonaReport = report;
+  return checks;
+}
+
+async function roleplayReviewChecks(): Promise<Check[]> {
+  const { checks, report } = await runRoleplayReviewGate();
+  roleplayReviewReport = report;
+  return checks;
+}
+
+/**
  * Run functions keyed by gate id. The Record<GateId, …> type makes this exhaustive: every registered
  * gate MUST have a run, and no run may exist without a spec — the code-side registry↔spec binding
  * (the doc-side binding is gate-registry.test.ts). A run yields a flat Check[], except the perFundSet
@@ -1541,9 +1596,12 @@ const GATE_RUNS: Record<GateId, () => GateRunResult | Promise<GateRunResult>> = 
     ...fixtureHashChecks(),
     ...corpusIsolationContractChecks(),
   ],
+  "G1-roleplay-contract": roleplayContractChecks,
   "G2-retrieval": retrievalAndRerankChecks,
   "G2-multi-turn": multiTurnChecks,
   "G2-answer": answerQualityChecks,
+  "G2-roleplay-persona": roleplayPersonaChecks,
+  "G2-roleplay-review": roleplayReviewChecks,
   "G3-pipeline": retrievalIntegrationChecks,
   "G3-fund": fundLayerGroups,
   "G3-isolation": corpusIsolationLiveChecks,
@@ -1592,6 +1650,9 @@ function writeRunArtefact(passed: boolean): void {
       requireAll: REQUIRE_ALL,
       judgeSamples: env.EVAL_JUDGE_SAMPLES ?? 1,
       writeBaseline: env.EVAL_WRITE_BASELINE === "1" || env.EVAL_WRITE_BASELINE === "true",
+      // Empty = the full registry ran. Non-empty makes the artefact self-identifying as partial, so
+      // a green report cannot be read as a verdict about gates that never executed.
+      onlyGates: GATE_FILTER,
     },
     models: {
       generator: EVAL_LLM_MODEL,
@@ -1604,6 +1665,7 @@ function writeRunArtefact(passed: boolean): void {
     retrievalIntegration: retrievalIntegrationReport,
     answer: answerReport,
     funds: fundLayerReports,
+    roleplay: { persona: roleplayPersonaReport, review: roleplayReviewReport },
     judge: { parseRetryCount: getJudgeParseRetryCount() },
   };
   const path = writeEvalReport(report);
@@ -1632,8 +1694,19 @@ async function main(): Promise<void> {
   let allPassed = true;
   let completed = false;
 
+  assertGateFilterAllowed();
+  if (GATE_FILTER.length > 0) {
+    console.warn(
+      `\nPARTIAL RUN — EVAL_ONLY=${GATE_FILTER.join(",")}. The other gates did not run and this ` +
+        "report says nothing about them.\n",
+    );
+  }
+
   try {
     for (const spec of GATE_SPECS) {
+      if (GATE_FILTER.length > 0 && !GATE_FILTER.includes(spec.id)) {
+        continue;
+      }
       allPassed = (await runGate(spec)) && allPassed;
     }
     completed = true;
