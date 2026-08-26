@@ -31,6 +31,13 @@ alwaysApply: false
 - Accuratesse is existentieel voor de CAO-agent: elke retrieval moet traceerbaar zijn
   (welke chunks, welke scores) via Langfuse.
 
-## Ingestion = de enige background-job in v1
+## Ingestion = de enige background-job op het RAG-pad
 - Corpus inladen + embedden mag async (simpele queue/worker). Prima hier.
 - Generaliseer async NIET naar het chat-pad. De chat-runtime blijft request/response.
+- **Geamendeerd 25 augustus 2026** (`docs/decisions/DECISION-roleplay-agent.md`, R4): de
+  rollenspel-beoordeling is een tweede achtergrondjob. Hij duurt tot twee minuten en zijn uitkomst
+  moet daarna via een outbox naar het systeem van de klant, dus hij mag niet afhangen van een
+  openstaand tabblad. De outbox zelf is geen derde product: verwerking is opportunistisch op
+  review/start (`after()`), met backoff in `next_attempt_at`. LTI 1.1 Basic Outcomes deelt diezelfde
+  outbox (`target.kind = "lti11"`), geen tweede tabel. Dit raakt uitsluitend het rollenspel;
+  het chat-pad van de grounded agents blijft request/response.

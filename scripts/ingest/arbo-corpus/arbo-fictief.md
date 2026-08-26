@@ -1,3 +1,4 @@
+<!-- SCAFFOLD-CONTENT: fictief, niet fonds-gereviewd. Beoordeel het mechanisme, niet de inhoud. -->
 Arbocatalogus Fictief — Wunderbranche 2026
 
 Dit is een volledig fictieve arbocatalogus, geschreven zodat de GATE_DB isolation probe een tweede

@@ -7,6 +7,7 @@ import { getProvisionerDb, type Database } from "./client.js";
 import { createFundUser } from "./dashboard-users.js";
 import {
   FUND_MIGRATION_PROVISION,
+  FUND_MIGRATION_ROLEPLAY,
   provisionDdl,
   recordMigrationSql,
   revokePublicFundSchemaSql,
@@ -70,7 +71,11 @@ export function buildFundEnvironmentStatements(input: {
   if (input.readerRole) {
     statements.push(...grantReaderOnFundSchemaSql(input.readerRole, input.schemaName));
   }
+  // `provisionDdl` already emits the roleplay DDL, so a fresh schema is at 0002 the moment it
+  // exists. Recording both keeps the per-fund ledger honest instead of letting the fund migrator
+  // rediscover work that is already done.
   statements.push(recordMigrationSql(input.schemaName, FUND_MIGRATION_PROVISION));
+  statements.push(recordMigrationSql(input.schemaName, FUND_MIGRATION_ROLEPLAY));
   return statements;
 }
 

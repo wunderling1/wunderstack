@@ -33,4 +33,5 @@ runtime already allowlists `http://localhost:3003`. Without both env vars the pa
 
 ## Dev
 
-`pnpm --filter marketing dev` (port 3003). Runtime on 3000, playground on 3001, dashboard on 3002.
+`pnpm --filter marketing dev` (port 3003). Runtime on 3000, playground on 3001, dashboard on 3002,
+roleplay on 3004.

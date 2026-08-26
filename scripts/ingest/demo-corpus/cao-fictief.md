@@ -1,3 +1,4 @@
+<!-- SCAFFOLD-CONTENT: fictief, niet fonds-gereviewd. Beoordeel het mechanisme, niet de inhoud. -->
 CAO Fictief — Wunderbranche 2026
 
 Dit is een volledig fictieve cao, geschreven voor de publieke demo (tenant zero). Elke gelijkenis

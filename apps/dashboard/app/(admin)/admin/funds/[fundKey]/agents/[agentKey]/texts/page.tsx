@@ -15,7 +15,7 @@ export default async function AgentTextsPage({
   const { fundKey: rawFund, agentKey: rawAgent } = await params;
   const fundKey = parseFundKey(rawFund);
   const agentKey = parseAgentKey(rawAgent);
-  if (!fundKey || !agentKey) notFound();
+  if (!fundKey || !agentKey || agentKey === "roleplay") notFound();
 
   const [fund, instance] = await Promise.all([getFund(fundKey), getInstance(fundKey, agentKey)]);
   if (!fund || !instance) notFound();

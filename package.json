@@ -7,7 +7,7 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "build": "pnpm --filter @wunderstack/embed build && pnpm --filter runtime build && pnpm --filter playground build && pnpm --filter dashboard build && pnpm --filter marketing build",
+    "build": "pnpm --filter @wunderstack/embed build && pnpm --filter runtime build && pnpm --filter playground build && pnpm --filter dashboard build && pnpm --filter marketing build && pnpm --filter roleplay build",
     "start": "pnpm --filter runtime start",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",

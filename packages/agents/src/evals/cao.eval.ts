@@ -92,6 +92,14 @@ import {
   passagesForCase,
 } from "./golden-set.js";
 import { ANSWER_THRESHOLDS, MULTI_TURN_SERVE_THRESHOLDS, answerFloorFailures } from "./answer-floors.js";
+import {
+  ANSWER_CHECK_KIND,
+  contentGatesBlocking,
+  isAdvisory,
+  pathScopeAllowed,
+  resolveTier,
+  type CheckKind,
+} from "./content-policy.js";
 import { acquireEvalLock, EvalAlreadyRunningError } from "./eval-lock.js";
 import { appendFundRecords, fundRecordsFromReport, resolveCommitSha } from "./fund-ledger.js";
 import { extraPromptContractChecks } from "./agent-profile.js";
@@ -116,7 +124,11 @@ import {
   type AnswerCaseReport,
   type AnswerReport,
   type FundCaseDiagnosis,
+  type RoleplayPersonaReport,
+  type RoleplayReviewReport,
 } from "./report-writer.js";
+import { roleplayContractChecks } from "./roleplay-contract.js";
+import { runRoleplayPersonaGate, runRoleplayReviewGate } from "./roleplay-gates.js";
 import { retryWithBackoff, sleep } from "./retry.js";
 
 /**
@@ -136,6 +148,13 @@ const PRIMARY_K = 5;
 /** True when a missing-key gate must fail rather than skip (set on the merge-to-main CI job). */
 const REQUIRE_ALL = env.EVAL_REQUIRE_ALL === "1" || env.EVAL_REQUIRE_ALL === "true";
 
+/**
+ * Eval tier from EVAL_TIER. Missing/unknown → nightly (strict). On CI: pr | merge | nightly.
+ * Content floors are advisory only when tier === "pr".
+ */
+const TIER = resolveTier(env.EVAL_TIER);
+const CONTENT_GATES_BLOCKING = contentGatesBlocking(TIER);
+
 /** Recall/MRR bar shape, shared by the in-memory Gate B and the nightly Gate B-integration. */
 type RetrievalThresholds = {
   readonly hitAt1: number;
@@ -151,10 +170,81 @@ type RetrievalThresholds = {
  */
 const REQUIRE_DB = env.EVAL_REQUIRE_DB === "1" || env.EVAL_REQUIRE_DB === "true";
 
+/**
+ * Development filter: run only these gate ids. Exists because iterating on one gate should not cost
+ * a full suite run, and a `.only` that lives in a diff is worse than one that lives in the shell.
+ *
+ * It is refused outright on the protected paths (see `assertGateFilterAllowed`). A filter and
+ * "skipped != passed" are the same question asked twice — a run that silently dropped half the
+ * registry is exactly the failure §4.2 exists to prevent — so instead of trying to make them
+ * coexist, the filter is simply unavailable where the gates are required.
+ */
+const GATE_FILTER = (env.EVAL_ONLY ?? "")
+  .split(",")
+  .map((id) => id.trim())
+  .filter((id) => id.length > 0);
+
+function assertGateFilterAllowed(): void {
+  if (GATE_FILTER.length === 0) {
+    return;
+  }
+  if (REQUIRE_ALL || REQUIRE_DB) {
+    throw new Error(
+      "EVAL_ONLY is not allowed together with EVAL_REQUIRE_ALL/EVAL_REQUIRE_DB: a protected run " +
+        "must walk the whole gate registry. Unset EVAL_ONLY.",
+    );
+  }
+  const known = new Set<string>(GATE_SPECS.map((spec) => spec.id));
+  const unknown = GATE_FILTER.filter((id) => !known.has(id));
+  if (unknown.length > 0) {
+    throw new Error(
+      `EVAL_ONLY names unknown gate id(s): ${unknown.join(", ")}. Known ids: ${[...known].join(", ")}.`,
+    );
+  }
+}
+
+/**
+ * PR path-scope: which gates the diff can touch. Empty = full registry. Never scopes G1 contracts
+ * (offline and free). Refused outside EVAL_TIER=pr so the merge queue always runs everything.
+ */
+const PATH_SCOPE = (env.EVAL_PATH_SCOPE ?? "")
+  .split(",")
+  .map((id) => id.trim())
+  .filter((id) => id.length > 0);
+
+/** Offline contract gates — always run, never path-scoped. */
+const ALWAYS_RUN_GATES = new Set(["G1-contract", "G1-roleplay-contract"]);
+
+function assertPathScopeAllowed(): void {
+  if (PATH_SCOPE.length === 0) {
+    return;
+  }
+  if (!pathScopeAllowed(TIER)) {
+    throw new Error(
+      "EVAL_PATH_SCOPE is alleen toegestaan op EVAL_TIER=pr; de merge-queue loopt altijd het volledige register.",
+    );
+  }
+  const known = new Set<string>(GATE_SPECS.map((spec) => spec.id));
+  const unknown = PATH_SCOPE.filter((id) => !known.has(id));
+  if (unknown.length > 0) {
+    throw new Error(
+      `EVAL_PATH_SCOPE names unknown gate id(s): ${unknown.join(", ")}. Known ids: ${[...known].join(", ")}.`,
+    );
+  }
+}
+
+function isInPathScope(gateId: string): boolean {
+  if (PATH_SCOPE.length === 0 || ALWAYS_RUN_GATES.has(gateId)) {
+    return true;
+  }
+  return PATH_SCOPE.includes(gateId);
+}
+
 const {
   gateResults,
   pushGate,
   pushUnavailable,
+  pushNotApplicable,
   credentialsAvailable,
   requirementLabel,
 } = createEvalHarness({ requireAll: REQUIRE_ALL, requireDb: REQUIRE_DB });
@@ -220,6 +310,8 @@ const RETRIEVAL_THRESHOLDS = {
 let retrievalReport: RetrievalReport | null = null;
 let retrievalIntegrationReport: RetrievalIntegrationReport | null = null;
 let answerReport: AnswerReport | null = null;
+let roleplayPersonaReport: RoleplayPersonaReport | null = null;
+let roleplayReviewReport: RoleplayReviewReport | null = null;
 const fundLayerReports: FundLayerReport[] = [];
 let embeddingModelId: string | null = null;
 let rerankModelId: string | null = null;
@@ -1088,6 +1180,7 @@ async function fundLayerChecks(set: GoldenFundSet): Promise<Check[]> {
     agentKey,
     corpusVersion: set.corpusVersion,
     fixtureHash: set.fixtureHash,
+    contentStatus: set.contentStatus,
     answerableQueries: answerable.length,
     metrics: {
       hitAt1: metrics.recallAtK[1] ?? 0,
@@ -1102,12 +1195,20 @@ async function fundLayerChecks(set: GoldenFundSet): Promise<Check[]> {
     cases: diagnoses,
   });
 
+  // Recall on scaffold/starter sets is advisory on the PR path — how well a fixture question
+  // matches dummy text is content, not mechanism. Composition, reachability and refusal-guard stay
+  // blocking everywhere (pipeline promises).
+  const recallAdvisory = TIER === "pr" && set.contentStatus !== "fund-reviewed";
+  const recall = recallChecks(`fund "${set.key}" retrieval`, metrics, RETRIEVAL_INTEGRATION_THRESHOLDS).map(
+    (check) => (recallAdvisory ? { ...check, advisory: true } : check),
+  );
+
   return [
     // Composition first: when the corpus is not what it claims to be, every number below — including
     // reachability — is measured against the wrong documents.
     ...corpusCompositionCheck(set, corpusDocuments),
     fixtureReachabilityCheck(set, diagnoses, catalog),
-    ...recallChecks(`fund "${set.key}" retrieval`, metrics, RETRIEVAL_INTEGRATION_THRESHOLDS),
+    ...recall,
     {
       name: `fund "${set.key}" refusal-guard: >= ${String(requiredEmpty)} out-of-corpus probes return 0 hits (refuse-without-LLM)`,
       ok: emptyProbes >= requiredEmpty,
@@ -1237,13 +1338,19 @@ async function multiTurnServeChecks(): Promise<Check[]> {
         `unverifiable=${String(served.unverifiable)} hardFact=${String(served.hardFactGuardTriggered)}`,
     );
 
-    checks.push({
-      name: `multi-turn serve: "${testCase.id}" survives verifyAndBuild with a verified citation`,
-      ok: served.found && served.citations.length > 0,
-      detail:
-        `queries=${retrievalQueries.join(" | ")} citations=${String(served.citations.length)} ` +
-        `unverifiable=${String(served.unverifiable)}`,
-    });
+    // Derived calculation-bait cases (etd-d02, etd-d03) correctly refuse to invent a number the
+    // CAO does not state — their referenceAnswer says so. Demanding a verified citation there
+    // conflates a coverage miss with a safety miss. Still log every case and still count
+    // unverifiable across all of them; only the per-case "must cite" floor skips derived.
+    if (testCase.category !== "derived") {
+      checks.push({
+        name: `multi-turn serve: "${testCase.id}" survives verifyAndBuild with a verified citation`,
+        ok: served.found && served.citations.length > 0,
+        detail:
+          `queries=${retrievalQueries.join(" | ")} citations=${String(served.citations.length)} ` +
+          `unverifiable=${String(served.unverifiable)}`,
+      });
+    }
 
     await sleep(2000);
   }
@@ -1251,11 +1358,14 @@ async function multiTurnServeChecks(): Promise<Check[]> {
   console.log(
     `  served-with-citation ${String(servedWithCitationCount)}/${String(followUps.length)}  ` +
       `unverifiable ${String(unverifiableCount)}/${String(followUps.length)}  ` +
-      `(gate <= ${String(MULTI_TURN_SERVE_THRESHOLDS.maxUnverifiableCount)} unverifiable)\n`,
+      `(gate <= ${String(MULTI_TURN_SERVE_THRESHOLDS.maxUnverifiableCount)} unverifiable; ` +
+      `derived cases excluded from per-case citation: a correct answer claims no article here)\n`,
   );
 
   checks.push({
-    name: `multi-turn serve: unverifiable count <= ${String(MULTI_TURN_SERVE_THRESHOLDS.maxUnverifiableCount)}`,
+    name:
+      `multi-turn serve: unverifiable count <= ${String(MULTI_TURN_SERVE_THRESHOLDS.maxUnverifiableCount)}` +
+      ` (derived cases uitgesloten van de per-case citatie-eis: een correct antwoord claimt hier geen artikel)`,
     ok: unverifiableCount <= MULTI_TURN_SERVE_THRESHOLDS.maxUnverifiableCount,
     detail: `${String(unverifiableCount)} of ${String(followUps.length)} unverifiable after verifyAndBuild`,
   });
@@ -1305,56 +1415,115 @@ function answerLevelChecks(aggregate: AggregateScores): Check[] {
     `  under-refusal         ${pct(aggregate.underRefusalRate)}  (${String(aggregate.underRefusalCount)} refusal case(s) answered; gate <= ${String(ANSWER_THRESHOLDS.maxUnderRefusalCount)})\n`,
   );
 
-  return [
+  // One entry per ANSWER_CHECK_KIND key so the checklist cannot drift from the classification.
+  const absolute: {
+    key: keyof typeof ANSWER_CHECK_KIND;
+    name: string;
+    ok: boolean;
+    detail?: string;
+  }[] = [
     {
+      key: "hardHallucination",
       name: `answer: hard-hallucination >= ${pct(ANSWER_THRESHOLDS.hardHallucination)} (invented amounts/terms/articles)`,
       ok: aggregate.hardHallucination >= ANSWER_THRESHOLDS.hardHallucination,
     },
     {
+      key: "softFaithfulness",
       name: `answer: soft-faithfulness >= ${pct(ANSWER_THRESHOLDS.softFaithfulness)} (answerable cases only; refusals excluded)`,
       ok: aggregate.faithfulness >= ANSWER_THRESHOLDS.softFaithfulness,
     },
     {
+      key: "relevance",
       name: `answer: relevance >= ${pct(ANSWER_THRESHOLDS.relevance)} (addresses the actual question; answerable cases only)`,
       ok: aggregate.relevance >= ANSWER_THRESHOLDS.relevance,
     },
     {
+      key: "citationCorrectness",
       name: `answer: citation-correctness >= ${pct(ANSWER_THRESHOLDS.citationCorrectness)} (answerable cases only; refusals excluded)`,
       ok: aggregate.citationCorrectness >= ANSWER_THRESHOLDS.citationCorrectness,
     },
     {
+      key: "completeness",
       name: `answer: completeness >= ${pct(ANSWER_THRESHOLDS.completeness)} (answerable cases only; refusals excluded)`,
       ok: aggregate.completeness >= ANSWER_THRESHOLDS.completeness,
     },
     {
+      key: "refusalCalibration",
       name: `answer: refusal-calibration >= ${pct(ANSWER_THRESHOLDS.refusalCalibration)}`,
       ok: aggregate.refusalCalibration >= ANSWER_THRESHOLDS.refusalCalibration,
     },
     {
+      key: "maxUnverifiedCount",
       name: `answer: citation-verification — <= ${String(ANSWER_THRESHOLDS.maxUnverifiedCount)} of ${String(aggregate.caseCount)} cases with an unverified citation (raw generation slip; strip pipeline guarantees 0 reach the user)`,
       ok: aggregate.unverifiedCitationCount <= ANSWER_THRESHOLDS.maxUnverifiedCount,
       detail: `${String(aggregate.unverifiedCitationCount)} unverified; rate ${pct(aggregate.citationVerification)}`,
     },
     {
+      key: "maxOrphanRate",
       name: `answer: orphan-source-rate <= ${pct(ANSWER_THRESHOLDS.maxOrphanRate)} (source without [n])`,
       ok: aggregate.orphanRate <= ANSWER_THRESHOLDS.maxOrphanRate,
     },
     {
+      key: "maxDanglingCount",
       name: `answer: dangling-marker — <= ${String(ANSWER_THRESHOLDS.maxDanglingCount)} of ${String(aggregate.caseCount)} cases with a dangling [n] (raw generation slip; reconciled before the user)`,
       ok: aggregate.danglingCaseCount <= ANSWER_THRESHOLDS.maxDanglingCount,
       detail: `${String(aggregate.danglingCaseCount)} dangling; rate ${pct(aggregate.danglingMarkerRate)}`,
     },
     {
+      key: "maxOverRefusalRate",
       name: `answer: over-refusal-rate <= ${pct(ANSWER_THRESHOLDS.maxOverRefusalRate)} (answerable but refused)`,
       ok: aggregate.overRefusalRate <= ANSWER_THRESHOLDS.maxOverRefusalRate,
     },
     {
+      key: "maxUnderRefusalCount",
       name: `answer: under-refusal — <= ${String(ANSWER_THRESHOLDS.maxUnderRefusalCount)} refusal case(s) answered (grounded slip; hard-hallucination still absolute)`,
       ok: aggregate.underRefusalCount <= ANSWER_THRESHOLDS.maxUnderRefusalCount,
       detail: `${String(aggregate.underRefusalCount)} of refusal cases answered; rate ${pct(aggregate.underRefusalRate)}`,
     },
+  ];
+
+  return [
+    ...absolute.map(({ key, name, ok, detail }) => {
+      const advisory = isAdvisory(ANSWER_CHECK_KIND[key], TIER);
+      return {
+        name,
+        ok,
+        ...(detail === undefined ? {} : { detail }),
+        ...(advisory ? { advisory: true } : {}),
+      };
+    }),
     ...answerRegressionChecks(aggregate),
   ];
+}
+
+/** Map a regression metric label to the ANSWER_CHECK_KIND key whose kind it inherits. */
+const REGRESSION_KIND_BY_LABEL: Record<string, keyof typeof ANSWER_CHECK_KIND> = {
+  "hard-hallucination": "hardHallucination",
+  "soft-faithfulness": "softFaithfulness",
+  relevance: "relevance",
+  "citation-correctness": "citationCorrectness",
+  completeness: "completeness",
+  "citation-verification": "maxUnverifiedCount",
+  "over-refusal-rate": "maxOverRefusalRate",
+  "orphan-source-rate": "maxOrphanRate",
+  "dangling-marker-rate": "maxDanglingCount",
+};
+
+function regressionCheck(
+  label: string,
+  name: string,
+  ok: boolean,
+  detail: string,
+): Check {
+  const key = REGRESSION_KIND_BY_LABEL[label];
+  const kind: CheckKind = key === undefined ? "mechanism" : ANSWER_CHECK_KIND[key];
+  const advisory = isAdvisory(kind, TIER);
+  return {
+    name,
+    ok,
+    detail,
+    ...(advisory ? { advisory: true } : {}),
+  };
 }
 
 /** Regression-relative answer checks against the committed baseline (same corpus snapshot only). */
@@ -1408,16 +1577,22 @@ function answerRegressionChecks(aggregate: AggregateScores): Check[] {
         ][])),
   ];
   return [
-    ...higherIsBetter.map(([label, now, was]) => ({
-      name: `answer regression: ${label} within ${pct(REL_TOLERANCE)} of baseline`,
-      ok: now >= was - REL_TOLERANCE,
-      detail: `${now.toFixed(3)} vs baseline ${was.toFixed(3)}`,
-    })),
-    ...lowerIsBetter.map(([label, now, was]) => ({
-      name: `answer regression: ${label} not more than ${pct(REL_TOLERANCE)} above baseline`,
-      ok: now <= was + REL_TOLERANCE,
-      detail: `${now.toFixed(3)} vs baseline ${was.toFixed(3)}`,
-    })),
+    ...higherIsBetter.map(([label, now, was]) =>
+      regressionCheck(
+        label,
+        `answer regression: ${label} within ${pct(REL_TOLERANCE)} of baseline`,
+        now >= was - REL_TOLERANCE,
+        `${now.toFixed(3)} vs baseline ${was.toFixed(3)}`,
+      ),
+    ),
+    ...lowerIsBetter.map(([label, now, was]) =>
+      regressionCheck(
+        label,
+        `answer regression: ${label} not more than ${pct(REL_TOLERANCE)} above baseline`,
+        now <= was + REL_TOLERANCE,
+        `${now.toFixed(3)} vs baseline ${was.toFixed(3)}`,
+      ),
+    ),
   ];
 }
 
@@ -1528,6 +1703,22 @@ async function answerQualityChecks(): Promise<Check[]> {
 }
 
 /**
+ * The two roleplay behavioural gates. The runners live in roleplay-gates.ts; these thin wrappers
+ * exist only to stash the artefact section, the same shape the retrieval and answer gates use.
+ */
+async function roleplayPersonaChecks(): Promise<Check[]> {
+  const { checks, report } = await runRoleplayPersonaGate();
+  roleplayPersonaReport = report;
+  return checks;
+}
+
+async function roleplayReviewChecks(): Promise<Check[]> {
+  const { checks, report } = await runRoleplayReviewGate();
+  roleplayReviewReport = report;
+  return checks;
+}
+
+/**
  * Run functions keyed by gate id. The Record<GateId, …> type makes this exhaustive: every registered
  * gate MUST have a run, and no run may exist without a spec — the code-side registry↔spec binding
  * (the doc-side binding is gate-registry.test.ts). A run yields a flat Check[], except the perFundSet
@@ -1541,9 +1732,12 @@ const GATE_RUNS: Record<GateId, () => GateRunResult | Promise<GateRunResult>> = 
     ...fixtureHashChecks(),
     ...corpusIsolationContractChecks(),
   ],
+  "G1-roleplay-contract": roleplayContractChecks,
   "G2-retrieval": retrievalAndRerankChecks,
   "G2-multi-turn": multiTurnChecks,
   "G2-answer": answerQualityChecks,
+  "G2-roleplay-persona": roleplayPersonaChecks,
+  "G2-roleplay-review": roleplayReviewChecks,
   "G3-pipeline": retrievalIntegrationChecks,
   "G3-fund": fundLayerGroups,
   "G3-isolation": corpusIsolationLiveChecks,
@@ -1560,6 +1754,12 @@ async function fundLayerGroups(): Promise<GateGroup[]> {
 
 /** Resolve prerequisites, run (or skip/fail) one gate, and return whether the run stays green. */
 async function runGate(spec: GateSpec): Promise<boolean> {
+  if (!isInPathScope(spec.id)) {
+    return pushNotApplicable(
+      spec,
+      `path scope excludes this gate (EVAL_PATH_SCOPE=${PATH_SCOPE.join(",")})`,
+    );
+  }
   // A perFundSet gate with zero discovered sets has nothing to run and emits no report.
   if (spec.perFundSet === true && goldenFundSets.length === 0) {
     return true;
@@ -1592,6 +1792,12 @@ function writeRunArtefact(passed: boolean): void {
       requireAll: REQUIRE_ALL,
       judgeSamples: env.EVAL_JUDGE_SAMPLES ?? 1,
       writeBaseline: env.EVAL_WRITE_BASELINE === "1" || env.EVAL_WRITE_BASELINE === "true",
+      // Empty = the full registry ran. Non-empty makes the artefact self-identifying as partial, so
+      // a green report cannot be read as a verdict about gates that never executed.
+      onlyGates: GATE_FILTER,
+      tier: TIER,
+      contentGatesBlocking: CONTENT_GATES_BLOCKING,
+      pathScope: PATH_SCOPE,
     },
     models: {
       generator: EVAL_LLM_MODEL,
@@ -1604,6 +1810,7 @@ function writeRunArtefact(passed: boolean): void {
     retrievalIntegration: retrievalIntegrationReport,
     answer: answerReport,
     funds: fundLayerReports,
+    roleplay: { persona: roleplayPersonaReport, review: roleplayReviewReport },
     judge: { parseRetryCount: getJudgeParseRetryCount() },
   };
   const path = writeEvalReport(report);
@@ -1632,8 +1839,26 @@ async function main(): Promise<void> {
   let allPassed = true;
   let completed = false;
 
+  assertGateFilterAllowed();
+  assertPathScopeAllowed();
+  if (GATE_FILTER.length > 0) {
+    console.warn(
+      `\nPARTIAL RUN — EVAL_ONLY=${GATE_FILTER.join(",")}. The other gates did not run and this ` +
+        "report says nothing about them.\n",
+    );
+  }
+  if (PATH_SCOPE.length > 0) {
+    console.warn(
+      `\nPARTIAL RUN — EVAL_PATH_SCOPE=${PATH_SCOPE.join(",")}. Gates outside this scope are ` +
+        "not-applicable; G1 contracts still run.\n",
+    );
+  }
+
   try {
     for (const spec of GATE_SPECS) {
+      if (GATE_FILTER.length > 0 && !GATE_FILTER.includes(spec.id)) {
+        continue;
+      }
       allPassed = (await runGate(spec)) && allPassed;
     }
     completed = true;

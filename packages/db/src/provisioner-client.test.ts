@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { resolveProvisionerUrl } from "./client.js";
+import { closeDb, resolveProvisionerUrl } from "./client.js";
 import { FundExistsError } from "./fund-environment.js";
 import { UserExistsError } from "./dashboard-users.js";
 
@@ -37,5 +37,9 @@ describe("resolveProvisionerUrl / getProvisionerDb contract", () => {
       resolveProvisionerUrl("postgresql://provisioner/local"),
       "postgresql://provisioner/local",
     );
+  });
+
+  it("closeDb is a no-op when no pool was opened", async () => {
+    await closeDb();
   });
 });

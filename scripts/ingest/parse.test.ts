@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import type { StructuredTextItem } from "unpdf";
 
 import { chunk } from "./chunk.js";
-import { dropRunningLines, findEmptyPages, itemsToLines, pdfItemsToText } from "./parse.js";
+import { dropRunningLines, findEmptyPages, itemsToLines, normalizeText, pdfItemsToText } from "./parse.js";
 
 /**
  * Fragments as pdf.js hands them over. Geometry mirrors what was measured on
@@ -156,5 +156,19 @@ describe("pages without extractable text", () => {
 
   it("reports none when every page carries text", () => {
     assert.deepEqual(findEmptyPages([[item("Hoofdstuk 1", 71, 700)]]), []);
+  });
+});
+
+describe("normalizeText", () => {
+  it("strips HTML comments so a SCAFFOLD-CONTENT marker never lands in a chunk", () => {
+    const raw = `<!-- SCAFFOLD-CONTENT: fictief, niet fonds-gereviewd. Beoordeel het mechanisme, niet de inhoud. -->
+CAO Fictief
+
+Artikel 1
+Tekst.`;
+    const normalized = normalizeText(raw);
+    assert.equal(normalized.includes("SCAFFOLD-CONTENT"), false);
+    assert.equal(normalized.includes("<!--"), false);
+    assert.match(normalized, /^CAO Fictief/);
   });
 });

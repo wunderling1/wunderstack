@@ -72,6 +72,21 @@ jobs:
           echo "GATE_DB=false" >> "$GITHUB_ENV"
           echo "enabled=false" >> "$GITHUB_OUTPUT"
 
+      - name: Resolve eval path scope
+        # Only on pull_request: omit expensive G2 gates the diff cannot touch. merge_group / push /
+        # schedule always run the full registry (EVAL_PATH_SCOPE empty).
+        id: path_scope
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "EVAL_PATH_SCOPE=" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+          chmod +x scripts/ci/resolve-path-scope.sh
+          SCOPE="$(git diff --name-only "$BASE...$HEAD" | scripts/ci/resolve-path-scope.sh)"
+          echo "EVAL_PATH_SCOPE=$SCOPE" >> "$GITHUB_ENV"
+
       - name: Enable Corepack
         run: corepack enable
 
@@ -213,6 +228,9 @@ jobs:
           # the count-based citation-verification / dangling gates; explicit 2 (= production default)
           # on cheap/fork paths where B/C skip. write-baseline also uses 3 (see below).
           EVAL_GENERATION_SAMPLES: ${{ (github.event_name == 'merge_group' || github.event_name == 'push' || github.event_name == 'schedule' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)) && '3' || '2' }}
+          # Content floors are advisory on pull_request; merge_group/push = merge; schedule = nightly.
+          EVAL_TIER: ${{ github.event_name == 'pull_request' && 'pr' || (github.event_name == 'schedule' && 'nightly' || 'merge') }}
+          EVAL_PATH_SCOPE: ${{ env.EVAL_PATH_SCOPE }}
 
       # Per-run artefact (E9): commit SHA, model ids, per-case scores, aggregates, gate results,
       # rerank counts, judge parse-retries. Uploaded even on failure — a red run is when it matters.
@@ -227,15 +245,21 @@ jobs:
       # Promotion ledger check (offline): may this fund be promoted at HEAD? Reads the ledger the
       # eval just appended and the structure reports ingest just wrote. A NO-GO is the signal —
       # including "ledger still empty for this fund" — not a skip.
-      - name: Promote-check (nightly / GATE_DB)
+      - name: Promote-check
         if: success() && env.GATE_DB == 'true'
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          STATUS=0
           for fund in demo etd etd-full oomt; do
             echo "::group::promote-check $fund HEAD"
-            pnpm promote-check "$fund" HEAD || exit 1
+            pnpm promote-check "$fund" HEAD || STATUS=1
             echo "::endgroup::"
           done
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            [ "$STATUS" -eq 0 ] || echo "::warning::promote-check NO-GO — rapportage, geen merge-blocker (D9)."
+            exit 0
+          fi
+          exit "$STATUS"
 
   # Manual-only: refresh the recorded baseline (retrieval + answer) under nightly config and publish
   # it as an artifact for review. Never commits — a human downloads it, inspects the deltas, and

@@ -99,7 +99,7 @@ describe("runJudgeWithParseRetry", () => {
     const result = await runJudgeWithParseRetry(async () => {
       calls += 1;
       return '{"faithfulness":1,"relevance":1,"completeness":1}';
-    });
+    }, parseJudgeOutput);
     assert.equal(calls, 1);
     assert.equal(result.faithfulness, 1);
   });
@@ -115,7 +115,7 @@ describe("runJudgeWithParseRetry", () => {
         retryExtra = extraMessages;
       }
       return out;
-    });
+    }, parseJudgeOutput);
 
     assert.equal(calls, 2);
     assert.equal(result.completeness, 0.5);
@@ -133,7 +133,7 @@ describe("runJudgeWithParseRetry", () => {
       runJudgeWithParseRetry(async () => {
         calls += 1;
         return "nog steeds kapot";
-      }),
+      }, parseJudgeOutput),
     );
     assert.equal(calls, 2);
   });

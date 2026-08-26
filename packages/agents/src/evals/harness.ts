@@ -12,6 +12,11 @@ export interface EvalCheck {
   name: string;
   ok: boolean;
   detail?: string;
+  /**
+   * When true, a red check is reported as WARN and does not fail the gate. Used for scaffold-content
+   * quality floors on the PR path — measured and visible, not merge-blocking. See content-policy.ts.
+   */
+  advisory?: boolean;
 }
 
 export interface GateGroup {
@@ -30,6 +35,11 @@ export interface EvalHarness {
   gateResults: GateReport[];
   pushGate: (spec: GateSpec, checks: EvalCheck[], suffix?: string) => boolean;
   pushUnavailable: (spec: GateSpec, requirement: string) => boolean;
+  /**
+   * Record that a gate was deliberately not run because the PR path-scope excludes it.
+   * Always returns true (not-applicable is not a failure). Only legal on EVAL_TIER=pr.
+   */
+  pushNotApplicable: (spec: GateSpec, reason: string) => boolean;
   credentialsAvailable: (requires: GateRequirement) => boolean;
   requiredWhenMissing: (requires: GateRequirement) => boolean;
   requirementLabel: (requires: GateRequirement) => string;
@@ -47,6 +57,8 @@ export function createEvalHarness(options: EvalHarnessOptions): EvalHarness {
     switch (requires) {
       case "none":
         return "";
+      case "mistral":
+        return "MISTRAL_API_KEY not set";
       case "scaleway":
         return "SCALEWAY_API_KEY not set";
       case "scaleway+mistral":
@@ -62,6 +74,8 @@ export function createEvalHarness(options: EvalHarnessOptions): EvalHarness {
     switch (requires) {
       case "none":
         return true;
+      case "mistral":
+        return Boolean(env.MISTRAL_API_KEY);
       case "scaleway":
         return Boolean(env.SCALEWAY_API_KEY);
       case "scaleway+mistral":
@@ -77,23 +91,55 @@ export function createEvalHarness(options: EvalHarnessOptions): EvalHarness {
     const id = suffix === undefined ? spec.id : `${spec.id} [${suffix}]`;
     console.log(`\n${spec.layer} · ${id} — ${spec.title}:`);
     for (const check of checks) {
+      const advisoryFail = !check.ok && check.advisory === true;
+      const prefix = check.ok ? "PASS" : advisoryFail ? "WARN" : "FAIL";
+      const advisoryTail = advisoryFail
+        ? " — advisory (scaffold-content, niet merge-blocking)"
+        : "";
       console.log(
-        `  [${check.ok ? "PASS" : "FAIL"}] ${check.name}${check.detail ? ` — ${check.detail}` : ""}`,
+        `  [${prefix}] ${check.name}${check.detail ? ` — ${check.detail}` : ""}${advisoryTail}`,
       );
     }
-    const passed = checks.every((check) => check.ok);
+    // Advisory reds are visible but do not fail the gate. Blocking reds always win.
+    const blocking = checks.filter((check) => check.advisory !== true);
+    const blockingPassed = blocking.every((check) => check.ok);
+    const hasAdvisoryFail = checks.some((check) => !check.ok && check.advisory === true);
+    const status = !blockingPassed
+      ? "failed"
+      : hasAdvisoryFail
+        ? "advisory-failed"
+        : "passed";
     gateResults.push({
       id,
       layer: spec.layer,
       title: spec.title,
-      status: passed ? "passed" : "failed",
+      status,
       checks: checks.map((check) => ({
         name: check.name,
         ok: check.ok,
         ...(check.detail === undefined ? {} : { detail: check.detail }),
+        ...(check.advisory === true ? { advisory: true } : {}),
       })),
     });
-    return passed;
+    return blockingPassed;
+  }
+
+  function pushNotApplicable(spec: GateSpec, reason: string): boolean {
+    console.log(`\n${spec.layer} · ${spec.id}: NOT APPLICABLE — ${reason}`);
+    gateResults.push({
+      id: spec.id,
+      layer: spec.layer,
+      title: spec.title,
+      status: "not-applicable",
+      checks: [
+        {
+          name: `NOT APPLICABLE: ${reason}`,
+          ok: true,
+          advisory: true,
+        },
+      ],
+    });
+    return true;
   }
 
   function pushUnavailable(spec: GateSpec, requirement: string): boolean {
@@ -128,6 +174,7 @@ export function createEvalHarness(options: EvalHarnessOptions): EvalHarness {
     gateResults,
     pushGate,
     pushUnavailable,
+    pushNotApplicable,
     credentialsAvailable,
     requiredWhenMissing,
     requirementLabel,

@@ -39,6 +39,13 @@ and does not count toward the rule of three.
    class inheritance, plugin frameworks, a supervisor/router across surfaces (decision 1).
    Owner: Wunderstack-maintainers. See `DECISION-shared-agent-runtime.md`.
 
+   *Amended 25 August 2026* ([DECISION-roleplay-agent.md](./DECISION-roleplay-agent.md), R1): the
+   claim in Context that "the rollenspel agent is not a RAG agent" is now enforced by the type
+   system. `AGENT_KEYS` is every instance key (`cao | arbo | roleplay`); the new
+   `GROUNDED_AGENT_KEYS` is the subset with an `AgentRuntimeProfile`, and `AGENT_PROFILES`
+   `satisfies Record<GroundedAgentKey, …>`. A non-retrieving agent can therefore exist as an
+   instance without being forced to declare a `runRetrieval` it never calls.
+
 5. **`agent_config(agent_key, fund_key)` holds tuning knobs only.** `minScore`, starters, corpus
    version / validity date. Prompts and refusal sentences stay in code.
 

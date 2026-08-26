@@ -4,11 +4,11 @@ import { getTenantId } from "@wunderstack/tenant";
 import { env } from "@wunderstack/shared";
 import { getAgentById } from "@/lib/agent";
 import {
-  createChatWorkSignal,
   DEFAULT_CHAT_HEARTBEAT_MS,
   DEFAULT_CHAT_TURN_BUDGET_MS,
   pipeChatNdjsonStream,
 } from "@/lib/chat-stream";
+import { createTurnWorkSignal } from "@/lib/ndjson-stream";
 import { corsHeaders, preflight } from "@/lib/cors";
 import { resolveEmbedAuth } from "@/lib/embed-auth";
 import { loadCorpusVersion, resolveRequestScope } from "@/lib/instance-scope";
@@ -148,7 +148,7 @@ export async function POST(request: Request): Promise<Response> {
   // handling keys off `request.signal` (client still connected?) so a turn-budget abort still yields
   // an error event instead of a silent hang.
   const cancel = new AbortController();
-  const { workSignal, turnDeadline } = createChatWorkSignal({
+  const { workSignal, turnDeadline } = createTurnWorkSignal({
     clientSignal: request.signal,
     cancelSignal: cancel.signal,
     turnBudgetMs: TURN_BUDGET_MS,

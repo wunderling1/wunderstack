@@ -32,15 +32,47 @@ Dit document heeft twee helften:
    expliciet-conservatief `[C]` met herijkmoment. Een drempel zonder bron is een aanname vermomd
    als feit. Drempelwijzigingen vereisen een regel in het changelog (§7) met reden.
 4. **Skip ≠ pass.** Een gate die niet draait mag nooit als geslaagd rapporteren. Artefacten kennen
-   drie statussen: `passed` / `failed` / `skipped`.
+   vijf statussen: `passed` / `failed` / `skipped` / `advisory-failed` / `not-applicable`.
+   `advisory-failed` = gedraaid en rood, maar niet merge-blocking (scaffold-content op het PR-pad).
+   `not-applicable` = bewust niet gedraaid wegens path-scope. Zie §"Scaffold-content".
 5. **Strenger naarmate realistischer.** Drempels op de productie-pipeline (Laag 3) mogen niet
    losser blijven dan op synthetische fixtures (Laag 2) zodra er genoeg nightly-data is om ze te
    ijken. *(Huidige toestand wijkt hiervan af — G3-floors staan provisioneel laag; zie §6.)*
 6. **Twee werelden:** Lagen 1–3 voorkomen dat slechte *code* live gaat (CI). Laag 4 voorkomt dat
    een slecht *antwoord* de gebruiker bereikt (runtime). Beide nodig (defense in depth).
-7. **Infrastructuur is geen gate.** Eigenschappen die het eval-systeem zelf betrouwbaar maken
+7. **Een nieuwe drempel zonder bronlabel mag niet landen.** Het bronlabel (`[X]` / `[C]` / `[E]`)
+   bepaalt via `content-policy.ts` of de check mechanism of content is — zonder label is de tier
+   onbepaald.
+8. **Infrastructuur is geen gate.** Eigenschappen die het eval-systeem zelf betrouwbaar maken
    (model-coupling, judge-retry, fixture-hash, baseline-integriteit, enforcement-flags) zijn
    *invarianten* (§5), geborgd via unit tests en CI-config — niet via het lagenmodel.
+
+### Scaffold-content
+
+**Mechanismegroen is merge-blocking; inhoudsgroen is promotie-blocking.** Zolang een set
+scaffold-content is, wordt hij gemeten en gerapporteerd, niet afgedwongen. Besluit:
+`docs/decisions/DECISION-scaffold-content-2026-08-26.md`.
+
+| Status | Betekenis |
+|---|---|
+| `advisory-failed` | Check gedraaid, rood, zichtbaar als `[WARN]` — blokkeert de merge niet |
+| `not-applicable` | Gate bewust niet gedraaid (PR path-scope); G1-contracts blijven altijd lopen |
+
+| `EVAL_TIER` | Wanneer (CI) | Content floors |
+|---|---|---|
+| `pr` | `pull_request` | advisory |
+| `merge` | `merge_group` / `push` | blocking |
+| `nightly` | `schedule` (en lokale default) | blocking |
+
+| Fondsset | `contentStatus` |
+|---|---|
+| `demo` | `scaffold` |
+| `etd` | `starter` |
+| `etd-full` | `starter` |
+| `arbo.oomt` | `starter` |
+
+Exit-criterium: zodra een fonds de set accordeert gaat `contentStatus` naar `fund-reviewed` en
+blokkeren content floors (en de recall-drempels van die set) óók op de PR.
 
 ---
 
@@ -70,13 +102,33 @@ productie (`cao/agent.ts`), niet in de eval-harness, en is daarom géén registr
 | Id | Laag | Vereist | Vervangt |
 |---|---|---|---|
 | `G1-contract` | G1 | — | Gate A + Gate D-contract |
+| `G1-roleplay-contract` | G1 | — | nieuw (rollenspelfamilie, fase 6) |
 | `G2-retrieval` | G2 | Scaleway | Gate B |
 | `G2-multi-turn` | G2 | Scaleway + Mistral | Gate B2 (nu case-categorie van G2-retrieval) |
 | `G2-answer` | G2 | Scaleway + Mistral | Gate C |
+| `G2-roleplay-persona` | G2 | Mistral | nieuw (rollenspelfamilie, fase 6) |
+| `G2-roleplay-review` | G2 | Mistral | nieuw (rollenspelfamilie, fase 6) |
 | `G3-pipeline` | G3 | DB + Scaleway | Gate B-integration |
 | `G3-fund` | G3 | DB + Scaleway + Mistral | Gate F (één report per fonds-set) |
 | `G3-isolation` | G3 | DB + Scaleway | Gate D-integration |
 | `G4` *(runtime)* | G4 | — | E13 — productie-guard, geen eval-gate |
+
+### Agent als dimensie (rollenspel — wél eigen gates, geen vijfde laag)
+
+Waar MCP hierboven een *kanaal* is en daarom geen eigen gates krijgt, is het rollenspel een ander
+**agenttype**: het haalt niets op, citeert niets, en is niet stateless
+([DECISION-roleplay-agent.md](../decisions/DECISION-roleplay-agent.md)). Geen enkele bestaande check
+zegt er iets over — recall, citatieverificatie en de hard-fact-guard hebben geen onderwerp in een
+gesprek zonder corpus. Daarom drie extra gates binnen dezelfde vier lagen, in plaats van een vijfde
+laag of een uitbreiding van `G2-answer` die twee onvergelijkbare dingen in één cijfer zou middelen.
+Het naamsvoorvoegsel maakt de familie leesbaar in `EVAL_ONLY` en in het artefact.
+
+| Laag | Rollenspel-toepassing |
+|---|---|
+| **G1** | `G1-roleplay-contract` — promptregels aanwezig (verborgen laag, geen zelfberekend totaal, geen "vorige pogingen"-kop), rubriekgewichten normaliseren naar 100%, en twee hash-pins: de gerenderde prompts tegen `ROLEPLAY_PROMPT_VERSION` en de gouden set tegen zijn `version` |
+| **G2** | `G2-roleplay-persona` (blijft in rol, houdt de verborgen laag vast, eindigt coherent) en `G2-roleplay-review` (zelfde transcript, zelfde cijfer). Beide draaien via `createRoleplayAgent()` zonder override — de productie-seam, inclusief de temperatuur per branch |
+| **G3** | **Bewust leeg.** G3 = "de echte pipeline op de echte corpus"; het rollenspel heeft geen corpus en geen ingest, dus er is geen productieverschil om te meten. De sessie-opslag valt onder de gewone DB-tests |
+| **G4** | **Niet van toepassing.** De runtime-guard vervangt een ongegrond hard feit door de weigerzin; een persona hóórt bedragen en termijnen te noemen die nergens gestaafd zijn. De guard hierop loslaten zou het rollenspel slopen |
 
 ### Kanaal als dimensie (MCP — geen eigen gate-laag)
 
@@ -120,6 +172,17 @@ op latency blijft backlog (`cao.eval.ts`), niet in dit model.
 | **Blocking** | CI bij same-repo (`EVAL_REQUIRE_ALL=1`). Fork-PR: `skipped`, nooit `passed`. |
 | **Herkomst** | Gate B + Gate B2 (als case-categorie) + Gate C. |
 | **Nulmeting 2026-07-21** | PASS. Retrieval hit@1 95.8% / recall 100% / MRR 0.979; multi-turn 4/4; answer alle floors gehaald (hardHall 100%, softFaith 100%, relevance 96.8%, citVerif 100%, underRefusal 0%). |
+
+### G1/G2 — de rollenspelfamilie
+
+| Veld | Inhoud |
+|---|---|
+| **Faalscenario's** | (a) De persona stapt uit zijn rol (noemt zichzelf een AI, praat over de oefening) — dan is er geen oefening meer. (b) De persona geeft de verborgen laag weg vóór de deelnemer ernaar heeft doorgevraagd — dan valt er niets meer te ontdekken. (c) De persona beëindigt een gesprek dat nog niet klaar is, of stemt in zonder dat de sessie sluit. (d) Hetzelfde transcript krijgt bij een tweede beoordeling een ander cijfer — en dat cijfer gaat straks naar het LMS van een klant. |
+| **Checks** | **G1-roleplay-contract:** 13 promptregel- en schema-checks + twee hash-pins. **G2-roleplay-persona:** 14 gegenereerde beurten (2 openingszinnen, 12 beurt-cases over twee scenario's), elk gescoord op álle dimensies — deterministische persona-break-detectie, letterlijke lekdetectie, een judge voor in-rol-zijn en geparafraseerde onthulling, en de eindbeslissing. **G2-roleplay-review:** twee transcripten × `EVAL_ROLEPLAY_REPEATS` (default 3) beoordelingen. |
+| **Bewijst niet** | **Dat een cijfer klopt.** De set is met de hand geschreven, niet geoogst: Qonvo leverde geen rollenspel-eval en zijn transcript-export heeft nooit gedraaid, dus er zijn geen echte gesprekken met het oordeel van een trainer ernaast. `G2-roleplay-review` meet daarom *stabiliteit* en *rangorde* (het sterke transcript moet het zwakke in elke herhaling verslaan), niet correctheid. Dat wordt pas een correctheidsgate wanneer een fonds echte transcripten mét hun oorspronkelijke beoordeling aanlevert. |
+| **Drempels** | Zie §3. Geen regressieband: vergelijken met een basislijn die niet bestaat is theater. Alleen absolute vloeren, alle `[X]` of `[C]`, geen `[E]`. |
+| **Blocking** | Als G2: CI bij same-repo (`EVAL_REQUIRE_ALL=1`). Fork-PR: `skipped`, nooit `passed`. |
+| **Nulmeting 2026-08-25** | Zie §3 en het interventielog van dezelfde dag. Drie runs tegen `mistral-large-2512`; de eerste twee lieten een fixture-defect en een productiedefect zien die beide zijn hersteld vóór de drempels vaststonden. |
 
 ### G3 — PRODUCTIE
 
@@ -216,6 +279,31 @@ genoemd) · `[?]` **bron onbekend — te herleiden of te herzien**.
 | danglingMarker | ≤ 1 case | **count** | `[X]` citatie-integriteit (rate = trend-only) |
 | overRefusalRate | ≤ 0.05 | rate | `[C]` bron niet gevonden → herijk na ≥ 14 nightly-runs. Nulmeting 0%. |
 | underRefusal | ≤ 1 refusal-case beantwoord | **count** | `[E]` count-tolerantie; bij N=10 refusals (corpus v5, 2026-08-22) is één slip ~10% (was 33% @ N=3); rate blijft trend-only. **Sinds 2026-08-24:** een gegronde scope-weigering (de CAO bepaalt X niet, zonder daarna een aanspraak toe te kennen) telt als weigering. After-the-negation grant van een aangrenzend onderwerp (etd-032) blijft under-refusal. |
+
+### G2-roleplay-persona (14 gegenereerde beurten, twee scenario's)
+| Metric | Drempel | Type | Bron |
+|---|---|---|---|
+| case zonder antwoord | = 0 | **count** | `[X]` binair. Een beurt die na de eigen parse-retry van de agent nog steeds niets leesbaars oplevert, is voor de deelnemer een verbruikte beurt zonder antwoord — geen zwakker antwoord. Geteld in plaats van geworpen, zodat één slechte trekking de case noemt in plaats van de run (en het artefact) te beëindigen. Nulmeting 0. |
+| persona-break | = 0 | **count** | `[X]` binair. Een personage dat zichzelf een AI noemt, een sprekerlabel plakt of over de oefening praat, heeft de oefening beëindigd. Deterministisch (regex op regels die de prompt letterlijk stelt). Nulmeting 0. |
+| in-role score (judge) | ≥ 0.90 | rate | `[C]` gemiddelde over alle 14 antwoorden. Eén vloeiende break trekt één case naar ~0, wat bij N=14 ~0.07 kost — genoeg om te bijten zonder dat één strenge-maar-in-rol-afwimpeling van 0.8 de gate flipt. Herijk na ≥ 14 runs. Nulmeting 0.929 (3×, identiek); de eerste CI-run mat 0.857 door twee judge-false-negatives op buiten-het-gesprek-probes — gerepareerd in de judge-rubric, niet in de drempel (interventielog 2026-08-26, C4). |
+| vroege onthulling | = 0 | **count** | `[X]` binair, **judge-ondersteund** en dat staat er expliciet: een lek in eigen woorden draagt geen enkele letterlijke marker, dus een deterministische lekdetector bewaakt het onhandige lek en laat het vloeiende door. Het rapport splitst letterlijk/geoordeeld. Nulmeting 0; de judge zag één onthulling, maar op de beurt waar de deelnemer er gericht naar vroeg — precies wat `reveal: "allowed"` toestaat. |
+| voortijdig einde | = 0 | **count** | `[X]` binair, deterministisch. Een gesprek beëindigen dat noch zijn eindconditie haalde noch zijn beurtbudget opmaakte, laat de deelnemer halverwege staan. Nulmeting 0. |
+| antwoord en `conversationEnd` eens | ≤ 1 | **count** | `[C]` judge-ondersteund, dus een counttolerantie in plaats van binair — dezelfde vorm en reden als `citationVerification ≤ 1`. Alleen op beurten waar het vlaggetje een modelbeslissing is; op de slotbeurt forceert `agent.ts` hem. Nulmeting 1; na het herschrijven van de fixture (`expectEnd` → `endPermitted`) drie metingen van 0, 0 en 1 (die laatste een afscheid in woorden zonder het vlaggetje). De tolerantie blijft op 1 tot ≥ 14 runs laten zien of dat trekkingsruis is of een structureel patroon. |
+| slotbeurt stelt nieuwe vraag | = 0 | **count** | `[C]` de slotprompt zegt letterlijk "Je stelt dus geen nieuwe vragen meer!"; detectie is een vraagteken **minus Nederlandse tag-vragen** — "dan laat ik het je weten, oké?" vraagt om instemming, niet om informatie, en beëindigt het gesprek precies zoals gevraagd. Die verscherping komt uit een tweede nulmeting die op exact dat antwoord rood sloeg: gerepareerd in de detector, niet in de drempel (interventielog C4). Blijft geschikt voor precies deze ene beurt en niet als algemene maat. Nulmeting 0. |
+
+### G2-roleplay-review (twee transcripten × 3 herhalingen)
+| Metric | Drempel | Type | Bron |
+|---|---|---|---|
+| herhaling zonder beoordeling | = 0 | **count** | `[X]` binair. Een herhaling die niets teruggeeft is geen mild cijfer maar géén cijfer: in productie faalt dan `POST /api/roleplay/review`. Telt alles wat de backoff overleeft — onleesbaar antwoord én onbereikbare provider — met de reden in `failures[]`, want die twee hebben verschillende oplossingen. Gemeten in plaats van geworpen, zodat een rood zegt wélk transcript en wélke herhaling. Nulmeting 1 op 18 (onleesbaar); na de parse-retry op alle drie de branches 0. |
+| pass/fail-flip | = 0 | **count** | `[X]` binair. Herhalingen die het oneens zijn over geslaagd/niet-geslaagd, is de enige uitkomst die als een ánder cijfer voor identiek werk in het LMS van een leerling belandt. Nulmeting 0. |
+| spreiding gewogen score | ≤ 1.0 | max − min | `[C]` reviewer draait op temperatuur 0.2, dus dit meet restruis. Nulmeting 0.20–0.50 op een 0-10-schaal; drempel bewust ruim tot de nightly genoeg runs heeft. |
+| rangorde-overtredingen | = 0 | **count** | `[X]` binair, en zonder echte gouden set het enige bewijs dat de rubriek een goed gesprek van een slecht gesprek scheidt: het hoger gerangschikte transcript moet het andere in **elke** herhaling verslaan, niet gemiddeld. Nulmeting 0 (9.2–9.5 vs 1.3–1.5). |
+| vormfouten na normalisatie | = 0 | **count** | `[X]` binair. Normalisatie garandeert één entry per criterium met de vraag woordelijk; een fout betekent dat een opgeslagen beoordeling niet meer bij zijn rubriek past. Nulmeting 0. |
+
+> **Geen regressieband voor de rollenspelfamilie.** De grounded gates toetsen óók ±tolerantie tegen
+> een basislijn; hier bestaat die niet, en tegen een niet-bestaande referentie vergelijken zou een
+> getal produceren dat niets meet. Toe te voegen na ~14 nightly-runs — dezelfde trigger die de
+> `[C]`-drempels hierboven dragen.
 
 ### G3 (productie-pipeline — "provisional")
 | Metric | Drempel | Bron |
@@ -428,6 +516,8 @@ niet vaststaat.
 | 2026-07-31 | **`Bewijst niet`-regel per laag (G1–G4) + sectie ingest-contract (§2):** expliciet gemaakt dat G2 niets over een echt corpus zegt en dat een groene `G3-fund [etd]` de productie-ingest niet dekt; het structuurrapport vastgelegd als visibility-laag met het pad naar drempels (na calibratie, alleen omhoog) | Fase 6 ingest-herstelplan; de blinde vlek uit `diagnosis-fund-article-metadata-2026-07-30.md` §3.2 stond nergens in het canonieke document, waardoor een groene gate meer leek te bewijzen dan hij deed | Cursor/Jordy |
 | 2026-08-22 | **Faithfulness / relevance / completeness middelen over answerable cases** (zelfde uitsluiting als citationCorrectness, actie 6). Per-case blijven refusal-scores `refusalCalibration` kopiëren; het aggregaat niet. Baseline.json niet met de hand herschreven: bij underRefusal=0 is de definitieverschuiving ~0.003–0.009, binnen `REL_TOLERANCE` 0.05; de volgende groene `EVAL_WRITE_BASELINE`-run legt de nieuwe definitie vast | PR-hot-path (#18/#19): toegestane under-refusal count ≤1 zette faith/rel/complete op 0 in het 31-case-gemiddelde en faalde relevance-regressie (0.919 vs baseline 0.971, drempel 0.921). Refusal-kwaliteit zit al in refusalCalibration + under-refusal-count. Unit-test: `does not let an allowed under-refusal zero faithfulness/relevance/completeness` | Cursor/Jordy |
 | 2026-08-22 | **B2 follow-up:** `refusalCalibration` uit `answerRegressionChecks` (`higherIsBetter`) gehaald. Absolute floor ≥ 0.90 en under-refusal-count ≤ 1 blijven. Repair-turn: naar-rato-hatch alleen bij ungrounded fact + deeltijd/pro-rata-signaal (`isProRataViolation`); niet-regelt-clausule altijd, met exacte `NOT_FOUND_MESSAGE` | Zelfde N=3-ruis als de geschrapte under-refusal-rate-regressie: 2/3 answered (etd-025/026) → 0.935 vs baseline 1.000 faalt de 5-puntsband, terwijl count=2 al rood is op de count-gate. De onvoorwaardelijke hatch in `buildRepairMessages` leerde het model op etd-026 "verwijs naar het fonds" i.p.v. te weigeren. Unit-tests: `isProRataViolation` + repair-prompt hatch on/off | Cursor/Jordy |
+| 2026-08-26 | **Rollenspel-judge scoort alleen het antwoord van het personage.** De eerste CI-run van de familie viel op in-role 0,857 (vloer 0,90) door twee cases die deterministisch 0 scoorden: de judge rekende de beurt van de *deelnemer* aan het personage aan — bij `rp-role-003` citeerde hij de leerling-vraag letterlijk als bewijs. De rubric zegt nu dat de gesprekspartner context is en dat een vraag van buiten het gesprek (AI-probe, instructie-onthulling, meta-vraag) 1,0 scoort of het personage hem afwimpelt óf negeert. **Drempel ongewijzigd op 0,90.** | Gemeten, 3× temperatuur 0: beide cases 0→1, terwijl twee controlecases met een echte rolbreuk 0 blijven. Beleidskeuze in het instrument, geen drempelverlaging. Details: interventielog 2026-08-26 (C4) | Cursor/Jordy |
+| 2026-08-25 | **Rollenspelfamilie toegevoegd** (fase 6): `G1-roleplay-contract`, `G2-roleplay-persona`, `G2-roleplay-review`, met de drempeltabellen hierboven, een nieuwe requirement `mistral` (zonder Scaleway — het rollenspel doet geen retrieval) en `EVAL_ONLY` om één gate lokaal te draaien. Twee bevindingen uit de nulmeting zijn hersteld vóór de drempels vaststonden: een fixture die een keuze van het personage voorschreef (`expectEnd` → `endPermitted`, gouden set v1 → v2), een beoordeling die 1 van 18 keer onleesbaar terugkwam (parse-retry op alle drie de branches, `ROLEPLAY_PROMPT_VERSION` → `2026-08-25-review-retry`) , een vraagteken-detector die een tag-vraag ("…, oké?") als nieuwe vraag telde, en een provider-timeout die als onleesbare beoordeling werd geteld (`retryWithBackoff` om de modelaanroepen, zoals Gate C al deed) | Een rollenspelbeurt heeft geen recall, geen citaties en geen hard-fact-guard; geen bestaande check zei er iets over. Details en meetwaarden: interventielog 2026-08-25 | Cursor/Jordy |
 | 2026-08-24 | **Gegronde scope-weigering telt als weigering** (`answerRefuses`). De golden-set-`referenceAnswer` van etd-025 ís die vorm; alleen de letterlijke `NOT_FOUND_MESSAGE` scoren beloonde tegengesteld gedrag. Een scope-negatie die daarna een aangrenzende aanspraak toekent (etd-032: geen fietsplan, wél reiskosten) blijft under-refusal — pin in `judge.test.ts`. Prompt-uitzondering "vastgelegd nee" beperkt tot het gevraagde onderwerp; het reiskosten-voorbeeld is eruit (dat was de distractor van etd-032). Count-drempel ≤ 1 ongewijzigd. Hard-hallucination blijft absoluut. | PR #29 artefact (run 32737827106): etd-025 finishReason=stop, 338 tekens, hardHallucination=1, toch under-refusal; etd-032 citeerde de prompt-uitzondering woordelijk uit `reiskosten`. Beleidskeuze, geen drempelverlaging. | Cursor/Jordy |
 
 ---

@@ -17,20 +17,37 @@ import {
   copyPublicCorpusIntoFund,
   ensureFundTables,
   FUND_MIGRATION_PROVISION,
+  FUND_MIGRATION_ROLEPLAY,
   listActiveFunds,
   listAppliedFundMigrations,
   recordFundMigration,
 } from "@wunderstack/db";
 
-async function migrateOne(fundKey: string): Promise<{ skipped: boolean; copied?: { documents: number; chunks: number; events: number } }> {
+interface MigrateResult {
+  copied?: { documents: number; chunks: number; events: number };
+  applied: string[];
+}
+
+async function migrateOne(fundKey: string): Promise<MigrateResult> {
+  // ensureFundTables runs the full provision DDL, which is `CREATE ... IF NOT EXISTS` throughout, so
+  // it both creates a missing schema and brings an existing one up to the current table set. The
+  // ledger below records what that call actually established.
   const fund = await ensureFundTables(fundKey);
-  const applied = await listAppliedFundMigrations(fund.schemaName);
-  if (applied.includes(FUND_MIGRATION_PROVISION)) {
-    return { skipped: true };
+  const already = await listAppliedFundMigrations(fund.schemaName);
+  const result: MigrateResult = { applied: [] };
+
+  if (!already.includes(FUND_MIGRATION_PROVISION)) {
+    result.copied = await copyPublicCorpusIntoFund(fundKey);
+    await recordFundMigration(fund.schemaName, FUND_MIGRATION_PROVISION);
+    result.applied.push(FUND_MIGRATION_PROVISION);
   }
-  const copied = await copyPublicCorpusIntoFund(fundKey);
-  await recordFundMigration(fund.schemaName);
-  return { skipped: false, copied };
+
+  if (!already.includes(FUND_MIGRATION_ROLEPLAY)) {
+    await recordFundMigration(fund.schemaName, FUND_MIGRATION_ROLEPLAY);
+    result.applied.push(FUND_MIGRATION_ROLEPLAY);
+  }
+
+  return result;
 }
 
 async function main(): Promise<void> {
@@ -53,13 +70,15 @@ async function main(): Promise<void> {
   for (const fund of funds) {
     try {
       const result = await migrateOne(fund.key);
-      if (result.skipped) {
-        console.log(`skip  ${fund.key} (${FUND_MIGRATION_PROVISION} already applied)`);
-      } else {
-        const copied = result.copied ?? { documents: 0, chunks: 0, events: 0 };
+      if (result.applied.length === 0) {
+        console.log(`skip  ${fund.key} (already up to date)`);
+      } else if (result.copied) {
+        const copied = result.copied;
         console.log(
-          `ok    ${fund.key} documents=${String(copied.documents)} chunks=${String(copied.chunks)} events=${String(copied.events)}`,
+          `ok    ${fund.key} [${result.applied.join(", ")}] documents=${String(copied.documents)} chunks=${String(copied.chunks)} events=${String(copied.events)}`,
         );
+      } else {
+        console.log(`ok    ${fund.key} [${result.applied.join(", ")}]`);
       }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);

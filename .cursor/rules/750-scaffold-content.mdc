@@ -1,0 +1,29 @@
+---
+description: Hoe een review omgaat met scaffold-content (dummy corpora, fixtures, demo-copy, rollenspelscenario's).
+globs: scripts/ingest/demo-corpus/**,scripts/ingest/arbo-corpus/**,packages/agents/src/evals/fixtures/**,apps/*/content/**
+alwaysApply: false
+---
+
+# Scaffold-content — nooit critical om de inhoud
+
+Beleid: **mechanismegroen is merge-blocking; inhoudsgroen is promotie-blocking.** Zie
+`docs/decisions/DECISION-scaffold-content-2026-08-26.md` en `content-policy.ts`.
+
+## Wat is scaffold?
+
+Content met een `<!-- SCAFFOLD-CONTENT: ... -->`-marker, root `"_scaffold": true`, of een fondsset
+met `contentStatus: "scaffold" | "starter"` in `FUND_SET_META`.
+
+## Reviewregels
+
+- Scaffold-/starter-content is **nooit `critical`** vanwege de inhoud.
+- Wél `critical` op scaffold-content: het **mechanisme liegt**. Voorbeelden: een veld dat de UI laat
+  invullen en daarna weggooit; een weigerzin die niet vuurt; een citaat zonder grounding; een fixture
+  die naar een niet-bestaande passage wijst; een SCAFFOLD-marker die in een chunk beland is.
+- **Niet** `critical`, hoogstens `when possible`, met de vaste staart *"wacht op fondscontent"*:
+  volledigheid van een artikel, pedagogische kwaliteit van een scenario, toon en fonds-waardigheid
+  van copy, placeholders, ontbrekende auteursvelden in demo-tekst.
+- Een inhoudelijke bevinding die géén mechanisme raakt hoort niet in `Critical issues` maar in een
+  aparte sectie **"Wacht op fondscontent"**.
+- Uitzondering: zodra `contentStatus: "fund-reviewed"` staat, vervalt deze regel voor die set —
+  dan is de inhoud de belofte.

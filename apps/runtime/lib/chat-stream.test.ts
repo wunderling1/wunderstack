@@ -5,11 +5,11 @@ import type { ChatEvent } from "../app/api/chat/contract";
 import {
   CHAT_GENERIC_ERROR_MESSAGE,
   CHAT_TIMEOUT_MESSAGE,
-  createChatWorkSignal,
   isFinalChatEvent,
   isTerminalChatEvent,
   pipeChatNdjsonStream,
 } from "./chat-stream.js";
+import { createTurnWorkSignal } from "./ndjson-stream.js";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -109,7 +109,7 @@ describe("pipeChatNdjsonStream", () => {
     const chunks: Uint8Array[] = [];
     const client = new AbortController();
     const cancel = new AbortController();
-    const { workSignal, turnDeadline } = createChatWorkSignal({
+    const { workSignal, turnDeadline } = createTurnWorkSignal({
       clientSignal: client.signal,
       cancelSignal: cancel.signal,
       turnBudgetMs: 30,

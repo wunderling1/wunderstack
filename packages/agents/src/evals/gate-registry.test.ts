@@ -24,9 +24,12 @@ const doc = readFileSync(docPath, "utf8");
  */
 const EXPECTED_IDS = [
   "G1-contract",
+  "G1-roleplay-contract",
   "G2-retrieval",
   "G2-multi-turn",
   "G2-answer",
+  "G2-roleplay-persona",
+  "G2-roleplay-review",
   "G3-pipeline",
   "G3-fund",
   "G3-isolation",

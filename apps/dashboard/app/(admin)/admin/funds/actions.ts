@@ -65,7 +65,6 @@ export async function createFundAction(
   if (selected.length === 0) {
     return { ok: false, error: "Selecteer minimaal één agent." };
   }
-  // Validate against the shared schema (defense in depth; filter already uses AGENT_KEYS).
   if (selected.some((key) => !agentKeySchema.safeParse(key).success)) {
     return { ok: false, error: "Ongeldige agent-selectie." };
   }

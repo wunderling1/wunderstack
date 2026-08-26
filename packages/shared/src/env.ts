@@ -20,9 +20,10 @@ const envSchema = z.object({
   // public demo can boot without a database; @wunderstack/db asserts its presence
   // at the point of connection.
   DATABASE_URL: optional(z.url()),
-  // Optional dedicated writer connection for control.agent_instances (Fase 4, second DB role). Falls
-  // back to DATABASE_URL when unset. Env name kept as TENANT_CONFIG_WRITER_DATABASE_URL (deploy alias).
-  // In deployment this is a DB user granted write on agent_instances only.
+  // Optional dedicated writer connection for control.agent_instances, control.roleplay_scenarios
+  // and control.lti11_consumers (Fase 4/5/8, second DB role). Falls back to DATABASE_URL when unset.
+  // Env name kept as TENANT_CONFIG_WRITER_DATABASE_URL (deploy alias). In deployment this is a DB
+  // user granted write on those tables only.
   TENANT_CONFIG_WRITER_DATABASE_URL: optional(z.url()),
   // Optional provisioner connection for createFundEnvironment (CREATE SCHEMA + write on control.*).
   // No fallback to DATABASE_URL — missing env fails the action visibly. Local: same value as
@@ -36,6 +37,9 @@ const envSchema = z.object({
   // by the addon owner in deployment. Unset → createFundEnvironment logs and skips (local OK when
   // provisioner === owner).
   DB_OWNER_ROLE: optional(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/)),
+  // Postgres application_name prefix (pg_stat_activity). Next apps stamp this in next.config
+  // before @wunderstack/shared parses env. Unset → client falls back to "wunderstack".
+  DB_APPLICATION_NAME: optional(z.string().min(1).max(63)),
   // Provider credentials for the sovereign default path (@wunderstack/ai).
   // Optional at parse time; each is asserted where it is actually used.
   MISTRAL_API_KEY: optional(z.string().min(1)),
@@ -54,8 +58,10 @@ const envSchema = z.object({
   LANGFUSE_SECRET_KEY: optional(z.string().min(1)),
   // Defaults to Langfuse EU Cloud when unset (asserted in @wunderstack/agents).
   LANGFUSE_BASE_URL: optional(z.url()),
-  // Shared secret used to HMAC-verify inbound webhooks (see apps/demo/lib/webhook-auth.ts).
-  // When unset the webhook rejects every request as unconfigured — a signed seam by default.
+  // Shared secret used to HMAC-verify inbound webhooks and to sign outbound roleplay-result
+  // deliveries (see apps/runtime/lib/webhook-auth.ts and lib/webhook-sign.ts). When unset the
+  // inbound webhook rejects every request as unconfigured — a signed-by-default seam — and a
+  // webhook-origin start refuses to open a session we could not sign a result for.
   WEBHOOK_SIGNING_SECRET: optional(z.string().min(1)),
   // Shared secrets for the MCP server (POST /api/mcp). Dual-secret rotation: CURRENT is required
   // when MCP is enabled; PREVIOUS stays valid during rotation (PLAN-mcp-server M5). When CURRENT
@@ -104,6 +110,21 @@ const envSchema = z.object({
   // When truthy, a known-good eval run records the current metrics as the regression baseline
   // (packages/agents/src/evals/fixtures/baseline.json) instead of comparing against it.
   EVAL_WRITE_BASELINE: optional(z.enum(["1", "true", "0", "false"])),
+  // How often the roleplay review gate re-reviews the SAME transcript to measure grade stability
+  // (G2-roleplay-review). Below 2 there is no spread to measure, so the gate would be vacuous.
+  // Defaults to 3; raise on the nightly run.
+  EVAL_ROLEPLAY_REPEATS: optional(z.coerce.number().int().min(2).max(9)),
+  // Comma-separated gate ids to run instead of the whole registry — a development convenience for
+  // iterating on one gate without paying for the full suite. REFUSED (hard error) when
+  // EVAL_REQUIRE_ALL or EVAL_REQUIRE_DB is set, so it can never quietly shrink a protected run; the
+  // artefact also records the filter, so a partial report cannot be mistaken for a full one.
+  EVAL_ONLY: optional(z.string().min(1)),
+  // Eval tier: pr | merge | nightly. Controls whether content (scaffold-quality) floors are advisory
+  // on the PR path. Missing/unknown → nightly (strict). Set by CI; see content-policy.ts.
+  EVAL_TIER: optional(z.enum(["pr", "merge", "nightly"])),
+  // Comma-separated gate ids the PR diff can touch. Empty = full registry. Only legal with
+  // EVAL_TIER=pr; refused on merge/nightly. See content-policy.ts pathScopeAllowed.
+  EVAL_PATH_SCOPE: optional(z.string().min(1)),
   // Commit SHA of the checked-out revision (GitHub Actions sets this). Recorded in the per-run eval
   // artefact (E9) so a report is traceable to an exact commit; null on local runs without it.
   GITHUB_SHA: optional(z.string().min(1)),
@@ -132,6 +153,16 @@ const envSchema = z.object({
    * Unset → chat/passage return 400 `no_agent_instance` (no silent CAO default).
    */
   RUNTIME_UNCONFIGURED_AGENT: optional(z.string().min(1)),
+  /**
+   * HMAC secret for LTI 1.1 session tokens (`lid` + `exp`, no learner identity). Optional at parse
+   * so a runtime that is not an LMS target can boot; mint/verify assert it (min 16 chars).
+   */
+  LTI_SESSION_SECRET: optional(z.string().min(16)),
+  /**
+   * Public origin of `apps/roleplay` (no trailing slash). OAuth 1.0a signatures and the post-launch
+   * redirect are computed against this host, not the internal rewrite host the runtime sees.
+   */
+  ROLEPLAY_PUBLIC_URL: optional(z.url()),
 });
 
 export type Env = z.infer<typeof envSchema>;

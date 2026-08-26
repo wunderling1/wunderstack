@@ -1,7 +1,7 @@
 # packages/ui
 
 **Wat dit is:** het design system — tokens (primitive → semantic → theme), primitives en (laag 3)
-trust-patterns. Gedeeld door playground, dashboard en embed.
+trust-patterns. Gedeeld door playground, dashboard, embed en de rollenspel-leerling-UI.
 
 ## Regels
 - **Props-in, geen data-wiring.** Nooit `@wunderstack/agents` importeren (CI: `no-ui-to-agents`). Componenten

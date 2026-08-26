@@ -38,6 +38,18 @@ skippen. Dit hangt aan `EVAL_REQUIRE_ALL` — en die env-var moet de eval ook ec
 MOET in `turbo.json` (`test.passThroughEnv`) staan én in `.env.example`. De `test`-task heeft
 `"cache": false` (een live eval mag nooit een gecachte "pass" replayen).
 
+## Invariant: advisory ≠ afwezig
+Een advisory check draait, scoort en staat in het artefact; alleen de blokkade is uit. Advisory mag
+nooit een skip worden, en `EVAL_TIER=pr` mag nooit buiten `pull_request` gezet worden. Afgedwongen
+door `content-policy.test.ts` en `assertPathScopeAllowed`.
+
+## Invariant: het bronlabel bepaalt de tier
+`[X]` → `mechanism`, `[C]` → `content` (zie `content-policy.ts`). Een drempel verplaatsen van content
+naar mechanism of omgekeerd is een beslissing die in `content-policy.ts` én in de test zichtbaar
+wordt, nooit een bijwerking van ander werk. Een drempel promoveren van `[C]` naar `[X]` is de normale
+route zodra een detector genoeg runs heeft overleefd — dat is een aparte PR met de meetreeks erbij.
+Een nieuwe drempel zonder bronlabel mag niet landen.
+
 ## Merge-gewoonte: diffstat
 Vóór elke merge: `git diff --stat <base>...HEAD`. Een grote, onverklaarde delta op een eval-/meetbestand
 is een stopteken — reconcilieer vóór je landt. Als solo-founder is dit je enige menselijke vangnet.

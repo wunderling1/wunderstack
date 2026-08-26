@@ -13,6 +13,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { AggregateScores, CaseScores } from "./judge.js";
+import type {
+  RoleplayPersonaAggregate,
+  RoleplayReviewAggregate,
+  RoleplayTurnScore,
+} from "./roleplay-judge.js";
 
 const reportPath = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "eval-report.json");
 
@@ -28,16 +33,28 @@ const reportPath = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "ev
 // v8: FundLayerReport.documents — the corpus a fund actually held when it was measured. A fund that
 //     silently gained a second CAO read as a ranking collapse and left no trace in the artefact
 //     (elektronische-detailhandel, 2026-08-24).
-export const EVAL_REPORT_SCHEMA_VERSION = 8;
+// v9: `roleplay` — the Fase 6 gate family (G2-roleplay-persona / G2-roleplay-review). Carries every
+//     generated reply verbatim: a persona break or an early reveal is a judgement about a sentence,
+//     and an aggregate count without that sentence is not diagnosable.
+// v10: advisory-failed / not-applicable gate statuses + ReportCheck.advisory — scaffold-content
+//     quality floors are measured on the PR path without merge-blocking (content-policy.ts).
+export const EVAL_REPORT_SCHEMA_VERSION = 10;
 
 export interface ReportCheck {
   name: string;
   ok: boolean;
   detail?: string;
+  /** True when a red check is advisory (WARN) rather than merge-blocking. */
+  advisory?: boolean;
 }
 
-/** Gate outcome. `skipped` is a first-class status — a gate that could not run is NEVER `passed`. */
-export type GateStatus = "passed" | "failed" | "skipped";
+/**
+ * Gate outcome. `skipped` is a first-class status — a gate that could not run is NEVER `passed`.
+ * `advisory-failed` means every blocking check passed but at least one advisory check was red —
+ * measured and visible, not merge-blocking. `not-applicable` means the PR path-scope excluded the
+ * gate deliberately.
+ */
+export type GateStatus = "passed" | "failed" | "skipped" | "advisory-failed" | "not-applicable";
 
 export interface GateReport {
   /** Stable G-identifier, e.g. "G2-retrieval" (per-fund gates append " [key]"). */
@@ -149,6 +166,8 @@ export interface FundLayerReport {
   agentKey: string;
   corpusVersion: string;
   fixtureHash: string;
+  /** Review status of the set's content — scaffold | starter | fund-reviewed. */
+  contentStatus: "scaffold" | "starter" | "fund-reviewed";
   answerableQueries: number;
   metrics: RecallSnapshot;
   thresholds: RecallThresholds;
@@ -169,6 +188,53 @@ export interface FundLayerReport {
   cases: FundCaseDiagnosis[];
 }
 
+/**
+ * Roleplay persona layer (Fase 6). `cases` carries the full generated reply on purpose: every
+ * blocking metric here is a claim about one sentence ("this persona admitted it was an AI", "this
+ * reply gave away the subtext"), and a count without the sentence behind it cannot be checked,
+ * argued with, or fixed. Same reasoning as AnswerCaseReport.answerRaw.
+ */
+export interface RoleplayPersonaReport {
+  setVersion: string;
+  fixtureHash: string;
+  promptVersion: string;
+  model: string;
+  aggregate: RoleplayPersonaAggregate;
+  cases: RoleplayTurnScore[];
+  /** Cases that produced no reply at all, so `cases` is never silently short. */
+  failures: RoleplayGenerationFailure[];
+}
+
+/** A case that produced no usable reply, after both the agent's parse-retry and the gate's backoff. */
+export interface RoleplayGenerationFailure {
+  caseId: string;
+  reason: string;
+}
+
+/** One repeat that produced no review, with the parser/provider message that explains why. */
+export interface RoleplayReviewFailure {
+  caseId: string;
+  repeat: number;
+  reason: string;
+}
+
+/**
+ * Roleplay review layer (Fase 6) — repeated reviews of one transcript. No per-run feedback text: the
+ * gate is about the NUMBER that reaches a learner's LMS, and storing three full review essays per
+ * transcript would bury the metric it exists to show. `failures` is the exception: a repeat that
+ * yielded nothing has no number to report, so the reason is all the artefact can carry.
+ */
+export interface RoleplayReviewReport {
+  setVersion: string;
+  fixtureHash: string;
+  promptVersion: string;
+  model: string;
+  /** Repeats attempted per transcript (EVAL_ROLEPLAY_REPEATS), not repeats that succeeded. */
+  repeats: number;
+  aggregate: RoleplayReviewAggregate;
+  failures: RoleplayReviewFailure[];
+}
+
 export interface EvalReport {
   schemaVersion: number;
   generatedAt: string;
@@ -179,6 +245,14 @@ export interface EvalReport {
     requireAll: boolean;
     judgeSamples: number;
     writeBaseline: boolean;
+    /** Gate ids this run was restricted to (EVAL_ONLY). Empty = the whole registry ran. */
+    onlyGates: string[];
+    /** Eval tier under which this report was produced (pr | merge | nightly). */
+    tier: "pr" | "merge" | "nightly";
+    /** Whether content floors blocked under that tier. */
+    contentGatesBlocking: boolean;
+    /** Gate ids from EVAL_PATH_SCOPE. Empty = no path filter. */
+    pathScope?: string[];
   };
   models: {
     generator: string;
@@ -192,6 +266,11 @@ export interface EvalReport {
   answer: AnswerReport | null;
   /** Per-fund correctness layers (E12); empty when no fund set ran (e.g. no DB on the PR hot path). */
   funds: FundLayerReport[];
+  /** Roleplay family (Fase 6); each half is null when its gate skipped for a missing key. */
+  roleplay: {
+    persona: RoleplayPersonaReport | null;
+    review: RoleplayReviewReport | null;
+  };
   judge: {
     parseRetryCount: number;
   };

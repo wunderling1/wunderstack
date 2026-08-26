@@ -39,26 +39,33 @@ const judgeResponseSchema = z.object({
 export type JudgeResponse = z.infer<typeof judgeResponseSchema>;
 
 /**
+ * Extract the JSON object from a judge response. Shared with the roleplay judge, which asks a
+ * different question and therefore has a different schema, but must fail on a malformed answer in
+ * exactly the same way — a second copy of this would be a second chance to start defaulting scores.
+ * Throws on no object present or unparseable JSON.
+ */
+export function extractJsonPayload(text: string): unknown {
+  const jsonMatch = /\{[\s\S]*\}/.exec(text);
+  if (!jsonMatch) {
+    throw new Error(`Judge returned no JSON object: ${text.slice(0, 200)}`);
+  }
+
+  try {
+    return JSON.parse(jsonMatch[0]);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`Judge returned malformed JSON: ${reason}`, { cause: error });
+  }
+}
+
+/**
  * Pure parse of a judge model response (no network, so the contract is unit-testable):
  * extract the JSON object, `JSON.parse` it, then validate against {@link judgeResponseSchema}.
  * Throws — never defaults a score — on any of: no JSON object present, malformed JSON, or a
  * schema violation. Callers decide whether to retry (see {@link runJudgeWithParseRetry}).
  */
 export function parseJudgeOutput(text: string): JudgeResponse {
-  const jsonMatch = /\{[\s\S]*\}/.exec(text);
-  if (!jsonMatch) {
-    throw new Error(`Judge returned no JSON object: ${text.slice(0, 200)}`);
-  }
-
-  let raw: unknown;
-  try {
-    raw = JSON.parse(jsonMatch[0]);
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    throw new Error(`Judge returned malformed JSON: ${reason}`, { cause: error });
-  }
-
-  return judgeResponseSchema.parse(raw);
+  return judgeResponseSchema.parse(extractJsonPayload(text));
 }
 
 /** Runs one judge turn; `extraMessages` are appended after the base prompt (used by the retry). */
@@ -86,11 +93,17 @@ export function resetJudgeParseRetryCount(): void {
  * conversation ("your previous answer was not valid JSON") so the model can correct itself.
  * A second failure throws (fail-loud, no silent default score). Each retry is logged as a warning
  * so its frequency stays visible (input for the E9 run artefact).
+ *
+ * `parse` is a parameter because the roleplay judge answers a different question with a different
+ * schema. The retry POLICY — exactly one, fail loud, counted — stays in one place for both.
  */
-export async function runJudgeWithParseRetry(call: JudgeModelCall): Promise<JudgeResponse> {
+export async function runJudgeWithParseRetry<T>(
+  call: JudgeModelCall,
+  parse: (text: string) => T,
+): Promise<T> {
   const firstRaw = await call([]);
   try {
-    return parseJudgeOutput(firstRaw);
+    return parse(firstRaw);
   } catch (error) {
     judgeParseRetryCount += 1;
     const reason = error instanceof Error ? error.message : String(error);
@@ -103,7 +116,7 @@ export async function runJudgeWithParseRetry(call: JudgeModelCall): Promise<Judg
       },
     ]);
     // A second failure throws here — the run fails loud, no score is defaulted.
-    return parseJudgeOutput(retryRaw);
+    return parse(retryRaw);
   }
 }
 
@@ -443,7 +456,7 @@ async function judgeOnce(
       { baseDelayMs: 5000, maxAttempts: 8 },
     );
     return result.text;
-  });
+  }, parseJudgeOutput);
 
   return {
     faithfulness: parsed.faithfulness,

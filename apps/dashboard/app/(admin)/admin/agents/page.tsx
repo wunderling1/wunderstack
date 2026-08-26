@@ -1,4 +1,4 @@
-import { AGENT_KEY_LABELS, AGENT_KEYS } from "@wunderstack/shared";
+import { AGENT_KEYS, AGENT_KEY_LABELS } from "@wunderstack/shared";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@wunderstack/ui";
 import Link from "next/link";
 
@@ -7,6 +7,9 @@ export const dynamic = "force-dynamic";
 /**
  * Platform agent-type index (S3). Release and gates live on the type; placements live on
  * `/admin/funds/[fundKey]/agents/[agentKey]`. No write actions here.
+ *
+ * Lists every instance key. The roleplay agent joined the list in fase 6, when it got a gate family
+ * of its own (DECISION-roleplay-agent.md R1).
  */
 export default function AgentsTypeIndexPage() {
   return (
