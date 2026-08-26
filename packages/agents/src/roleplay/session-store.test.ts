@@ -65,6 +65,7 @@ describe("appendTurnAndMaybeEnd concurrency contract", () => {
     const steps: string[] = [];
     let lastOrdinal = 0;
     let status: "active" | "ended" = "active";
+    assert.equal(status, "active");
 
     // One txn: allocate + insert + end, with no await between insert and end that could let a
     // reader observe messages on an still-active session.
