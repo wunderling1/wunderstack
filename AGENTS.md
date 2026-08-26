@@ -32,7 +32,7 @@ Volledige lijst + versiebeleid: `.cursor/rules/100-stack.mdc`.
 
 ## Repo-structuur
 `apps/runtime` (Next.js API-only: agent-API, webhook, hardening) · `apps/playground` (publieke
-tenant-zero-demo-UI) · `packages/ai` (model-naad) · `packages/agents`
+tenant-zero-demo-UI) · `apps/roleplay` (leerling-UI rollenspel, HTTP-only) · `packages/ai` (model-naad) · `packages/agents`
 (agent-defs, Mastra erin) · `packages/rag` · `packages/connectors` (airlock naar niet-EU-bronnen)
 · `packages/db` (Drizzle) · `packages/shared`.
 Pijl-regel: apps importeren uit packages, nooit andersom (CI-afgedwongen).
