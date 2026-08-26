@@ -1,34 +1,10 @@
-export { env, envSchema } from "./env.js";
-export type { Env } from "./env.js";
-
-export {
-  EMBEDDING_CONFIG,
-  requireEmbeddingConfig,
-  type EmbeddingConfig,
-} from "./config/embedding.js";
-
-export {
-  agentConfigDataSchema,
-  type AgentConfigData,
-} from "./config/agent-config.js";
-
-export {
-  RERANK_CONFIG,
-  requireRerankConfig,
-  type RerankConfig,
-} from "./config/rerank.js";
-
-export {
-  GENERATION_CONFIG,
-  type GenerationConfig,
-} from "./config/generation.js";
-
-export {
-  passages as caoLabeledPassages,
-  queries as caoLabeledQueries,
-  type CaoPassage,
-  type LabeledQuery,
-} from "./evals/cao-labeled-set.js";
+/**
+ * Client-safe surface for browser bundles (`"use client"`).
+ *
+ * Re-exports contracts only. Never re-export `./env` (or anything that imports it): the main
+ * `@wunderstack/shared` barrel parses `process.env` and would pull secret *names* into the learner
+ * bundle whenever a client component imports the package root.
+ */
 
 export {
   citationSourceSchema,
@@ -55,19 +31,6 @@ export {
   agentChannelSchema,
   type AgentChannel,
 } from "./contracts/channel.js";
-export { parseCaoFunds, isFundScopeConfigured } from "./config/funds.js";
-
-export {
-  AGENT_KEYS,
-  AGENT_KEY_LABELS,
-  GROUNDED_AGENT_KEYS,
-  agentKeySchema,
-  groundedAgentKeySchema,
-  isAgentKey,
-  isGroundedAgentKey,
-  type AgentKey,
-  type GroundedAgentKey,
-} from "./config/agent-keys.js";
 
 export {
   tenantThemeSchema,
@@ -170,5 +133,3 @@ export {
   type WebhookEvent,
   type WebhookAck,
 } from "./contracts/webhook.js";
-
-export { EVAL_FIXTURE_FUND } from "./config/eval.js";

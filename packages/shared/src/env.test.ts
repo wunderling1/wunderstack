@@ -31,6 +31,25 @@ describe("envSchema ingest chunker vars", () => {
   });
 });
 
+describe("envSchema DB_APPLICATION_NAME", () => {
+  it("accepts a short prefix", () => {
+    const parsed = envSchema.parse({ DB_APPLICATION_NAME: "wunderstack-dashboard" });
+    assert.equal(parsed.DB_APPLICATION_NAME, "wunderstack-dashboard");
+  });
+
+  it("treats unset and empty as undefined", () => {
+    assert.equal(envSchema.parse({}).DB_APPLICATION_NAME, undefined);
+    assert.equal(envSchema.parse({ DB_APPLICATION_NAME: "" }).DB_APPLICATION_NAME, undefined);
+  });
+
+  it("rejects a name longer than 63 characters", () => {
+    assert.throws(
+      () => envSchema.parse({ DB_APPLICATION_NAME: "w".repeat(64) }),
+      (error: unknown) => error instanceof Error && error.name === "ZodError",
+    );
+  });
+});
+
 describe("envSchema chat-stream robustness vars", () => {
   it("coerces turn-budget and heartbeat ms", () => {
     const parsed = envSchema.parse({

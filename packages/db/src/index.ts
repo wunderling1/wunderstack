@@ -20,7 +20,13 @@ export {
 } from "./fund-schema.js";
 export {
   FUND_MIGRATION_PROVISION,
+  FUND_MIGRATION_ROLEPLAY,
   provisionDdl,
+  roleplayDdl,
+  roleplayAlterSql,
+  createRoleplayTablesSql,
+  roleplayIndexesSql,
+  createRoleplayTurnFunctionSql,
   dropPublicCorpusSql,
   publicCorpusTablesSql,
   appliedMigrationsSql,
@@ -118,10 +124,41 @@ export {
   type TenantConfig,
 } from "./agent-instances.js";
 export { getAgentConfig, parseAgentConfigData } from "./agent-config.js";
+export {
+  listScenarios,
+  getScenario,
+  createScenario,
+  updateScenario,
+  rowToDraft,
+  nextScenarioVersion,
+  scenarioContentFingerprint,
+  ScenarioSlugTakenError,
+  ScenarioNotFoundError,
+} from "./roleplay-scenarios.js";
+export {
+  listLti11Consumers,
+  getActiveLti11ConsumerByKey,
+  getLti11ConsumerForDelivery,
+  createLti11Consumer,
+  deactivateLti11Consumer,
+  setLti11GradePassback,
+  acquireLti11Nonce,
+  releaseLti11Nonce,
+  insertLti11Launch,
+  getUnexpiredLti11Launch,
+  consumeLti11Launch,
+  generateLti11Credentials,
+  toPublicConsumer,
+  LTI11_LAUNCH_TTL_MS,
+  ConsumerKeyTakenError,
+  Lti11ConsumerNotFoundError,
+  type Lti11ConsumerPublic,
+  type Lti11LaunchAuth,
+} from "./lti11.js";
 
 // Re-export the query operators consumers need, so the ORM stays behind this seam
 // (no package/script imports drizzle-orm directly). Extend as new operators are needed.
-export { eq, and, asc, desc, gte, inArray, isNotNull, count, sql } from "drizzle-orm";
+export { eq, and, asc, desc, gte, gt, lte, inArray, isNotNull, count, sql } from "drizzle-orm";
 // pgvector distance helper used by retrieval (Fase 5). Kept here so the ORM stays behind
 // this seam; add l2Distance/innerProduct here too if a later phase needs them.
 export { cosineDistance } from "drizzle-orm";

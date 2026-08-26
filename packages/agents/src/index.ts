@@ -17,10 +17,10 @@ export {
 
 export {
   AGENT_PROFILES,
-  isAgentKey,
+  isGroundedAgentKey,
   listAgentProfiles,
   requireAgentProfile,
-  type AgentKey,
+  type GroundedAgentKey,
 } from "./runtime/registry.js";
 
 export {

@@ -1,4 +1,4 @@
-import { getAgent, isAgentKey, type GroundedAgent } from "@wunderstack/agents";
+import { getAgent, isGroundedAgentKey, type GroundedAgent } from "@wunderstack/agents";
 import { env } from "@wunderstack/shared";
 
 /**
@@ -24,8 +24,12 @@ export function resolveAgentIdFromConfig(
 }
 
 /**
- * Fail closed at process boot when RUNTIME_UNCONFIGURED_AGENT is set to an unknown catalog id.
+ * Fail closed at process boot when RUNTIME_UNCONFIGURED_AGENT is set to an id this app cannot serve.
  * Call once from the runtime entry perimeter (chat/config routes import this module).
+ *
+ * The check is against the *grounded* keys, not the wider instance-key space: these routes answer
+ * from a corpus with verified citations. An instance key without a runtime profile (roleplay) is a
+ * boot error here rather than a request-time surprise.
  */
 export function assertUnconfiguredAgentValid(
   unconfiguredAgent: string | undefined = env.RUNTIME_UNCONFIGURED_AGENT,
@@ -33,9 +37,9 @@ export function assertUnconfiguredAgentValid(
   if (unconfiguredAgent === undefined || unconfiguredAgent === "") {
     return;
   }
-  if (!isAgentKey(unconfiguredAgent)) {
+  if (!isGroundedAgentKey(unconfiguredAgent)) {
     throw new Error(
-      `RUNTIME_UNCONFIGURED_AGENT=${JSON.stringify(unconfiguredAgent)} is not a registered agent`,
+      `RUNTIME_UNCONFIGURED_AGENT=${JSON.stringify(unconfiguredAgent)} is not a registered grounded agent`,
     );
   }
 }

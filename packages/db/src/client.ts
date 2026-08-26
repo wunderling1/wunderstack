@@ -6,12 +6,63 @@ import * as schema from "./schema/index.js";
 
 export type Database = PostgresJsDatabase<typeof schema>;
 
-let client: ReturnType<typeof postgres> | undefined;
-let cached: Database | undefined;
-let writerClient: ReturnType<typeof postgres> | undefined;
-let writerCached: Database | undefined;
-let provisionerClient: ReturnType<typeof postgres> | undefined;
-let provisionerCached: Database | undefined;
+type Sql = ReturnType<typeof postgres>;
+
+type PoolSlot = { client: Sql; db: Database };
+
+type PoolKind = "reader" | "writer" | "provisioner";
+
+type GlobalPools = {
+  reader?: PoolSlot;
+  writer?: PoolSlot;
+  provisioner?: PoolSlot;
+};
+
+/**
+ * Process-wide pool slots. Next.js webpack (transpilePackages + HMR) can evaluate this
+ * module more than once; a `let` cache would orphan the previous postgres.js pool. The
+ * sockets stay open (`idle_timeout` default 0) until the process dies.
+ */
+const GLOBAL_KEY = "__wunderstack_db_pools" as const;
+
+function globalHolder(): typeof globalThis & { [GLOBAL_KEY]?: GlobalPools } {
+  return globalThis as typeof globalThis & { [GLOBAL_KEY]?: GlobalPools };
+}
+
+function globalPools(): GlobalPools {
+  const holder = globalHolder();
+  holder[GLOBAL_KEY] ??= {};
+  return holder[GLOBAL_KEY];
+}
+
+/** Starter-512 has few non-superuser slots. Dev must not open 10+5+5 per Next process. */
+function poolMax(kind: PoolKind): number {
+  if (env.NODE_ENV === "production") {
+    return kind === "reader" ? 10 : 5;
+  }
+  return kind === "reader" ? 3 : 2;
+}
+
+function applicationName(kind: PoolKind): string {
+  const app = env.DB_APPLICATION_NAME ?? "wunderstack";
+  return `${app}:${kind}`.slice(0, 63);
+}
+
+function openPool(url: string, kind: PoolKind): PoolSlot {
+  const client = postgres(url, {
+    max: poolMax(kind),
+    idle_timeout: env.NODE_ENV === "production" ? 60 : 20,
+    max_lifetime: 60 * 30,
+    // TCP handshake only. postgres.js has no pool-acquire timeout; queued
+    // checkouts wait until a slot frees. Forgotten transactions: GUC below.
+    connect_timeout: 30,
+    connection: {
+      application_name: applicationName(kind),
+      idle_in_transaction_session_timeout: 15_000,
+    },
+  });
+  return { client, db: drizzle(client, { schema }) };
+}
 
 /**
  * The single access point to the database (the seam that keeps swapping providers cheap).
@@ -19,8 +70,9 @@ let provisionerCached: Database | undefined;
  * DATABASE_URL until the database is actually used.
  */
 export function getDb(): Database {
-  if (cached) {
-    return cached;
+  const pools = globalPools();
+  if (pools.reader) {
+    return pools.reader.db;
   }
 
   if (!env.DATABASE_URL) {
@@ -29,21 +81,21 @@ export function getDb(): Database {
     );
   }
 
-  client = postgres(env.DATABASE_URL, { max: 10 });
-  cached = drizzle(client, { schema });
-  return cached;
+  pools.reader = openPool(env.DATABASE_URL, "reader");
+  return pools.reader.db;
 }
 
 /**
  * A dedicated writer connection for control.agent_instances (Fase 4, second DB role). Uses
  * TENANT_CONFIG_WRITER_DATABASE_URL when set (deploy alias; a DB user granted write on
- * agent_instances only), else falls back to DATABASE_URL — so the console can write theming/keys
- * even when the main connection is read-only in deployment, without granting broad write access.
- * Separate pool from getDb().
+ * control.agent_instances, control.roleplay_scenarios and control.lti11_consumers), else falls back
+ * to DATABASE_URL — so the console can write theming/keys/scenarios even when the main connection
+ * is read-only in deployment, without granting broad write access. Separate pool from getDb().
  */
 export function getWriterDb(): Database {
-  if (writerCached) {
-    return writerCached;
+  const pools = globalPools();
+  if (pools.writer) {
+    return pools.writer.db;
   }
 
   const url = env.TENANT_CONFIG_WRITER_DATABASE_URL ?? env.DATABASE_URL;
@@ -53,9 +105,8 @@ export function getWriterDb(): Database {
     );
   }
 
-  writerClient = postgres(url, { max: 5 });
-  writerCached = drizzle(writerClient, { schema });
-  return writerCached;
+  pools.writer = openPool(url, "writer");
+  return pools.writer.db;
 }
 
 /**
@@ -78,14 +129,14 @@ export function resolveProvisionerUrl(
  * Never falls back to DATABASE_URL — missing PROVISIONER_DATABASE_URL fails visibly.
  */
 export function getProvisionerDb(): Database {
-  if (provisionerCached) {
-    return provisionerCached;
+  const pools = globalPools();
+  if (pools.provisioner) {
+    return pools.provisioner.db;
   }
 
   const url = resolveProvisionerUrl(env.PROVISIONER_DATABASE_URL);
-  provisionerClient = postgres(url, { max: 5 });
-  provisionerCached = drizzle(provisionerClient, { schema });
-  return provisionerCached;
+  pools.provisioner = openPool(url, "provisioner");
+  return pools.provisioner.db;
 }
 
 /**
@@ -94,19 +145,14 @@ export function getProvisionerDb(): Database {
  * the DB was never used. Long-lived servers never need this — they keep the pool for the process.
  */
 export async function closeDb(): Promise<void> {
-  if (client) {
-    await client.end({ timeout: 5 });
-    client = undefined;
-    cached = undefined;
+  const holder = globalHolder();
+  const pools = holder[GLOBAL_KEY];
+  delete holder[GLOBAL_KEY];
+  if (!pools) {
+    return;
   }
-  if (writerClient) {
-    await writerClient.end({ timeout: 5 });
-    writerClient = undefined;
-    writerCached = undefined;
-  }
-  if (provisionerClient) {
-    await provisionerClient.end({ timeout: 5 });
-    provisionerClient = undefined;
-    provisionerCached = undefined;
-  }
+  const ending = [pools.reader, pools.writer, pools.provisioner]
+    .filter((slot): slot is PoolSlot => slot !== undefined)
+    .map((slot) => slot.client.end({ timeout: 5 }));
+  await Promise.all(ending);
 }

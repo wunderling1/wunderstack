@@ -127,6 +127,20 @@
       "when": 1787655000000,
       "tag": "0017_fund_theme",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1787999000000,
+      "tag": "0018_roleplay_scenarios",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788002000000,
+      "tag": "0019_lti11",
+      "breakpoints": true
     }
   ]
 }

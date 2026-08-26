@@ -9,14 +9,15 @@
  * CAO: money (€), percentages, quantities with labour-law units.
  * Arbo: physical limits (kg, dB, ppm, °C) and time quantities.
  *
- * Agent keys come from {@link AgentKey} in the runtime registry — adding an agent without patterns
- * here is a compile error (`Record<AgentKey, …>`).
+ * Agent keys come from {@link GroundedAgentKey} in the runtime registry — adding an agent without
+ * patterns here is a compile error (`Record<GroundedAgentKey, …>`). Agents without retrieval
+ * (roleplay) never reach this module: they make no grounded claims to verify.
  */
 
-import { type AgentKey, isAgentKey } from "./runtime/registry.js";
+import { type GroundedAgentKey, isGroundedAgentKey } from "./runtime/registry.js";
 
-/** @deprecated Prefer {@link AgentKey}; alias kept for eval/judge call-sites. */
-export type HardFactAgentKey = AgentKey;
+/** @deprecated Prefer {@link GroundedAgentKey}; alias kept for eval/judge call-sites. */
+export type HardFactAgentKey = GroundedAgentKey;
 
 /** CAO hard-fact families. Global so `matchAll` can enumerate; safe to reuse across calls. */
 export const CAO_HARD_FACT_PATTERNS: RegExp[] = [
@@ -36,7 +37,7 @@ export const ARBO_HARD_FACT_PATTERNS: RegExp[] = [
   /\b\d+(?:[.,]\d+)?\s?(?:uur|uren|dag|dagen|week|weken|maand|maanden|jaar|jaren)\b/gi,
 ];
 
-const HARD_FACT_PATTERNS_BY_AGENT: Record<AgentKey, RegExp[]> = {
+const HARD_FACT_PATTERNS_BY_AGENT: Record<GroundedAgentKey, RegExp[]> = {
   cao: CAO_HARD_FACT_PATTERNS,
   arbo: ARBO_HARD_FACT_PATTERNS,
 };
@@ -46,7 +47,7 @@ export function patternsFor(agentKey: HardFactAgentKey): RegExp[] {
 }
 
 export function resolveHardFactAgentKey(agentKey: string): HardFactAgentKey {
-  if (!isAgentKey(agentKey)) {
+  if (!isGroundedAgentKey(agentKey)) {
     throw new Error(`Unknown agent key for hard-fact patterns: ${agentKey}`);
   }
   return agentKey;
