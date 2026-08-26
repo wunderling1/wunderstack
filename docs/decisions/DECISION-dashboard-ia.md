@@ -18,6 +18,8 @@ Three levels. No screen edits two levels. Routes stay English; UI stays Dutch.
 | Schema dump, deactivate, audit | fund |
 | Embed snippet, public key + rotation, CORS | agent (instance) |
 | `texts` (tagline, intro, Article 50, starters) | agent |
+| `roleplay_scenarios` (admin-only authoring) | agent (roleplay) |
+| `lti11_consumers` (LMS-koppeling, opt-in cijferteruggave) | agent (roleplay) |
 | Corpus / sources, persona / `agent_config` | agent (* later) |
 | Release manifest, gates | platform (agent type) |
 | KPIs | fund = sum, agent = detail |

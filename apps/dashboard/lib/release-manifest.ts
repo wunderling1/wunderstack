@@ -11,7 +11,7 @@
  * the typed shape below is the contract the admin view already renders against.
  */
 
-import { AGENT_KEY_LABELS, AGENT_KEYS, type AgentKey } from "@wunderstack/shared";
+import { AGENT_KEYS, AGENT_KEY_LABELS, type AgentKey } from "@wunderstack/shared";
 import { env } from "@/lib/env";
 
 export type GateStatus = "green" | "amber" | "red" | "unknown";
@@ -45,6 +45,10 @@ export interface KnownAgent {
  * Catalog for the admin overview before any activity is logged. Derived from AGENT_KEYS in
  * @wunderstack/shared so the dashboard never imports `@wunderstack/agents` (no-dashboard-to-agents)
  * and never becomes a fourth hand-maintained copy.
+ *
+ * Every instance key, roleplay included: since fase 6 that agent has its own gate family
+ * (G1-roleplay-contract, G2-roleplay-persona, G2-roleplay-review), so leaving it out would hide a
+ * measured agent rather than protect anyone from an unmeasurable one.
  */
 export const KNOWN_AGENTS: KnownAgent[] = AGENT_KEYS.map((id) => ({
   id,
@@ -52,7 +56,7 @@ export const KNOWN_AGENTS: KnownAgent[] = AGENT_KEYS.map((id) => ({
 }));
 
 export function agentLabel(agentId: string): string {
-  return KNOWN_AGENTS.find((agent) => agent.id === agentId)?.label ?? agentId;
+  return AGENT_KEY_LABELS[agentId as AgentKey] ?? agentId;
 }
 
 export function getReleaseManifest(agentId: string): ReleaseManifest {

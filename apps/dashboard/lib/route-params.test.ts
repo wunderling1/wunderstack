@@ -17,7 +17,7 @@ test("parseFundKey returns null for unknown or invalid fund key", () => {
 
 test("parseAgentKey returns null for agent without a known key (notFound path)", () => {
   assert.equal(parseAgentKey("cao"), "cao");
-  assert.equal(parseAgentKey("arbo"), "arbo");
+  assert.equal(parseAgentKey("roleplay"), "roleplay");
   assert.equal(parseAgentKey("CAO"), "cao");
   assert.equal(parseAgentKey("unknown-agent"), null);
   assert.equal(parseAgentKey(""), null);

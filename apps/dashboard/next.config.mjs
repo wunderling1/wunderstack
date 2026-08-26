@@ -9,6 +9,9 @@ const rootEnv = resolve(dirname(fileURLToPath(import.meta.url)), "../../.env");
 if (existsSync(rootEnv)) {
   process.loadEnvFile(rootEnv);
 }
+// Distinct pg_stat_activity label. Does not replace the globalThis pool singleton in
+// @wunderstack/db — transpilePackages stays; postgres is not externalized as a leak fix.
+process.env.DB_APPLICATION_NAME ??= "wunderstack-dashboard";
 
 const commonSecurityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },

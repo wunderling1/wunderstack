@@ -16,7 +16,8 @@ export default async function FundAgentsListPage() {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-text-muted">
-        Agents van jouw fonds. Alleen-lezen — distributie en teksten beheert het platform.
+        Agents van jouw fonds. Alleen-lezen — distributie, teksten en scenario&apos;s beheert het
+        platform.
       </p>
       {instances.length === 0 ? (
         <p className="text-sm text-text-subtle">Nog geen agent-instances.</p>
