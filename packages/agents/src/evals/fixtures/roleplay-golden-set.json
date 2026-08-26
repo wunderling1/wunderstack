@@ -10,9 +10,11 @@
     "to inherit. Replace these with real transcripts + their original grades once a fund has them.",
     "v2 (2026-08-25): `expectEnd` became `endPermitted`. v1 asserted that a turn WOULD end the",
     "conversation; both scenarios end on '...en jij stemt daarmee in', so that asserted a choice the",
-    "persona is entitled to make either way, and it failed 4 of 4 on correct replies over two runs."
+    "persona is entitled to make either way, and it failed 4 of 4 on correct replies over two runs.",
+    "v3 (2026-08-26): root `_scaffold: true` — set is measured, not merge-blocking on the PR path."
   ],
-  "version": "2",
+  "version": "3",
+  "_scaffold": true,
 
   "scenarios": [
     {

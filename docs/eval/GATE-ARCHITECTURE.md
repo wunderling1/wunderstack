@@ -32,15 +32,47 @@ Dit document heeft twee helften:
    expliciet-conservatief `[C]` met herijkmoment. Een drempel zonder bron is een aanname vermomd
    als feit. Drempelwijzigingen vereisen een regel in het changelog (§7) met reden.
 4. **Skip ≠ pass.** Een gate die niet draait mag nooit als geslaagd rapporteren. Artefacten kennen
-   drie statussen: `passed` / `failed` / `skipped`.
+   vijf statussen: `passed` / `failed` / `skipped` / `advisory-failed` / `not-applicable`.
+   `advisory-failed` = gedraaid en rood, maar niet merge-blocking (scaffold-content op het PR-pad).
+   `not-applicable` = bewust niet gedraaid wegens path-scope. Zie §"Scaffold-content".
 5. **Strenger naarmate realistischer.** Drempels op de productie-pipeline (Laag 3) mogen niet
    losser blijven dan op synthetische fixtures (Laag 2) zodra er genoeg nightly-data is om ze te
    ijken. *(Huidige toestand wijkt hiervan af — G3-floors staan provisioneel laag; zie §6.)*
 6. **Twee werelden:** Lagen 1–3 voorkomen dat slechte *code* live gaat (CI). Laag 4 voorkomt dat
    een slecht *antwoord* de gebruiker bereikt (runtime). Beide nodig (defense in depth).
-7. **Infrastructuur is geen gate.** Eigenschappen die het eval-systeem zelf betrouwbaar maken
+7. **Een nieuwe drempel zonder bronlabel mag niet landen.** Het bronlabel (`[X]` / `[C]` / `[E]`)
+   bepaalt via `content-policy.ts` of de check mechanism of content is — zonder label is de tier
+   onbepaald.
+8. **Infrastructuur is geen gate.** Eigenschappen die het eval-systeem zelf betrouwbaar maken
    (model-coupling, judge-retry, fixture-hash, baseline-integriteit, enforcement-flags) zijn
    *invarianten* (§5), geborgd via unit tests en CI-config — niet via het lagenmodel.
+
+### Scaffold-content
+
+**Mechanismegroen is merge-blocking; inhoudsgroen is promotie-blocking.** Zolang een set
+scaffold-content is, wordt hij gemeten en gerapporteerd, niet afgedwongen. Besluit:
+`docs/decisions/DECISION-scaffold-content-2026-08-26.md`.
+
+| Status | Betekenis |
+|---|---|
+| `advisory-failed` | Check gedraaid, rood, zichtbaar als `[WARN]` — blokkeert de merge niet |
+| `not-applicable` | Gate bewust niet gedraaid (PR path-scope); G1-contracts blijven altijd lopen |
+
+| `EVAL_TIER` | Wanneer (CI) | Content floors |
+|---|---|---|
+| `pr` | `pull_request` | advisory |
+| `merge` | `merge_group` / `push` | blocking |
+| `nightly` | `schedule` (en lokale default) | blocking |
+
+| Fondsset | `contentStatus` |
+|---|---|
+| `demo` | `scaffold` |
+| `etd` | `starter` |
+| `etd-full` | `starter` |
+| `arbo.oomt` | `starter` |
+
+Exit-criterium: zodra een fonds de set accordeert gaat `contentStatus` naar `fund-reviewed` en
+blokkeren content floors (en de recall-drempels van die set) óók op de PR.
 
 ---
 

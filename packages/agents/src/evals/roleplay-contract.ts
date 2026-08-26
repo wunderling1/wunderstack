@@ -83,8 +83,8 @@ const PINNED_PROMPT_BUILD = {
  * fixtures without a deliberate version bump is a silent change to the measuring stick.
  */
 const PINNED_FIXTURE = {
-  version: "2",
-  hash: "4aaa46dfc62b1674be0f72bb033c40d46e15b657b5293cf28f957b713e1641d0",
+  version: "3",
+  hash: "9a4cc43a52ed91c5f52b68b27e90fd3ac1e6cb737be65283be30d5b0233b25ca",
 } as const;
 
 export function roleplayContractChecks(): EvalCheck[] {

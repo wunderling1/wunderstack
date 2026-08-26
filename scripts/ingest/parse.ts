@@ -16,11 +16,13 @@ export const SUPPORTED_EXTENSIONS = [".pdf", ".txt", ".md"] as const;
 /**
  * Light normalization that preserves document structure (headings, blank-line paragraph
  * breaks) so structure-aware chunking has something to work with. It only unifies line
- * endings, strips trailing spaces, and collapses runs of blank lines.
+ * endings, strips trailing spaces, collapses runs of blank lines, and removes HTML comments
+ * (so a `<!-- SCAFFOLD-CONTENT: ... -->` marker never lands in a chunk).
  */
 export function normalizeText(raw: string): string {
   return raw
     .replace(/\r\n?/g, "\n")
+    .replace(/<!--[\s\S]*?-->/g, "")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();

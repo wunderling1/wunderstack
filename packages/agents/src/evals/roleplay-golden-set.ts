@@ -139,6 +139,8 @@ const fileSchema = z
   .object({
     _readme: z.array(z.string()),
     version: z.string().min(1),
+    /** True when the set is scaffold/starter content — measured, not merge-blocking on the PR path. */
+    _scaffold: z.literal(true).optional(),
     scenarios: z.array(scenarioSchema).min(1),
     openings: z.array(openingCaseSchema).min(1),
     turns: z.array(turnCaseSchema).min(1),
