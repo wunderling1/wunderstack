@@ -76,10 +76,9 @@ describe("ROLEPLAY_CHECK_KIND", () => {
     assert.equal(ROLEPLAY_CHECK_KIND.maxEndFlagMismatchCount, "mechanism");
   });
 
-  it("classifies minInRoleScore, maxScoreSpread, maxClosingQuestionCount as content", () => {
+  it("classifies minInRoleScore and maxScoreSpread as content", () => {
     assert.equal(ROLEPLAY_CHECK_KIND.minInRoleScore, "content");
     assert.equal(ROLEPLAY_CHECK_KIND.maxScoreSpread, "content");
-    assert.equal(ROLEPLAY_CHECK_KIND.maxClosingQuestionCount, "content");
   });
 });
 

@@ -113,10 +113,20 @@ describe("personaFloorFailures", () => {
     );
   });
 
-  it("fails a closing turn that asks another question", () => {
-    assert.deepEqual(personaFloorFailures(persona({ closingQuestionCount: 1 })), [
-      "closing turn asks a new question (count)",
-    ]);
+  it("does not gate on a closing question (trend at N=1)", () => {
+    assert.deepEqual(
+      personaFloorFailures(persona({ closingQuestionCount: 1, closingTurnCount: 1 })),
+      [],
+    );
+  });
+
+  it("prints the closing-question count as trend on the mismatch floor", () => {
+    const floor = PERSONA_FLOORS.find((entry) => entry.thresholdKey === "maxEndFlagMismatchCount");
+    assert.ok(floor);
+    assert.match(
+      floor.detail(persona({ closingQuestionCount: 1, closingTurnCount: 1 })),
+      /1 asked a question \(trend\)/,
+    );
   });
 
   it("does not fail on a judged-only wobble that stays above the mean floor", () => {

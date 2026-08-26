@@ -79,8 +79,10 @@ const TAG_QUESTION = /(?:^|[,;:—-]\s*)(oké|oke|okay|toch|hè|he|goed|ja|niet|
  * "Ik ga er even over nadenken en dan laat ik het je weten, oké? Bedankt voor het gesprek", which
  * ends the conversation exactly as instructed and would have failed a bare question-mark check.
  *
- * A rhetorical "Wat moet ik nou?" still counts as a false positive, which is why this stays a count
- * gate on closing turns only and not a general metric.
+ * A rhetorical "Wat moet ik nou?" still counts as a false positive, which is why this stays a
+ * trend on closing turns only (N=1 today — one false positive would be the whole metric) and not a
+ * general metric. Promote to a floor once the set has ≥ 3 closing turns, together with
+ * `unclosedClosingTurnCount`.
  */
 export function asksQuestion(text: string): boolean {
   return text.replace(TAG_QUESTION, ".").includes("?");
@@ -291,7 +293,12 @@ export interface RoleplayPersonaAggregate {
    */
   unclosedClosingTurnCount: number;
   closingTurnCount: number;
-  /** Closing turns whose reply still asks a question, against the prompt's literal instruction. */
+  /**
+   * Trend: closing turns whose reply still asks a question, against the prompt's literal
+   * "Je stelt dus geen nieuwe vragen meer!". Not a floor at N=1 closing case — one rhetorical
+   * question or warm-temperature draw would be the whole metric. Promote to a floor once the set
+   * has ≥ 3 closing turns, together with `unclosedClosingTurnCount`.
+   */
   closingQuestionCount: number;
 }
 

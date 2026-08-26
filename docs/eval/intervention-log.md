@@ -451,8 +451,46 @@ count-gate is geworden, blijkt pas uit de eerstvolgende volle runs. Meenemen in 
 
 ---
 
+## 2026-08-26 · C4 · Slotvraagvloer gedemoteerd tot trend (N=1 sluitbeurt)
+
+**Fase:** G2-roleplay-persona, na de merge van PR #40 · **Duur:** ±30 minuten
+
+**Wat.** CI #155 (push naar `main` op `c94ac81`, `EVAL_TIER=merge`) was rood op één check:
+`closing turn asks a new question (count) — 1 (max 0)`. Alle andere gates van die run waren groen,
+inclusief hard-hallucination 100% en in-role 1.000. PR #40 was groen omdat dezelfde vloer op
+`EVAL_TIER=pr` advisory is.
+
+**Oorzaak.** De vloer mat één trekking van één case (`rp-end-005`, de enige `isClosingTurn: true` in
+de set) op temperature 0.7, met een detector (`asksQuestion`) die zelf een retorische vraag als
+false positive erkent. Bij N=1 is een drempel van 0 een muntworp. Op **dezelfde case**, in
+**dezelfde aggregate**, is `unclosedClosingTurnCount` al trend-only — "Not a floor at N=1 closing
+case — one judge false negative would be the whole metric. Promote to a floor once the set has ≥ 3
+closing turns." Dat argument gold woordelijk, en de vloer deed het niet.
+
+**Niet gedaan:** `maxClosingQuestionCount` naar 1 (bij N=1 is dat 100% tolerantie: de check kan dan
+nooit meer vuren). De sluitprompt aanscherpen op één waarneming. `contentGatesBlocking` globaal
+versoepelen (dat zet alle grounded `[C]`-vloeren op merge/nightly los).
+
+**Ingreep.** `maxClosingQuestionCount` uit `ROLEPLAY_THRESHOLDS` en `PERSONA_FLOORS`. Het getal blijft
+in het artefact (`closingQuestionCount`) en wordt meegedragen in de detailregel van de
+mismatch-vloer, naast `unclosedClosingTurnCount`. Productie ongewijzigd: `agent.ts` forceert
+`conversationEnd` op de sluitbeurt, dus een vraag verlengt de sessie niet en komt niet verkeerd in
+het LMS.
+
+**Promotietrigger.** Beide sluitbeurt-trends (`closingQuestionCount` én `unclosedClosingTurnCount`)
+tot vloer promoveren zodra de set ≥ 3 sluitbeurten heeft — dezelfde `[C]` → `[X]`-route, aparte PR
+met de meetreeks.
+
+**Bewijs.** Run `32968980031` / job `98177983108`. Canonieke tabel:
+`docs/eval/GATE-ARCHITECTURE.md` §G2-roleplay-persona.
+
+---
+
 ## Openstaand
 
+- **Slotvraag- en ongesloten-sluitbeurt-trends promoveren tot vloer** zodra de roleplay-set ≥ 3
+  sluitbeurten heeft (`closingQuestionCount` + `unclosedClosingTurnCount`, interventielog 2026-08-26).
+  Tot die tijd is N=1 (`rp-end-005`) te dun voor een poort.
 - ~~**Refusal-guard `demo` én `etd-full` rood**~~ — **afgehandeld 2026-07-31** (C4-entry hierboven).
   De hypothese "`minScore = 0.48` is op de fixtureset gekalibreerd" was half juist: de drempel
   klopt, de probes niet. Rest-risico: de guard is nu groen op alle corpora maar bewaakt een smallere
