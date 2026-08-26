@@ -1276,13 +1276,19 @@ async function multiTurnServeChecks(): Promise<Check[]> {
         `unverifiable=${String(served.unverifiable)} hardFact=${String(served.hardFactGuardTriggered)}`,
     );
 
-    checks.push({
-      name: `multi-turn serve: "${testCase.id}" survives verifyAndBuild with a verified citation`,
-      ok: served.found && served.citations.length > 0,
-      detail:
-        `queries=${retrievalQueries.join(" | ")} citations=${String(served.citations.length)} ` +
-        `unverifiable=${String(served.unverifiable)}`,
-    });
+    // Derived calculation-bait cases (etd-d02, etd-d03) correctly refuse to invent a number the
+    // CAO does not state — their referenceAnswer says so. Demanding a verified citation there
+    // conflates a coverage miss with a safety miss. Still log every case and still count
+    // unverifiable across all of them; only the per-case "must cite" floor skips derived.
+    if (testCase.category !== "derived") {
+      checks.push({
+        name: `multi-turn serve: "${testCase.id}" survives verifyAndBuild with a verified citation`,
+        ok: served.found && served.citations.length > 0,
+        detail:
+          `queries=${retrievalQueries.join(" | ")} citations=${String(served.citations.length)} ` +
+          `unverifiable=${String(served.unverifiable)}`,
+      });
+    }
 
     await sleep(2000);
   }
@@ -1290,11 +1296,14 @@ async function multiTurnServeChecks(): Promise<Check[]> {
   console.log(
     `  served-with-citation ${String(servedWithCitationCount)}/${String(followUps.length)}  ` +
       `unverifiable ${String(unverifiableCount)}/${String(followUps.length)}  ` +
-      `(gate <= ${String(MULTI_TURN_SERVE_THRESHOLDS.maxUnverifiableCount)} unverifiable)\n`,
+      `(gate <= ${String(MULTI_TURN_SERVE_THRESHOLDS.maxUnverifiableCount)} unverifiable; ` +
+      `derived cases excluded from per-case citation: a correct answer claims no article here)\n`,
   );
 
   checks.push({
-    name: `multi-turn serve: unverifiable count <= ${String(MULTI_TURN_SERVE_THRESHOLDS.maxUnverifiableCount)}`,
+    name:
+      `multi-turn serve: unverifiable count <= ${String(MULTI_TURN_SERVE_THRESHOLDS.maxUnverifiableCount)}` +
+      ` (derived cases uitgesloten van de per-case citatie-eis: een correct antwoord claimt hier geen artikel)`,
     ok: unverifiableCount <= MULTI_TURN_SERVE_THRESHOLDS.maxUnverifiableCount,
     detail: `${String(unverifiableCount)} of ${String(followUps.length)} unverifiable after verifyAndBuild`,
   });
