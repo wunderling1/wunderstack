@@ -10,6 +10,10 @@ const rootEnv = resolve(dirname(fileURLToPath(import.meta.url)), "../../.env");
 if (existsSync(rootEnv)) {
   process.loadEnvFile(rootEnv);
 }
+// Distinct pg_stat_activity label. Does not replace the globalThis pool singleton in
+// @wunderstack/db — transpilePackages stays; postgres remains in serverExternalPackages
+// only so Next does not bundle its native/dynamic bits.
+process.env.DB_APPLICATION_NAME ??= "wunderstack-runtime";
 
 // Static, universal security headers (security-audit finding #6). These are path-independent and
 // benefit every response (including static assets), so they live here. The Content-Security-Policy

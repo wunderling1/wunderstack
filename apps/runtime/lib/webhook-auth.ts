@@ -1,5 +1,7 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { timingSafeEqual } from "node:crypto";
 import { env } from "@wunderstack/shared";
+
+import { signWebhookBody, WEBHOOK_SIGNATURE_HEADER, WEBHOOK_TIMESTAMP_HEADER } from "./webhook-sign.js";
 
 /**
  * HMAC signature + replay verification for inbound webhooks (security-audit finding #5, API2 Broken
@@ -9,14 +11,13 @@ import { env } from "@wunderstack/shared";
  * Contract: the sender computes `HMAC-SHA256(secret, "${timestamp}.${rawBody}")` and sends it hex-
  * encoded in `x-wunderstack-signature`, with the unix-millisecond `x-wunderstack-timestamp`. We
  * verify with a timing-safe comparison, reject stale timestamps (replay window), and reject a
- * signature we have already seen inside that window (replay of a still-fresh request).
+ * signature we have already seen inside that window (replay of a still-fresh request). Outbound
+ * result delivery (Fase 7) signs with the same helper, so a fund verifies us the way we verify them.
  *
  * When `WEBHOOK_SIGNING_SECRET` is unset the endpoint is treated as misconfigured and every request
  * is rejected — a signed-by-default seam (the demo has no legitimate unauthenticated webhook use).
  */
 
-const SIGNATURE_HEADER = "x-wunderstack-signature";
-const TIMESTAMP_HEADER = "x-wunderstack-timestamp";
 const REPLAY_WINDOW_MS = 5 * 60 * 1000;
 
 /** Recently accepted signatures -> first-seen time, to reject replays within the window. */
@@ -55,8 +56,8 @@ export function verifyWebhookSignature(request: Request, rawBody: string): Webho
     return { ok: false, status: 503, error: "webhook_not_configured" };
   }
 
-  const signature = request.headers.get(SIGNATURE_HEADER);
-  const timestamp = request.headers.get(TIMESTAMP_HEADER);
+  const signature = request.headers.get(WEBHOOK_SIGNATURE_HEADER);
+  const timestamp = request.headers.get(WEBHOOK_TIMESTAMP_HEADER);
   if (!signature || !timestamp) {
     return { ok: false, status: 401, error: "missing_signature" };
   }
@@ -71,7 +72,7 @@ export function verifyWebhookSignature(request: Request, rawBody: string): Webho
     return { ok: false, status: 401, error: "stale_timestamp" };
   }
 
-  const expected = createHmac("sha256", secret).update(`${timestamp}.${rawBody}`).digest("hex");
+  const expected = signWebhookBody(secret, timestamp, rawBody);
   if (!hexEqual(signature, expected)) {
     return { ok: false, status: 401, error: "invalid_signature" };
   }
