@@ -263,6 +263,19 @@ export interface FundSetMeta {
   /** Retrieval agent key — defaults to cao for legacy fund sets. */
   agentKey?: string;
   /**
+   * Review status of this set's CONTENT. Determines whether a content miss is merge-blocking.
+   *   scaffold      — invented text, exists to exercise the pipeline (CAO Fictief, arbo-fictief)
+   *   starter       — real source text, hand-built start set, not yet fund-reviewed
+   *   fund-reviewed — a fund has signed off on the content; from here content is the promise
+   *
+   * Exit criterion: once a fund signs off, contentStatus becomes fund-reviewed and completeness,
+   * relevance and this set's recall floors block on the PR too. That is not a tightening of the
+   * promise — it is the moment the content becomes the promise.
+   *
+   * Required — no default. A new fund set must declare its status explicitly.
+   */
+  contentStatus: "scaffold" | "starter" | "fund-reviewed";
+  /**
    * The documents this fund's corpus must consist of — `documents.title`, which the ingest sets to
    * `basename(filePath, extname(filePath))` (or a literal, as the fixtures ingest does).
    *
@@ -279,11 +292,21 @@ export interface FundSetMeta {
 const FUND_SET_META: Record<string, FundSetMeta> = {
   // ETD — CAO Elektrotechnische Detailhandel 2023. Scored against the ingested ETD passages
   // (fund "eval-fixtures"); review log: fixtures/golden-set.REVIEW.md (fund layer section).
-  etd: { fund: "eval-fixtures", corpusVersion: "etd-1", expectedDocuments: ["Golden eval fixtures"] },
+  etd: {
+    fund: "eval-fixtures",
+    corpusVersion: "etd-1",
+    contentStatus: "starter",
+    expectedDocuments: ["Golden eval fixtures"],
+  },
   // Demo — the fictional "CAO Fictief" (Fase 5, tenant zero). Scored against the ingested demo corpus
   // (fund "demo", from scripts/ingest/demo-corpus). Runs on the nightly integration gate once that
   // corpus is ingested into the gate DB; base gates are unaffected (base fixture hash unchanged).
-  demo: { fund: "demo", corpusVersion: "demo-1", expectedDocuments: ["cao-fictief"] },
+  demo: {
+    fund: "demo",
+    corpusVersion: "demo-1",
+    contentStatus: "scaffold",
+    expectedDocuments: ["cao-fictief"],
+  },
   // ETD-full — the SAME CAO as `etd` above, but the complete 62-page PDF as the production ingest
   // stores it, under its own fund. Where `etd` scores hand-curated verbatim passages, this set scores
   // what the pipeline actually produced from the source document, so it is the only fund set that can
@@ -292,6 +315,7 @@ const FUND_SET_META: Record<string, FundSetMeta> = {
   "etd-full": {
     fund: "elektronische-detailhandel",
     corpusVersion: "etd-full-1",
+    contentStatus: "starter",
     expectedDocuments: ["cao_elektronische_detailhandel"],
   },
   // Arbo — OOMT sample arbocatalogus (scripts/ingest/arbo-oomt/arbo_catalogus_oomt.pdf).
@@ -299,6 +323,7 @@ const FUND_SET_META: Record<string, FundSetMeta> = {
     fund: "oomt",
     corpusVersion: "arbo-oomt-2",
     agentKey: "arbo",
+    contentStatus: "starter",
     expectedDocuments: ["arbo_catalogus_oomt"],
   },
 };
@@ -312,6 +337,8 @@ export interface GoldenFundSet {
   agentKey: string;
   /** This fund set's own corpus snapshot version, independent of GOLDEN_CORPUS_VERSION. */
   corpusVersion: string;
+  /** Review status of the set's content — see FundSetMeta.contentStatus. */
+  contentStatus: FundSetMeta["contentStatus"];
   /** Fixture file name. */
   file: string;
   cases: GoldenFundCase[];
@@ -349,6 +376,7 @@ function loadFundSets(): GoldenFundSet[] {
       fund: meta.fund,
       agentKey: meta.agentKey ?? "cao",
       corpusVersion: meta.corpusVersion,
+      contentStatus: meta.contentStatus,
       file,
       cases: parseJsonl(raw, goldenFundCaseSchema),
       fixtureHash: createHash("sha256").update(raw).digest("hex"),
