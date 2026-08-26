@@ -2,6 +2,7 @@ import { env } from "@wunderstack/shared";
 
 import { createRoleplayAgent } from "../roleplay/agent.js";
 import { ROLEPLAY_PROMPT_VERSION } from "../roleplay/version.js";
+import { isAdvisory, ROLEPLAY_CHECK_KIND, resolveTier } from "./content-policy.js";
 import type { EvalCheck } from "./harness.js";
 import { retryWithBackoff } from "./retry.js";
 import { PERSONA_FLOORS, REVIEW_FLOORS, type RoleplayFloor } from "./roleplay-floors.js";
@@ -44,13 +45,19 @@ import type {
 
 /** How often the same transcript is re-reviewed to measure grade stability. */
 const REVIEW_REPEATS = env.EVAL_ROLEPLAY_REPEATS ?? 3;
+const TIER = resolveTier(env.EVAL_TIER);
 
 function toChecks<T>(floors: readonly RoleplayFloor<T>[], aggregate: T): EvalCheck[] {
-  return floors.map((floor) => ({
-    name: floor.name,
-    ok: floor.ok(aggregate),
-    detail: floor.detail(aggregate),
-  }));
+  return floors.map((floor) => {
+    const kind = ROLEPLAY_CHECK_KIND[floor.thresholdKey];
+    const advisory = isAdvisory(kind, TIER);
+    return {
+      name: floor.name,
+      ok: floor.ok(aggregate),
+      detail: floor.detail(aggregate),
+      ...(advisory ? { advisory: true } : {}),
+    };
+  });
 }
 
 /**

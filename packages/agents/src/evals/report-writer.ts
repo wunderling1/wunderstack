@@ -166,6 +166,8 @@ export interface FundLayerReport {
   agentKey: string;
   corpusVersion: string;
   fixtureHash: string;
+  /** Review status of the set's content — scaffold | starter | fund-reviewed. */
+  contentStatus: "scaffold" | "starter" | "fund-reviewed";
   answerableQueries: number;
   metrics: RecallSnapshot;
   thresholds: RecallThresholds;
@@ -245,6 +247,12 @@ export interface EvalReport {
     writeBaseline: boolean;
     /** Gate ids this run was restricted to (EVAL_ONLY). Empty = the whole registry ran. */
     onlyGates: string[];
+    /** Eval tier under which this report was produced (pr | merge | nightly). */
+    tier: "pr" | "merge" | "nightly";
+    /** Whether content floors blocked under that tier. */
+    contentGatesBlocking: boolean;
+    /** Gate ids from EVAL_PATH_SCOPE. Empty = no path filter. */
+    pathScope?: string[];
   };
   models: {
     generator: string;

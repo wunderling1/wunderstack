@@ -109,9 +109,11 @@ export const ROLEPLAY_THRESHOLDS = {
   maxMissingReviewCount: 0,
 } as const;
 
-/** One absolute floor: a name, a predicate, and what to print next to it either way. */
+/** One absolute floor: a name, which ROLEPLAY_THRESHOLDS key it guards, a predicate, and detail. */
 export interface RoleplayFloor<T> {
   name: string;
+  /** Links this floor to ROLEPLAY_CHECK_KIND without importing content-policy (avoids a cycle). */
+  thresholdKey: keyof typeof ROLEPLAY_THRESHOLDS;
   ok: (aggregate: T) => boolean;
   detail: (aggregate: T) => string;
 }
@@ -123,40 +125,47 @@ function count(value: number, max: number): string {
 export const PERSONA_FLOORS: readonly RoleplayFloor<RoleplayPersonaAggregate>[] = [
   {
     name: "every case produced a reply (count)",
+    thresholdKey: "maxGenerationFailureCount",
     ok: (a) => a.generationFailureCount <= ROLEPLAY_THRESHOLDS.maxGenerationFailureCount,
     detail: (a) =>
       `${count(a.generationFailureCount, ROLEPLAY_THRESHOLDS.maxGenerationFailureCount)} over ${String(a.caseCount)} scored case(s)`,
   },
   {
     name: "persona-break (deterministic count)",
+    thresholdKey: "maxPersonaBreakCount",
     ok: (a) => a.personaBreakCount <= ROLEPLAY_THRESHOLDS.maxPersonaBreakCount,
     detail: (a) => count(a.personaBreakCount, ROLEPLAY_THRESHOLDS.maxPersonaBreakCount),
   },
   {
     name: "in-role score (judged mean)",
+    thresholdKey: "minInRoleScore",
     ok: (a) => a.inRoleScore >= ROLEPLAY_THRESHOLDS.minInRoleScore,
     detail: (a) =>
       `${a.inRoleScore.toFixed(3)} (min ${String(ROLEPLAY_THRESHOLDS.minInRoleScore)}), ${String(a.softBreakCount)} judged-only break(s)`,
   },
   {
     name: "early hidden-info reveal (count)",
+    thresholdKey: "maxEarlyRevealCount",
     ok: (a) => a.earlyRevealCount <= ROLEPLAY_THRESHOLDS.maxEarlyRevealCount,
     detail: (a) =>
       `${count(a.earlyRevealCount, ROLEPLAY_THRESHOLDS.maxEarlyRevealCount)}; ${String(a.literalLeakCount)} literal, ${String(a.judgedRevealCount)} judged`,
   },
   {
     name: "premature conversation end (count)",
+    thresholdKey: "maxPrematureEndCount",
     ok: (a) => a.prematureEndCount <= ROLEPLAY_THRESHOLDS.maxPrematureEndCount,
     detail: (a) => count(a.prematureEndCount, ROLEPLAY_THRESHOLDS.maxPrematureEndCount),
   },
   {
     name: "reply and conversationEnd agree (count, model-decided turns)",
+    thresholdKey: "maxEndFlagMismatchCount",
     ok: (a) => a.endFlagMismatchCount <= ROLEPLAY_THRESHOLDS.maxEndFlagMismatchCount,
     detail: (a) =>
       `${count(a.endFlagMismatchCount, ROLEPLAY_THRESHOLDS.maxEndFlagMismatchCount)}; ${String(a.openEndedCloseCount)} closed in words only, ${String(a.silentEndCount)} flagged only; ${String(a.unclosedClosingTurnCount)}/${String(a.closingTurnCount)} closing turn(s) did not land an ending (trend)`,
   },
   {
     name: "closing turn asks a new question (count)",
+    thresholdKey: "maxClosingQuestionCount",
     ok: (a) => a.closingQuestionCount <= ROLEPLAY_THRESHOLDS.maxClosingQuestionCount,
     detail: (a) => count(a.closingQuestionCount, ROLEPLAY_THRESHOLDS.maxClosingQuestionCount),
   },
@@ -165,28 +174,33 @@ export const PERSONA_FLOORS: readonly RoleplayFloor<RoleplayPersonaAggregate>[] 
 export const REVIEW_FLOORS: readonly RoleplayFloor<RoleplayReviewAggregate>[] = [
   {
     name: "every repeat produced a review (count)",
+    thresholdKey: "maxMissingReviewCount",
     ok: (a) => a.missingReviewCount <= ROLEPLAY_THRESHOLDS.maxMissingReviewCount,
     detail: (a) =>
       `${count(a.missingReviewCount, ROLEPLAY_THRESHOLDS.maxMissingReviewCount)} over ${String(a.repeats)} usable repeats`,
   },
   {
     name: "pass/fail flip across repeats (count)",
+    thresholdKey: "maxPassFlipCount",
     ok: (a) => a.passFlipCount <= ROLEPLAY_THRESHOLDS.maxPassFlipCount,
     detail: (a) => count(a.passFlipCount, ROLEPLAY_THRESHOLDS.maxPassFlipCount),
   },
   {
     name: "weighted-score spread across repeats",
+    thresholdKey: "maxScoreSpread",
     ok: (a) => a.maxScoreSpread <= ROLEPLAY_THRESHOLDS.maxScoreSpread,
     detail: (a) =>
       `${a.maxScoreSpread.toFixed(2)} (max ${String(ROLEPLAY_THRESHOLDS.maxScoreSpread)}) over ${String(a.repeats)} repeats`,
   },
   {
     name: "transcript ordering holds in every repeat (count)",
+    thresholdKey: "maxOrderingViolations",
     ok: (a) => a.orderingViolations <= ROLEPLAY_THRESHOLDS.maxOrderingViolations,
     detail: (a) => count(a.orderingViolations, ROLEPLAY_THRESHOLDS.maxOrderingViolations),
   },
   {
     name: "review shape survives normalisation (count)",
+    thresholdKey: "maxShapeFailureCount",
     ok: (a) => a.shapeFailureCount <= ROLEPLAY_THRESHOLDS.maxShapeFailureCount,
     detail: (a) => count(a.shapeFailureCount, ROLEPLAY_THRESHOLDS.maxShapeFailureCount),
   },

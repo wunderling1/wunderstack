@@ -119,6 +119,12 @@ const envSchema = z.object({
   // EVAL_REQUIRE_ALL or EVAL_REQUIRE_DB is set, so it can never quietly shrink a protected run; the
   // artefact also records the filter, so a partial report cannot be mistaken for a full one.
   EVAL_ONLY: optional(z.string().min(1)),
+  // Eval tier: pr | merge | nightly. Controls whether content (scaffold-quality) floors are advisory
+  // on the PR path. Missing/unknown → nightly (strict). Set by CI; see content-policy.ts.
+  EVAL_TIER: optional(z.enum(["pr", "merge", "nightly"])),
+  // Comma-separated gate ids the PR diff can touch. Empty = full registry. Only legal with
+  // EVAL_TIER=pr; refused on merge/nightly. See content-policy.ts pathScopeAllowed.
+  EVAL_PATH_SCOPE: optional(z.string().min(1)),
   // Commit SHA of the checked-out revision (GitHub Actions sets this). Recorded in the per-run eval
   // artefact (E9) so a report is traceable to an exact commit; null on local runs without it.
   GITHUB_SHA: optional(z.string().min(1)),

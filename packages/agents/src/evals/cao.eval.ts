@@ -92,6 +92,14 @@ import {
   passagesForCase,
 } from "./golden-set.js";
 import { ANSWER_THRESHOLDS, MULTI_TURN_SERVE_THRESHOLDS, answerFloorFailures } from "./answer-floors.js";
+import {
+  ANSWER_CHECK_KIND,
+  contentGatesBlocking,
+  isAdvisory,
+  pathScopeAllowed,
+  resolveTier,
+  type CheckKind,
+} from "./content-policy.js";
 import { acquireEvalLock, EvalAlreadyRunningError } from "./eval-lock.js";
 import { appendFundRecords, fundRecordsFromReport, resolveCommitSha } from "./fund-ledger.js";
 import { extraPromptContractChecks } from "./agent-profile.js";
@@ -139,6 +147,13 @@ const PRIMARY_K = 5;
 
 /** True when a missing-key gate must fail rather than skip (set on the merge-to-main CI job). */
 const REQUIRE_ALL = env.EVAL_REQUIRE_ALL === "1" || env.EVAL_REQUIRE_ALL === "true";
+
+/**
+ * Eval tier from EVAL_TIER. Missing/unknown → nightly (strict). On CI: pr | merge | nightly.
+ * Content floors are advisory only when tier === "pr".
+ */
+const TIER = resolveTier(env.EVAL_TIER);
+const CONTENT_GATES_BLOCKING = contentGatesBlocking(TIER);
 
 /** Recall/MRR bar shape, shared by the in-memory Gate B and the nightly Gate B-integration. */
 type RetrievalThresholds = {
@@ -188,10 +203,48 @@ function assertGateFilterAllowed(): void {
   }
 }
 
+/**
+ * PR path-scope: which gates the diff can touch. Empty = full registry. Never scopes G1 contracts
+ * (offline and free). Refused outside EVAL_TIER=pr so the merge queue always runs everything.
+ */
+const PATH_SCOPE = (env.EVAL_PATH_SCOPE ?? "")
+  .split(",")
+  .map((id) => id.trim())
+  .filter((id) => id.length > 0);
+
+/** Offline contract gates — always run, never path-scoped. */
+const ALWAYS_RUN_GATES = new Set(["G1-contract", "G1-roleplay-contract"]);
+
+function assertPathScopeAllowed(): void {
+  if (PATH_SCOPE.length === 0) {
+    return;
+  }
+  if (!pathScopeAllowed(TIER)) {
+    throw new Error(
+      "EVAL_PATH_SCOPE is alleen toegestaan op EVAL_TIER=pr; de merge-queue loopt altijd het volledige register.",
+    );
+  }
+  const known = new Set<string>(GATE_SPECS.map((spec) => spec.id));
+  const unknown = PATH_SCOPE.filter((id) => !known.has(id));
+  if (unknown.length > 0) {
+    throw new Error(
+      `EVAL_PATH_SCOPE names unknown gate id(s): ${unknown.join(", ")}. Known ids: ${[...known].join(", ")}.`,
+    );
+  }
+}
+
+function isInPathScope(gateId: string): boolean {
+  if (PATH_SCOPE.length === 0 || ALWAYS_RUN_GATES.has(gateId)) {
+    return true;
+  }
+  return PATH_SCOPE.includes(gateId);
+}
+
 const {
   gateResults,
   pushGate,
   pushUnavailable,
+  pushNotApplicable,
   credentialsAvailable,
   requirementLabel,
 } = createEvalHarness({ requireAll: REQUIRE_ALL, requireDb: REQUIRE_DB });
@@ -1127,6 +1180,7 @@ async function fundLayerChecks(set: GoldenFundSet): Promise<Check[]> {
     agentKey,
     corpusVersion: set.corpusVersion,
     fixtureHash: set.fixtureHash,
+    contentStatus: set.contentStatus,
     answerableQueries: answerable.length,
     metrics: {
       hitAt1: metrics.recallAtK[1] ?? 0,
@@ -1141,12 +1195,20 @@ async function fundLayerChecks(set: GoldenFundSet): Promise<Check[]> {
     cases: diagnoses,
   });
 
+  // Recall on scaffold/starter sets is advisory on the PR path — how well a fixture question
+  // matches dummy text is content, not mechanism. Composition, reachability and refusal-guard stay
+  // blocking everywhere (pipeline promises).
+  const recallAdvisory = TIER === "pr" && set.contentStatus !== "fund-reviewed";
+  const recall = recallChecks(`fund "${set.key}" retrieval`, metrics, RETRIEVAL_INTEGRATION_THRESHOLDS).map(
+    (check) => (recallAdvisory ? { ...check, advisory: true } : check),
+  );
+
   return [
     // Composition first: when the corpus is not what it claims to be, every number below — including
     // reachability — is measured against the wrong documents.
     ...corpusCompositionCheck(set, corpusDocuments),
     fixtureReachabilityCheck(set, diagnoses, catalog),
-    ...recallChecks(`fund "${set.key}" retrieval`, metrics, RETRIEVAL_INTEGRATION_THRESHOLDS),
+    ...recall,
     {
       name: `fund "${set.key}" refusal-guard: >= ${String(requiredEmpty)} out-of-corpus probes return 0 hits (refuse-without-LLM)`,
       ok: emptyProbes >= requiredEmpty,
@@ -1353,56 +1415,115 @@ function answerLevelChecks(aggregate: AggregateScores): Check[] {
     `  under-refusal         ${pct(aggregate.underRefusalRate)}  (${String(aggregate.underRefusalCount)} refusal case(s) answered; gate <= ${String(ANSWER_THRESHOLDS.maxUnderRefusalCount)})\n`,
   );
 
-  return [
+  // One entry per ANSWER_CHECK_KIND key so the checklist cannot drift from the classification.
+  const absolute: {
+    key: keyof typeof ANSWER_CHECK_KIND;
+    name: string;
+    ok: boolean;
+    detail?: string;
+  }[] = [
     {
+      key: "hardHallucination",
       name: `answer: hard-hallucination >= ${pct(ANSWER_THRESHOLDS.hardHallucination)} (invented amounts/terms/articles)`,
       ok: aggregate.hardHallucination >= ANSWER_THRESHOLDS.hardHallucination,
     },
     {
+      key: "softFaithfulness",
       name: `answer: soft-faithfulness >= ${pct(ANSWER_THRESHOLDS.softFaithfulness)} (answerable cases only; refusals excluded)`,
       ok: aggregate.faithfulness >= ANSWER_THRESHOLDS.softFaithfulness,
     },
     {
+      key: "relevance",
       name: `answer: relevance >= ${pct(ANSWER_THRESHOLDS.relevance)} (addresses the actual question; answerable cases only)`,
       ok: aggregate.relevance >= ANSWER_THRESHOLDS.relevance,
     },
     {
+      key: "citationCorrectness",
       name: `answer: citation-correctness >= ${pct(ANSWER_THRESHOLDS.citationCorrectness)} (answerable cases only; refusals excluded)`,
       ok: aggregate.citationCorrectness >= ANSWER_THRESHOLDS.citationCorrectness,
     },
     {
+      key: "completeness",
       name: `answer: completeness >= ${pct(ANSWER_THRESHOLDS.completeness)} (answerable cases only; refusals excluded)`,
       ok: aggregate.completeness >= ANSWER_THRESHOLDS.completeness,
     },
     {
+      key: "refusalCalibration",
       name: `answer: refusal-calibration >= ${pct(ANSWER_THRESHOLDS.refusalCalibration)}`,
       ok: aggregate.refusalCalibration >= ANSWER_THRESHOLDS.refusalCalibration,
     },
     {
+      key: "maxUnverifiedCount",
       name: `answer: citation-verification — <= ${String(ANSWER_THRESHOLDS.maxUnverifiedCount)} of ${String(aggregate.caseCount)} cases with an unverified citation (raw generation slip; strip pipeline guarantees 0 reach the user)`,
       ok: aggregate.unverifiedCitationCount <= ANSWER_THRESHOLDS.maxUnverifiedCount,
       detail: `${String(aggregate.unverifiedCitationCount)} unverified; rate ${pct(aggregate.citationVerification)}`,
     },
     {
+      key: "maxOrphanRate",
       name: `answer: orphan-source-rate <= ${pct(ANSWER_THRESHOLDS.maxOrphanRate)} (source without [n])`,
       ok: aggregate.orphanRate <= ANSWER_THRESHOLDS.maxOrphanRate,
     },
     {
+      key: "maxDanglingCount",
       name: `answer: dangling-marker — <= ${String(ANSWER_THRESHOLDS.maxDanglingCount)} of ${String(aggregate.caseCount)} cases with a dangling [n] (raw generation slip; reconciled before the user)`,
       ok: aggregate.danglingCaseCount <= ANSWER_THRESHOLDS.maxDanglingCount,
       detail: `${String(aggregate.danglingCaseCount)} dangling; rate ${pct(aggregate.danglingMarkerRate)}`,
     },
     {
+      key: "maxOverRefusalRate",
       name: `answer: over-refusal-rate <= ${pct(ANSWER_THRESHOLDS.maxOverRefusalRate)} (answerable but refused)`,
       ok: aggregate.overRefusalRate <= ANSWER_THRESHOLDS.maxOverRefusalRate,
     },
     {
+      key: "maxUnderRefusalCount",
       name: `answer: under-refusal — <= ${String(ANSWER_THRESHOLDS.maxUnderRefusalCount)} refusal case(s) answered (grounded slip; hard-hallucination still absolute)`,
       ok: aggregate.underRefusalCount <= ANSWER_THRESHOLDS.maxUnderRefusalCount,
       detail: `${String(aggregate.underRefusalCount)} of refusal cases answered; rate ${pct(aggregate.underRefusalRate)}`,
     },
+  ];
+
+  return [
+    ...absolute.map(({ key, name, ok, detail }) => {
+      const advisory = isAdvisory(ANSWER_CHECK_KIND[key], TIER);
+      return {
+        name,
+        ok,
+        ...(detail === undefined ? {} : { detail }),
+        ...(advisory ? { advisory: true } : {}),
+      };
+    }),
     ...answerRegressionChecks(aggregate),
   ];
+}
+
+/** Map a regression metric label to the ANSWER_CHECK_KIND key whose kind it inherits. */
+const REGRESSION_KIND_BY_LABEL: Record<string, keyof typeof ANSWER_CHECK_KIND> = {
+  "hard-hallucination": "hardHallucination",
+  "soft-faithfulness": "softFaithfulness",
+  relevance: "relevance",
+  "citation-correctness": "citationCorrectness",
+  completeness: "completeness",
+  "citation-verification": "maxUnverifiedCount",
+  "over-refusal-rate": "maxOverRefusalRate",
+  "orphan-source-rate": "maxOrphanRate",
+  "dangling-marker-rate": "maxDanglingCount",
+};
+
+function regressionCheck(
+  label: string,
+  name: string,
+  ok: boolean,
+  detail: string,
+): Check {
+  const key = REGRESSION_KIND_BY_LABEL[label];
+  const kind: CheckKind = key === undefined ? "mechanism" : ANSWER_CHECK_KIND[key];
+  const advisory = isAdvisory(kind, TIER);
+  return {
+    name,
+    ok,
+    detail,
+    ...(advisory ? { advisory: true } : {}),
+  };
 }
 
 /** Regression-relative answer checks against the committed baseline (same corpus snapshot only). */
@@ -1456,16 +1577,22 @@ function answerRegressionChecks(aggregate: AggregateScores): Check[] {
         ][])),
   ];
   return [
-    ...higherIsBetter.map(([label, now, was]) => ({
-      name: `answer regression: ${label} within ${pct(REL_TOLERANCE)} of baseline`,
-      ok: now >= was - REL_TOLERANCE,
-      detail: `${now.toFixed(3)} vs baseline ${was.toFixed(3)}`,
-    })),
-    ...lowerIsBetter.map(([label, now, was]) => ({
-      name: `answer regression: ${label} not more than ${pct(REL_TOLERANCE)} above baseline`,
-      ok: now <= was + REL_TOLERANCE,
-      detail: `${now.toFixed(3)} vs baseline ${was.toFixed(3)}`,
-    })),
+    ...higherIsBetter.map(([label, now, was]) =>
+      regressionCheck(
+        label,
+        `answer regression: ${label} within ${pct(REL_TOLERANCE)} of baseline`,
+        now >= was - REL_TOLERANCE,
+        `${now.toFixed(3)} vs baseline ${was.toFixed(3)}`,
+      ),
+    ),
+    ...lowerIsBetter.map(([label, now, was]) =>
+      regressionCheck(
+        label,
+        `answer regression: ${label} not more than ${pct(REL_TOLERANCE)} above baseline`,
+        now <= was + REL_TOLERANCE,
+        `${now.toFixed(3)} vs baseline ${was.toFixed(3)}`,
+      ),
+    ),
   ];
 }
 
@@ -1627,6 +1754,12 @@ async function fundLayerGroups(): Promise<GateGroup[]> {
 
 /** Resolve prerequisites, run (or skip/fail) one gate, and return whether the run stays green. */
 async function runGate(spec: GateSpec): Promise<boolean> {
+  if (!isInPathScope(spec.id)) {
+    return pushNotApplicable(
+      spec,
+      `path scope excludes this gate (EVAL_PATH_SCOPE=${PATH_SCOPE.join(",")})`,
+    );
+  }
   // A perFundSet gate with zero discovered sets has nothing to run and emits no report.
   if (spec.perFundSet === true && goldenFundSets.length === 0) {
     return true;
@@ -1662,6 +1795,9 @@ function writeRunArtefact(passed: boolean): void {
       // Empty = the full registry ran. Non-empty makes the artefact self-identifying as partial, so
       // a green report cannot be read as a verdict about gates that never executed.
       onlyGates: GATE_FILTER,
+      tier: TIER,
+      contentGatesBlocking: CONTENT_GATES_BLOCKING,
+      pathScope: PATH_SCOPE,
     },
     models: {
       generator: EVAL_LLM_MODEL,
@@ -1704,10 +1840,17 @@ async function main(): Promise<void> {
   let completed = false;
 
   assertGateFilterAllowed();
+  assertPathScopeAllowed();
   if (GATE_FILTER.length > 0) {
     console.warn(
       `\nPARTIAL RUN — EVAL_ONLY=${GATE_FILTER.join(",")}. The other gates did not run and this ` +
         "report says nothing about them.\n",
+    );
+  }
+  if (PATH_SCOPE.length > 0) {
+    console.warn(
+      `\nPARTIAL RUN — EVAL_PATH_SCOPE=${PATH_SCOPE.join(",")}. Gates outside this scope are ` +
+        "not-applicable; G1 contracts still run.\n",
     );
   }
 
