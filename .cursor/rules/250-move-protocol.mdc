@@ -20,6 +20,9 @@ Bij het verplaatsen of hernoemen van code binnen de monorepo (zie `docs/plans/PL
 - `packages/ui` kent geen `packages/agents`-concepten (`no-ui-to-agents`); UI is props-in.
 - `apps/playground` is UI-only en importeert nooit `packages/agents` (`no-playground-to-agents`); het praat
   met de runtime over HTTP.
+- `apps/roleplay` is UI-only en importeert nooit `packages/agents` (`no-roleplay-to-agents`); het praat
+  met de runtime over HTTP. Beurtenteller en doelstrip blijven app-lokaal tot een tweede consumer
+  (regel van drie / D16).
 - Handhaving loopt via de **bestaande** dependency-cruiser (`.dependency-cruiser.cjs`) + ESLint
   `no-restricted-imports` + `scripts/check-ui-boundaries.sh`. Introduceer géén tweede grenstool (v4-principe).
 - Voeg een nieuwe app/package toe aan deze regelset zodra hij bestaat.
@@ -28,4 +31,5 @@ Bij het verplaatsen of hernoemen van code binnen de monorepo (zie `docs/plans/PL
 
 - `apps/runtime` — API-only, fonds-agnostisch (D14). Geen UI.
 - `apps/playground` — publieke tenant-zero-demo-UI (D13). Geen agent-/businesslogica.
-- `packages/tenant` — enige bron voor tenant↔fund-mapping (D15).
+- `apps/roleplay` — leerling-UI voor het rollenspel. HTTP-only, iframebaar (LMS, fase 8).
+- `packages/tenant` — enige bron voor tenant↔fonds-mapping (D15).

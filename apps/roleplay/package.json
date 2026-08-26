@@ -1,0 +1,33 @@
+{
+  "name": "roleplay",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --webpack --port 3004",
+    "build": "next build --webpack",
+    "start": "next start --port 3004",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test:unit": "tsx --test 'lib/**/*.test.ts'"
+  },
+  "dependencies": {
+    "@wunderstack/shared": "workspace:*",
+    "@wunderstack/ui": "workspace:*",
+    "lucide-react": "^1.23.0",
+    "next": "16.2.9",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.2",
+    "@types/node": "22.20.0",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "eslint": "10.6.0",
+    "postcss": "^8.5.16",
+    "tailwindcss": "^4.3.2",
+    "tsx": "4.22.4",
+    "typescript": "6.0.3"
+  }
+}

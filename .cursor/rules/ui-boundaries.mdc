@@ -24,4 +24,5 @@ Primitive and semantic CSS lives under `packages/ui/src/tokens/`.
 ## Removability
 
 `apps/playground` is a leaf consumer. Removing it must leave the repo green (only route registration
-removed). `apps/runtime` is API-only and does not consume `packages/ui`.
+removed). `apps/roleplay` is the same kind of leaf: HTTP-only, no agent seam. `apps/runtime` is
+API-only and does not consume `packages/ui`.

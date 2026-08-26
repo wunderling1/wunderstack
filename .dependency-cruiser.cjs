@@ -10,6 +10,14 @@ module.exports = {
       to: { path: "^packages/agents/" },
     },
     {
+      name: "no-roleplay-to-agents",
+      comment:
+        "The roleplay learner UI is HTTP-only: it talks to the runtime over HTTP, never imports the agent seam (or db/rag/ai/analytics), so Mastra stays out of a page that an LMS will iframe.",
+      severity: "error",
+      from: { path: "^apps/roleplay/" },
+      to: { path: "^packages/(agents|db|rag|ai|analytics)/" },
+    },
+    {
       name: "no-playground-to-agents",
       comment:
         "The playground is UI-only (tenant-zero demo, D14): it talks to the runtime over HTTP, never imports the agent seam directly. Keeps agent + hardening logic in one place.",
