@@ -83,6 +83,25 @@ export function pathScopeAllowed(tier: EvalTier): boolean {
   return tier === "pr";
 }
 
+/**
+ * Sentinel written by `scripts/ci/resolve-path-scope.sh` when a PR diff touches neither grounded
+ * nor roleplay surfaces. Distinct from an empty `EVAL_PATH_SCOPE` (full registry on push/merge).
+ */
+export const PATH_SCOPE_NONE = "none";
+
+/** Split `EVAL_PATH_SCOPE` into ids. Empty string → `[]` (full registry). `"none"` → `["none"]`. */
+export function parsePathScopeIds(raw: string | undefined): string[] {
+  return (raw ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter((id) => id.length > 0);
+}
+
+/** True when the scope is the docs-/untouched-PR sentinel (G2 not-applicable; G1 still runs). */
+export function isPathScopeNone(scope: readonly string[]): boolean {
+  return scope.length === 1 && scope[0] === PATH_SCOPE_NONE;
+}
+
 /** True when a check of this kind should be advisory (WARN, not FAIL) under the given tier. */
 export function isAdvisory(kind: CheckKind, tier: EvalTier): boolean {
   return kind === "content" && !contentGatesBlocking(tier);

@@ -109,14 +109,14 @@ elif [ "$need_roleplay" -eq 1 ]; then
   scope="$ROLEPLAY_GATES"
   explain="roleplay (${trigger_roleplay})"
 else
-  scope=""
+  scope="none"
   explain="none — diff does not touch grounded or roleplay surfaces"
 fi
 
-if [ -n "$scope" ]; then
-  echo "Path scope: ${scope} — ${explain}" >&2
+if [ "$scope" = "none" ]; then
+  echo "Path scope: none — G2 behavioural gates not-applicable; G1 still runs — ${explain}" >&2
 else
-  echo "Path scope: (empty — G2 behavioural gates not-applicable; G1 still runs) — ${explain}" >&2
+  echo "Path scope: ${scope} — ${explain}" >&2
 fi
 
 printf '%s\n' "$scope"

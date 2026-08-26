@@ -6,6 +6,9 @@ import {
   ANSWER_CHECK_KIND,
   contentGatesBlocking,
   isAdvisory,
+  isPathScopeNone,
+  parsePathScopeIds,
+  PATH_SCOPE_NONE,
   pathScopeAllowed,
   resolveTier,
   ROLEPLAY_CHECK_KIND,
@@ -110,5 +113,23 @@ describe("resolveTier / contentGatesBlocking / pathScopeAllowed", () => {
     assert.equal(isAdvisory("content", "pr"), true);
     assert.equal(isAdvisory("content", "merge"), false);
     assert.equal(isAdvisory("mechanism", "pr"), false);
+  });
+});
+
+describe("parsePathScopeIds / isPathScopeNone", () => {
+  it("empty or unset means full registry (not the none sentinel)", () => {
+    assert.deepEqual(parsePathScopeIds(undefined), []);
+    assert.deepEqual(parsePathScopeIds(""), []);
+    assert.equal(isPathScopeNone([]), false);
+  });
+
+  it("parses the none sentinel as a single-token scope", () => {
+    assert.deepEqual(parsePathScopeIds(PATH_SCOPE_NONE), [PATH_SCOPE_NONE]);
+    assert.equal(isPathScopeNone([PATH_SCOPE_NONE]), true);
+  });
+
+  it("parses a comma-separated gate id list", () => {
+    assert.deepEqual(parsePathScopeIds("G2-answer, G2-retrieval"), ["G2-answer", "G2-retrieval"]);
+    assert.equal(isPathScopeNone(["G2-answer"]), false);
   });
 });

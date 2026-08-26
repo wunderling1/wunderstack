@@ -96,6 +96,8 @@ import {
   ANSWER_CHECK_KIND,
   contentGatesBlocking,
   isAdvisory,
+  isPathScopeNone,
+  parsePathScopeIds,
   pathScopeAllowed,
   resolveTier,
   type CheckKind,
@@ -204,13 +206,13 @@ function assertGateFilterAllowed(): void {
 }
 
 /**
- * PR path-scope: which gates the diff can touch. Empty = full registry. Never scopes G1 contracts
- * (offline and free). Refused outside EVAL_TIER=pr so the merge queue always runs everything.
+ * PR path-scope: which gates the diff can touch.
+ * - Empty = full registry (push / merge_group / schedule, or unset locally).
+ * - `["none"]` = docs-/untouched PR: G2 not-applicable; G1 contracts still run.
+ * - Otherwise = the listed gate ids.
+ * Refused outside EVAL_TIER=pr so the merge queue always runs everything.
  */
-const PATH_SCOPE = (env.EVAL_PATH_SCOPE ?? "")
-  .split(",")
-  .map((id) => id.trim())
-  .filter((id) => id.length > 0);
+const PATH_SCOPE = parsePathScopeIds(env.EVAL_PATH_SCOPE);
 
 /** Offline contract gates — always run, never path-scoped. */
 const ALWAYS_RUN_GATES = new Set(["G1-contract", "G1-roleplay-contract"]);
@@ -224,6 +226,10 @@ function assertPathScopeAllowed(): void {
       "EVAL_PATH_SCOPE is alleen toegestaan op EVAL_TIER=pr; de merge-queue loopt altijd het volledige register.",
     );
   }
+  // Sentinel from resolve-path-scope.sh — not a gate id.
+  if (isPathScopeNone(PATH_SCOPE)) {
+    return;
+  }
   const known = new Set<string>(GATE_SPECS.map((spec) => spec.id));
   const unknown = PATH_SCOPE.filter((id) => !known.has(id));
   if (unknown.length > 0) {
@@ -234,8 +240,15 @@ function assertPathScopeAllowed(): void {
 }
 
 function isInPathScope(gateId: string): boolean {
-  if (PATH_SCOPE.length === 0 || ALWAYS_RUN_GATES.has(gateId)) {
+  if (ALWAYS_RUN_GATES.has(gateId)) {
     return true;
+  }
+  // Empty = full registry (merge/push). Sentinel none = G2 not-applicable.
+  if (PATH_SCOPE.length === 0) {
+    return true;
+  }
+  if (isPathScopeNone(PATH_SCOPE)) {
+    return false;
   }
   return PATH_SCOPE.includes(gateId);
 }

@@ -58,6 +58,10 @@ scaffold-content is, wordt hij gemeten en gerapporteerd, niet afgedwongen. Beslu
 | `advisory-failed` | Check gedraaid, rood, zichtbaar als `[WARN]` — blokkeert de merge niet |
 | `not-applicable` | Gate bewust niet gedraaid (PR path-scope); G1-contracts blijven altijd lopen |
 
+`EVAL_PATH_SCOPE` op het PR-pad: lege waarde = volledig register (zoals push/merge); `none` =
+diff raakt geen grounded-/roleplay-paden → G2 `not-applicable`; anders een komma-lijst van
+gate-ids. `none` is een sentinel van `scripts/ci/resolve-path-scope.sh`, geen gate-id.
+
 | `EVAL_TIER` | Wanneer (CI) | Content floors |
 |---|---|---|
 | `pr` | `pull_request` | advisory |

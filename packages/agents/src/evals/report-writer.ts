@@ -251,7 +251,7 @@ export interface EvalReport {
     tier: "pr" | "merge" | "nightly";
     /** Whether content floors blocked under that tier. */
     contentGatesBlocking: boolean;
-    /** Gate ids from EVAL_PATH_SCOPE. Empty = no path filter. */
+    /** Gate ids from EVAL_PATH_SCOPE. Empty = full registry; `["none"]` = G2 not-applicable. */
     pathScope?: string[];
   };
   models: {
