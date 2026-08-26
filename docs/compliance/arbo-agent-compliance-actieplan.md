@@ -8,6 +8,9 @@ Duurzame bron: [Beleidsregel arbocatalogi 2019](https://wetten.overheid.nl/BWBR0
 > komen uit PR-0 punt 2 (OOMT-goedkeuring) en zijn **nog niet vastgesteld**. Implementeer ze niet
 > uit dit document totdat die goedkeuring in `docs/compliance/` of in `arbo/prompt.ts`-commentaren
 > is vastgelegd met bronvermelding.
+>
+> **Deel B3 (G5) is niet geland.** De asserties hangen op tag `archive/arbo-answergate-2026-08-25`.
+> Ze zijn geen release-gate tot ze vanaf verse `main` zijn overgezet.
 
 ## Doel
 
@@ -43,8 +46,10 @@ Niet in de answergate-reeks (hangt aan A1-metadata):
 
 ## Deel B3 — deterministische asserties (G5)
 
-Release-blokkerend. Judge-scores (faithfulness / relevance / completeness) blokkeren **niet**
-(generator == judge == `mistral-large-2512`).
+> **Niet geland op `main`.** Deze checks bestaan niet in de gate-registry. Broncode hangt op
+> tag `archive/arbo-answergate-2026-08-25`. Bedoeling ná restack: release-blokkerend; tot die tijd
+> geen G5-gate. Judge-scores (faithfulness / relevance / completeness) blokkeren **niet**
+> (generator == judge == `mistral-large-2512`).
 
 | Id | Wanneer actief | Assertie |
 |---|---|---|
