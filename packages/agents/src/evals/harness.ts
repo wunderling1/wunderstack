@@ -47,6 +47,8 @@ export function createEvalHarness(options: EvalHarnessOptions): EvalHarness {
     switch (requires) {
       case "none":
         return "";
+      case "mistral":
+        return "MISTRAL_API_KEY not set";
       case "scaleway":
         return "SCALEWAY_API_KEY not set";
       case "scaleway+mistral":
@@ -62,6 +64,8 @@ export function createEvalHarness(options: EvalHarnessOptions): EvalHarness {
     switch (requires) {
       case "none":
         return true;
+      case "mistral":
+        return Boolean(env.MISTRAL_API_KEY);
       case "scaleway":
         return Boolean(env.SCALEWAY_API_KEY);
       case "scaleway+mistral":

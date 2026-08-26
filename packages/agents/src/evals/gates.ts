@@ -10,6 +10,15 @@
  *
  * G4 (runtime hard-fact guard) is enforced on the served path in production (cao/agent.ts), not by
  * this eval harness, so it is deliberately NOT a registry entry.
+ *
+ * The roleplay gates are the one place where "a new capability is a case-category, not a gate" does
+ * not apply, and the reason is worth stating: roleplay is not a capability of the grounded agent, it
+ * is a second agent type whose failure modes have no overlap with the grounded ones. Nothing in
+ * G2-retrieval or G2-answer says anything about a persona that admits it is a language model, leaks
+ * the subtext in its first sentence, or hands the same transcript two different grades. They are new
+ * risks, so they are new gates — but inside the existing four layers, because the layers describe
+ * WHEN and against WHAT a gate runs (offline contract / fixtures + keys / real corpus), which does
+ * not change per agent. See DECISION-roleplay-agent.md and GATE-ARCHITECTURE.md §"Rollenspel".
  */
 
 /** Layer identifiers of the four-layer gate model. */
@@ -22,6 +31,7 @@ export type GateLayer = "G1" | "G2" | "G3";
  */
 export type GateRequirement =
   | "none"
+  | "mistral"
   | "scaleway"
   | "scaleway+mistral"
   | "db+scaleway"
@@ -50,6 +60,12 @@ export const GATE_SPECS = [
     title: "prompt, clarify & fund-scoping CONTRACT (change-detector, not a behavioral gate)",
   },
   {
+    id: "G1-roleplay-contract",
+    layer: "G1",
+    requires: "none",
+    title: "roleplay prompt & scoring CONTRACT (change-detector, not a behavioral gate)",
+  },
+  {
     id: "G2-retrieval",
     layer: "G2",
     requires: "scaleway",
@@ -66,6 +82,18 @@ export const GATE_SPECS = [
     layer: "G2",
     requires: "scaleway+mistral",
     title: "answer-level quality",
+  },
+  {
+    id: "G2-roleplay-persona",
+    layer: "G2",
+    requires: "mistral",
+    title: "roleplay persona behaviour: stays in role, withholds the hidden layer, ends on time",
+  },
+  {
+    id: "G2-roleplay-review",
+    layer: "G2",
+    requires: "mistral",
+    title: "roleplay review stability: same transcript, same grade",
   },
   {
     id: "G3-pipeline",
