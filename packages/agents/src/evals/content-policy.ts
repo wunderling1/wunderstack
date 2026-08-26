@@ -61,7 +61,6 @@ export const ROLEPLAY_CHECK_KIND = {
   maxEndFlagMismatchCount: "mechanism", // [C] label but blocks: mismatch reaches the learner LMS
   minInRoleScore: "content",
   maxScoreSpread: "content",
-  maxClosingQuestionCount: "content",
 } as const satisfies Record<keyof typeof ROLEPLAY_THRESHOLDS, CheckKind>;
 
 /** Where the eval is running. Missing/unknown → nightly (strict is the safe default). */

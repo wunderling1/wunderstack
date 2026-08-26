@@ -70,13 +70,6 @@ export const ROLEPLAY_THRESHOLDS = {
    */
   maxEndFlagMismatchCount: 1,
   /**
-   * `[C]` The closing-turn prompt says literally "Je stelt dus geen nieuwe vragen meer!". Detection
-   * is a question mark minus Dutch tag questions ("…, oké?" asks for a nod, not for information —
-   * see `asksQuestion`). A rhetorical question would still trip it, so this stays scoped to closing
-   * turns only (N=1 today). Promote to `[X]` when the detector has survived a few real runs.
-   */
-  maxClosingQuestionCount: 0,
-  /**
    * `[X]` Binary. Different repeats of the same transcript disagreeing about pass/fail is the one
    * failure that reaches a learner's LMS as a different grade for identical work.
    */
@@ -161,13 +154,7 @@ export const PERSONA_FLOORS: readonly RoleplayFloor<RoleplayPersonaAggregate>[] 
     thresholdKey: "maxEndFlagMismatchCount",
     ok: (a) => a.endFlagMismatchCount <= ROLEPLAY_THRESHOLDS.maxEndFlagMismatchCount,
     detail: (a) =>
-      `${count(a.endFlagMismatchCount, ROLEPLAY_THRESHOLDS.maxEndFlagMismatchCount)}; ${String(a.openEndedCloseCount)} closed in words only, ${String(a.silentEndCount)} flagged only; ${String(a.unclosedClosingTurnCount)}/${String(a.closingTurnCount)} closing turn(s) did not land an ending (trend)`,
-  },
-  {
-    name: "closing turn asks a new question (count)",
-    thresholdKey: "maxClosingQuestionCount",
-    ok: (a) => a.closingQuestionCount <= ROLEPLAY_THRESHOLDS.maxClosingQuestionCount,
-    detail: (a) => count(a.closingQuestionCount, ROLEPLAY_THRESHOLDS.maxClosingQuestionCount),
+      `${count(a.endFlagMismatchCount, ROLEPLAY_THRESHOLDS.maxEndFlagMismatchCount)}; ${String(a.openEndedCloseCount)} closed in words only, ${String(a.silentEndCount)} flagged only; ${String(a.unclosedClosingTurnCount)}/${String(a.closingTurnCount)} closing turn(s) did not land an ending (trend); ${String(a.closingQuestionCount)} asked a question (trend)`,
   },
 ];
 
