@@ -17,6 +17,7 @@ export function fundTabHref(fundKey: string, segment: FundTabSegment): string {
 /**
  * Which fund tab is active for a pathname. Agent detail pages
  * (`…/agents/<agentKey>`) keep the Agents tab current.
+ * Those routes sit outside `(fund-console)`, so fund chrome is not mounted there.
  */
 export function activeFundTab(pathname: string, fundKey: string): FundTabSegment {
   const base = `/admin/funds/${fundKey}`;

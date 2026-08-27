@@ -1,17 +1,15 @@
-import { listInstances } from "@wunderstack/db";
 import { Chip, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@wunderstack/ui";
 import Link from "next/link";
 import { auth } from "@/auth";
+import { listInstancesCached } from "@/lib/fund-lookups";
 import { agentLabel } from "@/lib/release-manifest";
-
-export const dynamic = "force-dynamic";
 
 export default async function FundAgentsListPage() {
   const session = await auth();
   const tenantId = session?.user?.tenantId;
   if (!tenantId) return null;
 
-  const instances = await listInstances(tenantId);
+  const instances = await listInstancesCached(tenantId);
 
   return (
     <div className="flex flex-col gap-4">

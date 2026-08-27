@@ -5,8 +5,6 @@ import { FundAreaTabNav } from "@/components/fund/area-tab-nav";
 import { TopBar } from "@/components/top-bar";
 import { decideAccess } from "@/lib/authz";
 
-export const dynamic = "force-dynamic";
-
 export default async function FundLayout({ children }: { children: ReactNode }) {
   const session = await auth();
   const decision = decideAccess(session, "fund");

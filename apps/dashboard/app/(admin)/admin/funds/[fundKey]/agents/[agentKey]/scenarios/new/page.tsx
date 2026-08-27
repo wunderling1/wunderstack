@@ -4,8 +4,6 @@ import { notFound } from "next/navigation";
 import { parseAgentKey, parseFundKey } from "@/lib/route-params";
 import { ScenarioForm } from "../scenario-form";
 
-export const dynamic = "force-dynamic";
-
 export default async function NewRoleplayScenarioPage({
   params,
 }: {

@@ -1,4 +1,4 @@
-import { getKpiSummary, getRecentInteractions } from "@wunderstack/analytics";
+import { getAgentOverview } from "@wunderstack/analytics";
 import {
   Chip,
   KpiTile,
@@ -27,11 +27,10 @@ export async function AgentOverviewPanel({
   fundKey: string;
   agentKey: string;
 }) {
-  const win = { fundKey, agentId: agentKey, since: sinceDaysAgo(WINDOW_DAYS) };
-  const [summary, log] = await Promise.all([
-    getKpiSummary(win),
-    getRecentInteractions(win, 25),
-  ]);
+  const { summary, log } = await getAgentOverview(
+    { fundKey, agentId: agentKey, since: sinceDaysAgo(WINDOW_DAYS) },
+    25,
+  );
   const manifest = getReleaseManifest(agentKey);
 
   return (

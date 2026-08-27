@@ -1,10 +1,8 @@
-import { getFund, getLatestFundDump } from "@wunderstack/db";
 import { Card } from "@wunderstack/ui";
 import { notFound } from "next/navigation";
+import { getFundCached, getLatestFundDumpCached } from "@/lib/fund-lookups";
 import { parseFundKey } from "@/lib/route-params";
-import { DeactivateForm, DumpForm, UpdateNameForm } from "../manage-forms";
-
-export const dynamic = "force-dynamic";
+import { DeactivateForm, DumpForm, UpdateNameForm } from "../../manage-forms";
 
 const dateTime = new Intl.DateTimeFormat("nl-NL", { dateStyle: "short", timeStyle: "short" });
 
@@ -17,10 +15,10 @@ export default async function FundManagePage({
   const fundKey = parseFundKey(raw);
   if (!fundKey) notFound();
 
-  const fund = await getFund(fundKey);
+  const fund = await getFundCached(fundKey);
   if (!fund) notFound();
 
-  const latestDump = await getLatestFundDump(fundKey);
+  const latestDump = await getLatestFundDumpCached(fundKey);
   const active = fund.status === "active";
   const displayName = fund.name ?? fund.key;
 

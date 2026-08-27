@@ -1,11 +1,9 @@
-import { getFund, getFundTheme, listInstances } from "@wunderstack/db";
 import { AGENT_KEY_LABELS } from "@wunderstack/shared";
 import { Card } from "@wunderstack/ui";
 import { notFound } from "next/navigation";
+import { getFundCached, listInstancesCached } from "@/lib/fund-lookups";
 import { parseFundKey } from "@/lib/route-params";
 import { BrandingForm } from "./branding-form";
-
-export const dynamic = "force-dynamic";
 
 export default async function FundBrandingPage({
   params,
@@ -16,14 +14,11 @@ export default async function FundBrandingPage({
   const fundKey = parseFundKey(raw);
   if (!fundKey) notFound();
 
-  const fund = await getFund(fundKey);
+  const fund = await getFundCached(fundKey);
   if (!fund) notFound();
 
-  const [themeRaw, instances] = await Promise.all([
-    getFundTheme(fundKey),
-    listInstances(fundKey),
-  ]);
-  const theme = themeRaw as {
+  const instances = await listInstancesCached(fundKey);
+  const theme = (fund.theme ?? {}) as {
     primary?: string;
     accent?: string;
     radius?: string;

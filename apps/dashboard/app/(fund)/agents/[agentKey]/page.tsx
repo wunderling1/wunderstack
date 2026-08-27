@@ -1,10 +1,11 @@
-import { getInstance } from "@wunderstack/db";
 import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { AgentOverviewPanel } from "@/components/fund/agent-overview-panel";
+import { getInstanceCached } from "@/lib/fund-lookups";
 import { agentLabel } from "@/lib/release-manifest";
 import { parseAgentKey } from "@/lib/route-params";
 
+/** KPI surface — always fetch. Config tabs are cached separately. */
 export const dynamic = "force-dynamic";
 
 /**
@@ -24,7 +25,7 @@ export default async function FundAgentPage({
   const agentKey = parseAgentKey(raw);
   if (!agentKey) notFound();
 
-  const instance = await getInstance(tenantId, agentKey);
+  const instance = await getInstanceCached(tenantId, agentKey);
   if (!instance) notFound();
 
   return (

@@ -8,8 +8,10 @@ import {
   PgDumpFailedError,
   PgDumpMissingError,
 } from "@wunderstack/db";
+import { revalidateTag } from "next/cache";
 import { auth } from "@/auth";
 import { decideAccess } from "@/lib/authz";
+import { fundConfigTag } from "@/lib/config-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -34,9 +36,13 @@ export async function POST(
 
   try {
     const dump = await openFundDump(fundKey);
-    void dump.completed.catch((error: unknown) => {
-      console.error("[fund dump]", error instanceof Error ? error.name : "unknown");
-    });
+    void dump.completed
+      .then(() => {
+        revalidateTag(fundConfigTag(fundKey), { expire: 0 });
+      })
+      .catch((error: unknown) => {
+        console.error("[fund dump]", error instanceof Error ? error.name : "unknown");
+      });
     const body = Readable.toWeb(dump.stream) as ReadableStream<Uint8Array>;
     return new Response(body, {
       headers: {

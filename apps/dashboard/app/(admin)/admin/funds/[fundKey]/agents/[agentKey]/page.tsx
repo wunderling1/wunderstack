@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { AgentOverviewPanel } from "@/components/fund/agent-overview-panel";
 import { parseAgentKey, parseFundKey } from "@/lib/route-params";
 
+/** KPI surface — always fetch. Config tabs are cached separately. */
 export const dynamic = "force-dynamic";
 
 export default async function AgentOverviewPage({
