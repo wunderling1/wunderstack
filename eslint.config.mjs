@@ -38,6 +38,18 @@ export default tseslint.config(
     },
   },
   {
+    // Host-page snippet: copied onto fund sites, never executed in Node.
+    files: ["packages/embed/src/loader.js"],
+    languageOptions: {
+      globals: {
+        document: "readonly",
+        window: "readonly",
+        URL: "readonly",
+        URLSearchParams: "readonly",
+      },
+    },
+  },
+  {
     files: ["packages/ui/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-imports": [

@@ -10,27 +10,30 @@ API, and migrates theming from the compile-time `[data-fund]` seam to runtime in
 
 ## Decisions
 
-1. **Embed = React in Shadow DOM, reusing the trust-patterns.** The web component mounts React inside
-   a shadow root and reuses `@wunderstack/ui` (`AnswerCard`, `CitationBlock`, `RefusalNotice`). This
-   keeps citations native to the design system with no drift. Cost: React + Tailwind CSS ship in the
-   bundle (~250 KB min). The chat shell (composer/thread) is embed-local (D16). The embed never
-   imports a server package or `@wunderstack/shared`; contract shapes are mirrored in `src/types.ts`.
+1. **Embed = iframe guest + React panel in Shadow DOM.** The fund pastes a ~3 KB vanilla loader
+   (`/embed.js`). On open, an iframe loads `/embed/frame`, which mounts React inside a shadow root
+   and reuses `@wunderstack/ui` (`AnswerCard`, `CitationBlock`, `RefusalNotice`). React never runs on
+   the fund host page — full document isolation is the procurement argument. Cost: the panel bundle
+   stays large (~600 KB raw / ~145 KB gzip) but only downloads after click, on the runtime origin,
+   with a content-hashed immutable URL. The chat shell (composer/thread) is embed-local (D16). The
+   embed never imports a server package or `@wunderstack/shared`; contract shapes are mirrored in
+   `src/types.ts`.
 
 2. **Stable snippet + `GET /config`.** The snippet carries only `script-src`, `data-key`,
-   `data-agent`. Everything variable (theme, texts, Article 50) is fetched at boot from `GET /config`,
-   so a fund never re-pastes a snippet after a colour/text change.
+   `data-agent`. Everything variable (theme, texts, Article 50) is fetched at boot from `GET /config`
+   *inside the iframe*, so a fund never re-pastes a snippet after a colour/text change.
 
 3. **Runtime theming replaces `[data-fund]` as the product mechanism.** A tenant theme is the curated
    token subset (primary, radius, logo) + NL copy, stored on `control.agent_instances`, served by `GET /config`,
    injected by the embed as CSS custom properties on the shadow host. The `[data-fund]` seam stays in
    `@wunderstack/ui` as the default-theme fallback — not removed.
 
-4. **Public tenant-key + CORS, per tenant.** The key is a public identifier, not a secret: it may sit
-   in the snippet. Access is gated by the per-tenant CORS allowlist + rate limiting, not key secrecy.
-   Rotating the key invalidates old snippets. Enforcement: a browser cross-origin request (Origin
-   present) MUST carry a valid key and an allowlisted origin; a non-browser caller (no Origin: the
-   fund's server-side proxy, curl) is trusted (a supplied key must still be valid). An unconfigured
-   tenant (no agent-instance row) stays open + rate-limited — the tenant-zero demo and local dev.
+4. **Public tenant-key + frame-ancestors / CORS, per tenant.** The key is a public identifier, not a
+   secret: it may sit in the snippet. Host-page framing is gated by CSP `frame-ancestors` on
+   `/embed/frame` from the tenant CORS allowlist. Same-origin chat from the iframe still requires a
+   valid key; browser cross-origin callers (if any) still use the CORS allowlist + rate limiting.
+   Rotating the key invalidates old snippets. An unconfigured tenant (no agent-instance row) stays
+   open + rate-limited — the tenant-zero demo and local dev.
 
 5. **Rate limiting per IP and per key.** The existing per-IP fixed-window limit stays; a per-tenant
    ceiling is added so one fund's whole embed audience is bounded independently of any single IP.

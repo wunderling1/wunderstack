@@ -26,9 +26,23 @@ export const embedCitationSchema = z.object({
 });
 export type EmbedCitation = z.infer<typeof embedCitationSchema>;
 
+/** Early retrieval stub — mirrors shared `retrievedPassageSchema` (not a verified citation). */
+export const retrievedPassageSchema = z.object({
+  ref: z.number().int().positive(),
+  title: z.string(),
+  sourceRef: z.string().nullable(),
+  article: z.string().nullable(),
+});
+export type RetrievedPassage = z.infer<typeof retrievedPassageSchema>;
+
 /** Discriminators must match `@wunderstack/shared` `chatEventSchema`: status|text|citations|followups|done|error. */
 export const chatEventSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("status"), phase: z.string(), count: z.number().optional() }),
+  z.object({
+    type: z.literal("status"),
+    phase: z.string(),
+    count: z.number().optional(),
+    passages: z.array(retrievedPassageSchema).max(50).optional(),
+  }),
   z.object({ type: z.literal("text"), delta: z.string() }),
   z.object({
     type: z.literal("citations"),
@@ -37,13 +51,19 @@ export const chatEventSchema = z.discriminatedUnion("type", [
     citations: z.array(embedCitationSchema),
     answer: z.string(),
     citationVerificationFailed: z.boolean(),
+    runOutcome: z.string().optional(),
   }),
   z.object({
     type: z.literal("followups"),
     questions: z.array(z.string().min(1).max(200)).max(3),
   }),
   z.object({ type: z.literal("done"), traceId: z.string().nullable() }),
-  z.object({ type: z.literal("error"), message: z.string() }),
+  z.object({
+    type: z.literal("error"),
+    message: z.string(),
+    traceId: z.string().nullable().optional(),
+    runOutcome: z.string().optional(),
+  }),
 ]);
 export type ChatEvent = z.infer<typeof chatEventSchema>;
 

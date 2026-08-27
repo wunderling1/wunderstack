@@ -21,15 +21,16 @@
       <p>
         Zet daarna op de Distributie-tab van de agent
         (<code>/admin/funds/&lt;fonds&gt;/agents/&lt;agent&gt;/distribution</code>) de
-        CORS-allowlist op
+        CORS-/frame-allowlist op
         <code>http://localhost:4173</code> en plak de gegenereerde snippet hieronder in (vervang de
-        <code>data-key</code>). De widget verschijnt rechtsonder.
+        <code>data-key</code>). De vanilla loader (~3&nbsp;KB) verschijnt rechtsonder; React laadt
+        pas in een iframe na klik.
       </p>
 
       <!-- Plak hier de snippet uit Distributie (met de echte data-key): -->
       <script
         src="http://localhost:3000/embed.js"
-        data-key="pk_REPLACE_ME"
+        data-key="pk_Blu0wnIhcD0k6LfTu0YcIIcLFVhyNDW8"
         data-agent="cao"
         async
       ></script>

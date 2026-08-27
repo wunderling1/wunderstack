@@ -21,17 +21,7 @@ import { NextResponse, type NextRequest } from "next/server";
  * so `process.env` is read at request time and the `runtime` segment option must NOT be set here.)
  */
 
-// The widget is embedded on funds' own sites, so /widget must allow those origins as frame-ancestors
-// (an allowlist from WIDGET_ALLOWED_ORIGINS, defaulting to same-origin). Every other route is denied.
-function widgetFrameAncestors(): string {
-  const origins = (process.env.WIDGET_ALLOWED_ORIGINS ?? "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0);
-  return origins.length > 0 ? origins.join(" ") : "'self'";
-}
-
-function buildCsp(nonce: string, isWidget: boolean): string {
+function buildCsp(nonce: string): string {
   const isDev = process.env.NODE_ENV !== "production";
   // Next's inline bootstrap scripts are whitelisted via the nonce; 'strict-dynamic' then trusts the
   // chunks those nonced scripts load. Dev additionally needs 'unsafe-eval' for React Fast Refresh.
@@ -53,28 +43,34 @@ function buildCsp(nonce: string, isWidget: boolean): string {
     "base-uri 'self'",
     "form-action 'self'",
     "object-src 'none'",
-    `frame-ancestors ${isWidget ? widgetFrameAncestors() : "'none'"}`,
+    "frame-ancestors 'none'",
   ].join("; ");
 }
 
 export function proxy(request: NextRequest) {
   const nonce = randomBytes(16).toString("base64");
-  const isWidget = request.nextUrl.pathname === "/widget";
-  const csp = buildCsp(nonce, isWidget);
+  const pathname = request.nextUrl.pathname;
+  // /embed/frame sets its own frame-ancestors from the tenant allowlist — skip the global DENY CSP
+  // so we do not fight the route response. Still attach a nonce CSP for Next's own scripts if any.
+  const isEmbedFrame = pathname === "/embed/frame";
+  const csp = buildCsp(nonce);
 
   // Next.js extracts the nonce from the CSP on the *request* headers to stamp its own <script> tags.
   const requestHeaders = new Headers(request.headers);
-  requestHeaders.set("content-security-policy", csp);
+  if (!isEmbedFrame) {
+    requestHeaders.set("content-security-policy", csp);
+  }
 
   const response = NextResponse.next({ request: { headers: requestHeaders } });
 
   // ...and the browser enforces the CSP from the *response* headers.
-  response.headers.set("Content-Security-Policy", csp);
-  // frame-ancestors governs framing for modern browsers; X-Frame-Options is the legacy backstop.
-  // The widget must stay embeddable, so only non-widget routes get DENY.
-  if (!isWidget) {
-    response.headers.set("X-Frame-Options", "DENY");
+  if (isEmbedFrame) {
+    // Route handler owns frame-ancestors; do not stamp X-Frame-Options DENY.
+    return response;
   }
+
+  response.headers.set("Content-Security-Policy", csp);
+  response.headers.set("X-Frame-Options", "DENY");
 
   return response;
 }

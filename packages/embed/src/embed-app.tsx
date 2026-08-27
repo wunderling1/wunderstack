@@ -1,9 +1,11 @@
 import {
   AnswerCard,
+  AnswerProgress,
   Card,
+  CardSection,
   CitationBlock,
-  Field,
-  IconButton,
+  Composer,
+  Pill,
   RefusalNotice,
 } from "@wunderstack/ui";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
@@ -15,15 +17,20 @@ import {
   type EmbedCitation,
   type EmbedConfig,
   type EmbedLayout,
+  type RetrievedPassage,
 } from "./types";
 
 interface Turn {
   role: "user" | "agent";
   text: string;
   citations?: EmbedCitation[];
+  /** Early retrieval stubs — "Gevonden in de CAO", cleared when verified citations arrive. */
+  passages?: RetrievedPassage[];
   refused?: boolean;
   /** Grounded follow-up chips from the `followups` stream event. */
   followUpQuestions?: string[];
+  /** Progress phase while waiting for the first answer tokens. */
+  phase?: "searching" | "retrieved" | "generating" | null;
 }
 
 interface Props {
@@ -37,6 +44,39 @@ interface Props {
 
 const DEFAULT_ARTICLE_50 =
   "Je praat met een AI-assistent. Antwoorden kunnen onjuist zijn; controleer belangrijke informatie bij de bron.";
+
+const PROGRESS_STEPS = [
+  { id: "searching", label: "CAO doorzoeken" },
+  { id: "retrieved", label: "Passages beoordelen" },
+  { id: "generating", label: "Bronvermelding controleren" },
+];
+
+/** Friendly agent sub-label — same copy as the playground. */
+function agentSubLabel(agentId: string): string {
+  if (agentId === "arbo") return "Arbocatalogus";
+  if (agentId === "cao") return "CAO-agent";
+  return agentId;
+}
+
+/** Align a new turn to the top of the thread so the answer is readable from the start. */
+function scrollChildToStart(
+  container: HTMLElement,
+  child: HTMLElement,
+  behavior: ScrollBehavior,
+): void {
+  const nextTop =
+    container.scrollTop + (child.getBoundingClientRect().top - container.getBoundingClientRect().top);
+  container.scrollTo({ top: Math.max(0, nextTop), behavior });
+}
+
+function lastUserTurnIndex(turns: Turn[]): number {
+  for (let i = turns.length - 1; i >= 0; i--) {
+    if (turns[i]?.role === "user") {
+      return i;
+    }
+  }
+  return -1;
+}
 
 /** Map the curated tenant theme onto the design tokens (runtime theming, D17). */
 function themeStyle(theme: EmbedConfig["theme"] | undefined): CSSProperties {
@@ -58,9 +98,13 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
   const [open, setOpen] = useState(inline);
   const [config, setConfig] = useState<EmbedConfig | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
-  const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  /** True once `citations` arrived — composer unlocks while follow-ups may still stream. */
+  const [answerSettled, setAnswerSettled] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const lastUserIndex = lastUserTurnIndex(turns);
+  const alignedUserIndexRef = useRef(-1);
   const sessionId = useMemo(
     () => (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now())),
     [],
@@ -74,8 +118,6 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
       .then((res) => (res.ok ? res.json() : null))
       .then((data: unknown) => {
         if (cancelled || data === null) return;
-        // Validate the external response at the boundary (300-typescript); drop a malformed /config
-        // so nothing unvalidated (e.g. theme.primary) reaches the UI. Defaults still apply.
         const parsed = embedConfigSchema.safeParse(data);
         if (parsed.success) setConfig(parsed.data);
       })
@@ -88,14 +130,23 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
   }, [endpoint, agentKey]);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [turns, open]);
+    if (!open || lastUserIndex < 0) return;
+    const container = scrollRef.current;
+    const target = container?.querySelector(`[data-turn-index="${String(lastUserIndex)}"]`);
+    if (!container || !(target instanceof HTMLElement)) return;
+    const isNewQuestion = alignedUserIndexRef.current !== lastUserIndex;
+    alignedUserIndexRef.current = lastUserIndex;
+    scrollChildToStart(container, target, isNewQuestion ? "smooth" : "auto");
+  }, [lastUserIndex, open]);
 
   const article50 = config?.article50 ?? DEFAULT_ARTICLE_50;
   const tagline = config?.texts.tagline ?? "Stel je vraag";
   const logo = config?.theme.logo;
   const snippetHint = agentId.trim();
   const resolvedAgentId = config?.agentId ?? (snippetHint || "cao");
+  const composerLocked = busy && !answerSettled;
+  const chipsLocked = busy;
+  const showStop = busy && !answerSettled;
 
   useEffect(() => {
     if (!config || snippetHint.length === 0) return;
@@ -104,6 +155,17 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
       `[wunderstack-embed] data-agent="${snippetHint}" does not match this key's agent "${config.agentId}"; ignoring hint.`,
     );
   }, [config, snippetHint]);
+
+  useEffect(() => () => abortRef.current?.abort(), []);
+
+  function closePanel(): void {
+    abortRef.current?.abort();
+    setOpen(false);
+  }
+
+  function stopTurn(): void {
+    abortRef.current?.abort();
+  }
 
   function updateLast(fn: (turn: Turn) => Turn): void {
     setTurns((prev) => {
@@ -115,32 +177,55 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
   }
 
   function applyEvent(event: ChatEvent): void {
-    if (event.type === "text") {
-      updateLast((turn) => ({ ...turn, text: turn.text + event.delta }));
+    if (event.type === "status") {
+      const phase =
+        event.phase === "searching" || event.phase === "retrieved" || event.phase === "generating"
+          ? event.phase
+          : null;
+      updateLast((turn) => ({
+        ...turn,
+        phase,
+        ...(event.phase === "retrieved" && event.passages !== undefined
+          ? { passages: event.passages }
+          : {}),
+      }));
+    } else if (event.type === "text") {
+      updateLast((turn) => ({ ...turn, text: turn.text + event.delta, phase: null }));
     } else if (event.type === "citations") {
+      setAnswerSettled(true);
       updateLast((turn) => ({
         ...turn,
         text: event.answer || turn.text,
         citations: event.citations,
+        passages: undefined,
         refused: !event.found && !event.needsClarification,
+        phase: null,
       }));
     } else if (event.type === "followups") {
       updateLast((turn) => ({ ...turn, followUpQuestions: event.questions }));
     } else if (event.type === "error") {
-      updateLast((turn) => ({ ...turn, text: event.message }));
+      setAnswerSettled(true);
+      updateLast((turn) => ({ ...turn, text: event.message, phase: null }));
     }
   }
 
-  async function send(questionOverride?: string): Promise<void> {
-    const question = (questionOverride ?? input).trim();
-    if (!question || busy) return;
-    if (!questionOverride) setInput("");
+  async function send(question: string): Promise<void> {
+    const trimmed = question.trim();
+    if (!trimmed || busy) return;
     const history = turns
       .slice(-6)
       .map((turn) => ({ role: turn.role === "agent" ? "assistant" : "user", content: turn.text }))
       .filter((message) => message.content.length > 0);
-    setTurns((prev) => [...prev, { role: "user", text: question }, { role: "agent", text: "" }]);
+    setTurns((prev) => [
+      ...prev,
+      { role: "user", text: trimmed },
+      { role: "agent", text: "", phase: "searching" },
+    ]);
     setBusy(true);
+    setAnswerSettled(false);
+
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     try {
       const res = await fetch(`${endpoint}/api/chat`, {
@@ -150,12 +235,13 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
           ...(agentKey ? { "x-wunderstack-key": agentKey } : {}),
         },
         body: JSON.stringify({
-          question,
+          question: trimmed,
           history,
           sessionId,
           channel: "embed",
           ...(config?.fund ? { fund: config.fund } : {}),
         }),
+        signal: controller.signal,
       });
       if (!res.ok || !res.body) throw new Error("request_failed");
 
@@ -174,20 +260,29 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
           try {
             json = JSON.parse(raw);
           } catch {
-            continue; /* ignore a partial/garbled line */
+            continue;
           }
-          // Validate each stream event at the boundary; skip anything off-contract.
           const parsed = chatEventSchema.safeParse(json);
           if (parsed.success) applyEvent(parsed.data);
         }
       }
     } catch {
-      updateLast((turn) => ({
-        ...turn,
-        text: turn.text || "Er ging iets mis. Probeer het later opnieuw.",
-      }));
+      if (controller.signal.aborted) {
+        /* keep whatever we already painted */
+      } else {
+        setAnswerSettled(true);
+        updateLast((turn) => ({
+          ...turn,
+          text: turn.text || "Er ging iets mis. Probeer het later opnieuw.",
+          phase: null,
+        }));
+      }
     } finally {
       setBusy(false);
+      setAnswerSettled(true);
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+      }
     }
   }
 
@@ -206,7 +301,7 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
         {inline ? null : (
           <button
             type="button"
-            onClick={() => setOpen(false)}
+            onClick={closePanel}
             aria-label="Sluiten"
             className="ml-auto rounded p-1 text-text-muted hover:text-text"
           >
@@ -224,86 +319,115 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
             {...(config?.texts.intro ? { intro: config.texts.intro } : {})}
           />
         ) : null}
-        {turns.map((turn, index) => (
-          <div key={index} className="flex flex-col gap-2">
-            {turn.refused ? (
-              <RefusalNotice>{turn.text}</RefusalNotice>
-            ) : (
-              <AnswerCard
-                role={turn.role}
-                {...(turn.role === "agent"
-                  ? { agentLabel: "AI-assistent", agentSubLabel: resolvedAgentId }
-                  : {})}
-              >
-                {turn.text || (turn.role === "agent" ? "…" : "")}
-              </AnswerCard>
-            )}
-            {turn.citations && turn.citations.length > 0 ? (
-              <div className="flex flex-col gap-2">
-                {turn.citations.map((citation) => (
-                  <CitationBlock
-                    key={citation.ref}
-                    refNumber={citation.ref}
-                    verification="verified"
-                    label={citation.sourceRef ?? citation.heading ?? citation.title}
-                    quote={citation.snippet || citation.quote}
-                  />
-                ))}
-              </div>
-            ) : null}
-            {turn.role === "agent" &&
-            !turn.refused &&
-            turn.followUpQuestions &&
-            turn.followUpQuestions.length > 0 ? (
-              <div className="flex flex-col gap-1.5">
-                <p className="text-[11px] font-medium text-text-muted">Handige vervolgvragen</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {turn.followUpQuestions.map((question) => (
-                    <button
-                      key={question}
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void send(question)}
-                      className="w-fit max-w-full rounded-pill bg-primary-tint px-2.5 py-1 text-left text-xs text-text hover:bg-primary/10 disabled:opacity-50"
-                    >
-                      {question}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </div>
-        ))}
+        {turns.map((turn, index) => {
+          const waiting = turn.role === "agent" && turn.text.length === 0 && !turn.refused;
+          return (
+            <div key={index} data-turn-index={index} className="flex flex-col gap-2">
+              {turn.refused ? (
+                <RefusalNotice size="sm">{turn.text}</RefusalNotice>
+              ) : turn.role === "user" ? (
+                <AnswerCard role="user" size="sm">
+                  {turn.text}
+                </AnswerCard>
+              ) : (
+                <AnswerCard
+                  role="agent"
+                  size="sm"
+                  agentLabel="AI-assistent"
+                  agentSubLabel={agentSubLabel(resolvedAgentId)}
+                  footer={
+                    <>
+                      {turn.citations && turn.citations.length > 0 ? (
+                        <CardSection heading="Bronnen" size="sm">
+                          <ul className="flex flex-col gap-2">
+                            {turn.citations.map((citation) => (
+                              <li key={citation.ref}>
+                                <CitationBlock
+                                  size="sm"
+                                  refNumber={citation.ref}
+                                  verification="verified"
+                                  label={citation.sourceRef ?? citation.heading ?? citation.title}
+                                  quote={citation.snippet || citation.quote}
+                                />
+                              </li>
+                            ))}
+                          </ul>
+                        </CardSection>
+                      ) : turn.passages && turn.passages.length > 0 ? (
+                        <CardSection heading="Gevonden in de CAO" size="sm" muted>
+                          <ul className="flex flex-col gap-2">
+                            {turn.passages.map((passage) => (
+                              <li key={passage.ref}>
+                                <CitationBlock
+                                  size="sm"
+                                  refNumber={passage.ref}
+                                  verification="caution"
+                                  label={
+                                    passage.sourceRef ??
+                                    (passage.article ? `Artikel ${passage.article}` : passage.title)
+                                  }
+                                />
+                              </li>
+                            ))}
+                          </ul>
+                        </CardSection>
+                      ) : null}
+                      {turn.followUpQuestions && turn.followUpQuestions.length > 0 ? (
+                        <CardSection size="sm">
+                          <p className="mb-1.5 text-[11px] font-medium text-text-muted">
+                            Handige vervolgvragen
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {turn.followUpQuestions.map((question) => (
+                              <button
+                                key={question}
+                                type="button"
+                                disabled={chipsLocked}
+                                onClick={() => void send(question)}
+                                className="disabled:opacity-50"
+                              >
+                                <Pill
+                                  variant="primary"
+                                  size="sm"
+                                  className="max-w-full cursor-pointer hover:bg-primary/10"
+                                >
+                                  {question}
+                                </Pill>
+                              </button>
+                            ))}
+                          </div>
+                        </CardSection>
+                      ) : null}
+                    </>
+                  }
+                >
+                  {waiting ? (
+                    <AnswerProgress
+                      size="sm"
+                      steps={PROGRESS_STEPS}
+                      activeId={turn.phase ?? "searching"}
+                    />
+                  ) : (
+                    turn.text
+                  )}
+                </AnswerCard>
+              )}
+            </div>
+          );
+        })}
       </div>
 
-      <form
-        className="bg-page px-3 py-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void send();
-        }}
-      >
-        <div className="flex items-end gap-2 rounded-pill bg-surface p-2 shadow-[var(--elevation-raised)]">
-          <Field
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            placeholder="Typ je vraag…"
-            disabled={busy}
-            className="flex-1 border-none bg-transparent shadow-none focus-visible:ring-0"
-          />
-          <IconButton
-            type="submit"
-            label="Verstuur"
-            disabled={busy || input.trim().length === 0}
-            className="h-8 w-8 shrink-0"
-          >
-            {/* Inline arrow-up — embed has no lucide dep */}
-            <svg aria-hidden viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4">
-              <path d="M8 13V3m0 0L4 7m4-4 4 4" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </IconButton>
-        </div>
-      </form>
+      <div className="bg-page px-3 py-3">
+        <Composer
+          size="sm"
+          multiline={false}
+          disabled={composerLocked && !showStop}
+          stopping={showStop}
+          onSend={(q) => void send(q)}
+          onStop={stopTurn}
+          placeholder="Typ je vraag…"
+        />
+      </div>
 
       <p className="border-t border-border bg-surface px-4 py-2 text-[11px] leading-snug text-text-subtle">
         {article50}
