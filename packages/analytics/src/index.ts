@@ -23,12 +23,17 @@ export {
   getTopThemes,
   getUnansweredQuestions,
   getRecentInteractions,
+  getFundOverview,
+  getAgentOverview,
   getAgentActivity,
   type KpiWindow,
   type KpiSummary,
   type ThemeCount,
   type UnansweredQuestion,
   type InteractionLogRow,
+  type FundOverview,
+  type FundOverviewLimits,
+  type AgentOverview,
   type AgentActivityRow,
 } from "./kpi.js";
 

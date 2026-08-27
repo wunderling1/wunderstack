@@ -1,13 +1,11 @@
-import { getFund, listInstances } from "@wunderstack/db";
 import { AGENT_KEY_LABELS, AGENT_KEYS } from "@wunderstack/shared";
 import { Card, Chip, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@wunderstack/ui";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getFundCached, listInstancesCached } from "@/lib/fund-lookups";
 import { agentLabel } from "@/lib/release-manifest";
 import { parseFundKey } from "@/lib/route-params";
-import { AddAgentForm } from "../manage-forms";
-
-export const dynamic = "force-dynamic";
+import { AddAgentForm } from "../../manage-forms";
 
 export default async function FundAgentsPage({
   params,
@@ -18,10 +16,10 @@ export default async function FundAgentsPage({
   const fundKey = parseFundKey(raw);
   if (!fundKey) notFound();
 
-  const fund = await getFund(fundKey);
+  const fund = await getFundCached(fundKey);
   if (!fund) notFound();
 
-  const instances = await listInstances(fundKey);
+  const instances = await listInstancesCached(fundKey);
   const present = new Set(instances.map((row) => row.agentKey));
   const remainingAgents = AGENT_KEYS.filter((id) => !present.has(id)).map((id) => ({
     id,

@@ -1,11 +1,9 @@
-import { listLti11Consumers, listScenarios } from "@wunderstack/db";
 import { Card, Chip, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@wunderstack/ui";
 import { notFound } from "next/navigation";
 import { env } from "@/lib/env";
+import { listLti11ConsumersCached, listScenariosCached } from "@/lib/fund-lookups";
 import { parseAgentKey, parseFundKey } from "@/lib/route-params";
 import { CreateLtiConsumerForm, DeactivateLtiConsumerForm, LtiPassbackToggle } from "./lti-forms";
-
-export const dynamic = "force-dynamic";
 
 function launchBase(): string | null {
   return env.ROLEPLAY_PUBLIC_URL ? env.ROLEPLAY_PUBLIC_URL.replace(/\/$/, "") : null;
@@ -25,7 +23,10 @@ export default async function RoleplayLtiPage({
   const agentKey = parseAgentKey(rawAgent);
   if (!fundKey || agentKey !== "roleplay") notFound();
 
-  const [consumers, scenarios] = await Promise.all([listLti11Consumers(fundKey), listScenarios(fundKey)]);
+  const [consumers, scenarios] = await Promise.all([
+    listLti11ConsumersCached(fundKey),
+    listScenariosCached(fundKey),
+  ]);
   const published = scenarios.filter((row) => row.status === "published");
   const origin = launchBase();
 

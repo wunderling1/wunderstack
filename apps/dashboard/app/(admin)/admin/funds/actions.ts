@@ -7,8 +7,10 @@ import {
   UserExistsError,
 } from "@wunderstack/db";
 import { AGENT_KEYS, agentKeySchema } from "@wunderstack/shared";
+import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { decideAccess } from "@/lib/authz";
+import { updateFundConfigCache } from "@/lib/config-cache";
 import { generatePassword, hashPassword } from "@/lib/password";
 
 async function assertAdmin(): Promise<void> {
@@ -77,6 +79,8 @@ export async function createFundAction(
       agentKeys: selected,
       user: { email, passwordHash: hashPassword(password) },
     });
+    updateFundConfigCache(result.fundKey);
+    revalidatePath("/admin/funds");
     return {
       ok: true,
       fundKey: result.fundKey,

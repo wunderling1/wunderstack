@@ -1,11 +1,9 @@
-import { getFund, getInstance } from "@wunderstack/db";
 import { DEFAULT_ARTICLE_50_NOTICE, tenantTextsSchema } from "@wunderstack/shared";
 import { Card } from "@wunderstack/ui";
 import { notFound } from "next/navigation";
+import { getFundCached, getInstanceCached } from "@/lib/fund-lookups";
 import { parseAgentKey, parseFundKey } from "@/lib/route-params";
 import { TextsForm } from "./texts-form";
-
-export const dynamic = "force-dynamic";
 
 export default async function AgentTextsPage({
   params,
@@ -17,7 +15,10 @@ export default async function AgentTextsPage({
   const agentKey = parseAgentKey(rawAgent);
   if (!fundKey || !agentKey || agentKey === "roleplay") notFound();
 
-  const [fund, instance] = await Promise.all([getFund(fundKey), getInstance(fundKey, agentKey)]);
+  const [fund, instance] = await Promise.all([
+    getFundCached(fundKey),
+    getInstanceCached(fundKey, agentKey),
+  ]);
   if (!fund || !instance) notFound();
 
   const texts = tenantTextsSchema.parse(instance.texts ?? {});

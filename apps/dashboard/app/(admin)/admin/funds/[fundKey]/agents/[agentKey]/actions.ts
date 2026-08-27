@@ -9,6 +9,7 @@ import {
 import { agentKeySchema, tenantTextsSchema } from "@wunderstack/shared";
 import { revalidatePath } from "next/cache";
 import { assertAdmin } from "@/lib/assert-admin";
+import { updateFundConfigCache } from "@/lib/config-cache";
 import { parseFundKey } from "@/lib/route-params";
 
 export type FormErrorState = { ok: false; error: string } | { ok: true } | null;
@@ -23,6 +24,7 @@ function optionalStr(value: FormDataEntryValue | null): string | undefined {
 }
 
 function revalidateAgent(fundKey: string, agentKey: string): void {
+  updateFundConfigCache(fundKey, agentKey);
   revalidatePath(`/admin/funds/${fundKey}/agents/${agentKey}`);
   revalidatePath(`/admin/funds/${fundKey}/agents/${agentKey}/distribution`);
   revalidatePath(`/admin/funds/${fundKey}/agents/${agentKey}/texts`);

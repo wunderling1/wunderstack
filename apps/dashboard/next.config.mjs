@@ -27,6 +27,14 @@ const nextConfig = {
   async headers() {
     return [{ source: "/:path*", headers: commonSecurityHeaders }];
   },
+  // Client Router Cache: dynamic stays 0 so KPI pages refetch on every navigation.
+  // Config-tab <Link prefetch> uses the static window (30s) — see FundTabNav / AgentTabNav.
+  experimental: {
+    staleTimes: {
+      dynamic: 0,
+      static: 30,
+    },
+  },
   transpilePackages: [
     "@wunderstack/shared",
     "@wunderstack/db",

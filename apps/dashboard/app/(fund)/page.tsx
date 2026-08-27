@@ -1,9 +1,4 @@
-import {
-  getKpiSummary,
-  getRecentInteractions,
-  getTopThemes,
-  getUnansweredQuestions,
-} from "@wunderstack/analytics";
+import { getCorpusOverview, getFundOverview } from "@wunderstack/analytics";
 import {
   Table,
   TableBody,
@@ -15,9 +10,9 @@ import {
 import { auth } from "@/auth";
 import { FundActivityPanels } from "@/components/fund/activity-panels";
 import { FundKpiTiles } from "@/components/fund/kpi-tiles";
-import { getCorpusOverview } from "@/lib/corpus";
 import { sinceDaysAgo } from "@/lib/window";
 
+/** KPI surface — always fetch. Config tabs are cached separately. */
 export const dynamic = "force-dynamic";
 
 const WINDOW_DAYS = 30;
@@ -31,13 +26,11 @@ export default async function FundDashboard() {
   if (!tenantId) return null;
 
   const win = { fundKey: tenantId, since: sinceDaysAgo(WINDOW_DAYS) };
-  const [summary, unanswered, themes, log, corpus] = await Promise.all([
-    getKpiSummary(win),
-    getUnansweredQuestions(win, 20),
-    getTopThemes(win),
-    getRecentInteractions(win, 25),
+  const [overview, corpus] = await Promise.all([
+    getFundOverview(win),
     getCorpusOverview(tenantId),
   ]);
+  const { summary, unanswered, themes, log } = overview;
 
   return (
     <div className="flex flex-col gap-10">

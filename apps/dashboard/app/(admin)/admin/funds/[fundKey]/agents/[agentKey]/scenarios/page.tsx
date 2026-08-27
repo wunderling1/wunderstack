@@ -1,11 +1,18 @@
-import { listScenarios } from "@wunderstack/db";
 import { ROLEPLAY_SCENARIO_STATUS_LABELS, type RoleplayScenarioStatus } from "@wunderstack/shared";
-import { Chip, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@wunderstack/ui";
+import {
+  buttonVariants,
+  Chip,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@wunderstack/ui";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { listScenariosCached } from "@/lib/fund-lookups";
 import { parseAgentKey, parseFundKey } from "@/lib/route-params";
-
-export const dynamic = "force-dynamic";
 
 function statusChip(status: string) {
   const label = ROLEPLAY_SCENARIO_STATUS_LABELS[status as RoleplayScenarioStatus] ?? status;
@@ -23,7 +30,7 @@ export default async function RoleplayScenariosPage({
   const agentKey = parseAgentKey(rawAgent);
   if (!fundKey || agentKey !== "roleplay") notFound();
 
-  const scenarios = await listScenarios(fundKey);
+  const scenarios = await listScenariosCached(fundKey);
   const base = `/admin/funds/${fundKey}/agents/roleplay/scenarios`;
 
   return (
@@ -38,7 +45,7 @@ export default async function RoleplayScenariosPage({
         </div>
         <Link
           href={`${base}/new`}
-          className="shrink-0 rounded-[var(--radius-control)] bg-primary px-4 py-2 text-sm font-medium text-on-primary hover:bg-primary-hover"
+          className={buttonVariants({ variant: "primary", size: "default" })}
         >
           Nieuw scenario
         </Link>

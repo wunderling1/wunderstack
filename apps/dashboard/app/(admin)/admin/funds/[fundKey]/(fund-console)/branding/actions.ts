@@ -4,6 +4,7 @@ import { updateFundTheme } from "@wunderstack/db";
 import { tenantThemeSchema } from "@wunderstack/shared";
 import { revalidatePath } from "next/cache";
 import { assertAdmin } from "@/lib/assert-admin";
+import { updateFundConfigCache } from "@/lib/config-cache";
 import { parseFundKey } from "@/lib/route-params";
 
 export type FormErrorState = { ok: false; error: string } | { ok: true } | null;
@@ -37,6 +38,7 @@ export async function updateFundThemeAction(
       }),
     );
     await updateFundTheme({ fundKey, theme });
+    updateFundConfigCache(fundKey);
     revalidatePath(`/admin/funds/${fundKey}/branding`);
     revalidatePath(`/admin/funds/${fundKey}`);
     return { ok: true };

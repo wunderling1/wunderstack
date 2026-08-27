@@ -14,6 +14,7 @@ import Link from "next/link";
 import { agentLabel, KNOWN_AGENTS } from "@/lib/release-manifest";
 import { sinceDaysAgo } from "@/lib/window";
 
+/** KPI surface — always fetch. Config tabs are cached separately. */
 export const dynamic = "force-dynamic";
 
 const WINDOW_DAYS = 30;

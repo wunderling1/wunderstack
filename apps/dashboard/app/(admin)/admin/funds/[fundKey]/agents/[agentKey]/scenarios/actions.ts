@@ -10,6 +10,7 @@ import { publicationIssues, type RoleplayScenarioDraft } from "@wunderstack/shar
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { assertAdmin } from "@/lib/assert-admin";
+import { updateFundConfigCache } from "@/lib/config-cache";
 import { parseRoleplayForm } from "@/lib/roleplay-form";
 import { parseAgentKey, parseFundKey } from "@/lib/route-params";
 
@@ -20,6 +21,7 @@ function str(value: FormDataEntryValue | null): string {
 }
 
 function revalidateScenarios(fundKey: string, slug?: string): void {
+  updateFundConfigCache(fundKey, "roleplay");
   const base = `/admin/funds/${fundKey}/agents/roleplay`;
   revalidatePath(`${base}/scenarios`);
   revalidatePath(`${base}/scenarios/new`);
