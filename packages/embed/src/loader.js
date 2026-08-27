@@ -20,7 +20,7 @@
   var origin;
   try {
     origin = new URL(script.src, window.location.href).origin;
-  } catch (err) {
+  } catch {
     return;
   }
 
