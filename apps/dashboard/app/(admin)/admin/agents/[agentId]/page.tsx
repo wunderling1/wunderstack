@@ -163,7 +163,7 @@ export default async function AgentDetail({
             href={manifest.langfuseUrl}
             target="_blank"
             rel="noreferrer"
-            className={buttonVariants({ variant: "secondary", shape: "control" })}
+            className={buttonVariants({ variant: "secondary", size: "default" })}
           >
             Open in Langfuse
           </a>

@@ -1,6 +1,6 @@
 "use client";
 
-import { AnswerCard, Button, Field } from "@wunderstack/ui";
+import { Button, Field } from "@wunderstack/ui";
 import { useActionState, useMemo, useState, type CSSProperties } from "react";
 import { updateFundThemeAction, type FormErrorState } from "./actions";
 
@@ -26,14 +26,11 @@ export function BrandingForm({
   const previewStyle = useMemo(
     () =>
       ({
-        "--color-primary": primary || "#4f46e5",
-        "--color-primary-hover": primary || "#4f46e5",
-        "--color-primary-tint": `color-mix(in srgb, ${primary || "#4f46e5"} 12%, white)`,
-        "--color-on-primary": "#ffffff",
-        "--radius-card": radius || "12px",
-        "--radius-control": radius || "12px",
+        "--preview-primary": primary || "#4f46e5",
+        "--preview-accent": accent || "#0f766e",
+        "--preview-radius": radius || "12px",
       }) as CSSProperties,
-    [primary, radius],
+    [primary, accent, radius],
   );
 
   return (
@@ -79,7 +76,7 @@ export function BrandingForm({
         {state?.ok === true ? (
           <p className="text-sm text-state-verified-fg">Huisstijl opgeslagen.</p>
         ) : null}
-        <Button type="submit" variant="ghost" shape="control" className="self-start" disabled={pending}>
+        <Button type="submit" variant="ghost" size="default" className="self-start" disabled={pending}>
           {pending ? "Bezig…" : "Opslaan"}
         </Button>
         <p className="text-xs text-text-subtle">
@@ -90,13 +87,28 @@ export function BrandingForm({
 
       <div className="flex flex-col gap-3" style={previewStyle}>
         <span className="text-sm font-medium">Voorbeeld</span>
-        <div className="flex flex-col gap-3 rounded-[var(--radius-card)] border border-border bg-page p-4">
-          <AnswerCard role="user" size="sm">
+        <div
+          className="border border-border bg-surface p-4"
+          style={{ borderRadius: "var(--preview-radius)" }}
+        >
+          <div
+            className="mb-3 max-w-[85%] px-3 py-2 text-sm text-white"
+            style={{
+              background: "var(--preview-primary)",
+              borderRadius: "var(--preview-radius)",
+            }}
+          >
             Wat zegt de CAO over vakantie?
-          </AnswerCard>
-          <AnswerCard role="agent" size="sm" agentLabel="AI-assistent" agentSubLabel="CAO-agent">
+          </div>
+          <div
+            className="max-w-[85%] border px-3 py-2 text-sm text-text"
+            style={{
+              borderColor: "var(--preview-accent)",
+              borderRadius: "var(--preview-radius)",
+            }}
+          >
             Volgens artikel … heb je recht op …
-          </AnswerCard>
+          </div>
         </div>
       </div>
     </div>

@@ -1,6 +1,5 @@
 "use client";
 
-import { NavPills, navPillClassName } from "@wunderstack/ui";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { agentTabHref, agentTabs } from "@/lib/agent-tabs";
@@ -17,7 +16,11 @@ export function AgentTabNav({
   const tabs = agentTabs(agentKey);
 
   return (
-    <NavPills role="tablist" aria-label="Agenttabbladen">
+    <div
+      role="tablist"
+      aria-label="Agenttabbladen"
+      className="inline-flex items-center gap-1 rounded-[var(--radius-control)] border border-border bg-surface-sunk p-1"
+    >
       {tabs.map((tab) => {
         const href = agentTabHref(fundKey, agentKey, tab.segment);
         const selected =
@@ -32,12 +35,16 @@ export function AgentTabNav({
             role="tab"
             aria-selected={selected}
             aria-current={selected ? "page" : undefined}
-            className={navPillClassName(selected)}
+            className={
+              selected
+                ? "rounded-[var(--radius-input)] bg-surface px-3 py-1.5 text-sm font-medium text-text shadow-[var(--elevation-card)]"
+                : "rounded-[var(--radius-input)] px-3 py-1.5 text-sm font-medium text-text-muted hover:text-text"
+            }
           >
             {tab.label}
           </Link>
         );
       })}
-    </NavPills>
+    </div>
   );
 }

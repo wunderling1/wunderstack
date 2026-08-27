@@ -1,6 +1,5 @@
 "use client";
 
-import { NavPills, navPillClassName } from "@wunderstack/ui";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -18,7 +17,11 @@ export function FundAreaTabNav() {
   const pathname = usePathname();
 
   return (
-    <NavPills role="tablist" aria-label="Fondstabbladen" className="mb-6">
+    <div
+      role="tablist"
+      aria-label="Fondstabbladen"
+      className="mb-6 inline-flex items-center gap-1 rounded-[var(--radius-control)] border border-border bg-surface-sunk p-1"
+    >
       {FUND_AREA_TABS.map((tab) => {
         const selected = tab.match(pathname);
         return (
@@ -29,12 +32,16 @@ export function FundAreaTabNav() {
             role="tab"
             aria-selected={selected}
             aria-current={selected ? "page" : undefined}
-            className={navPillClassName(selected)}
+            className={
+              selected
+                ? "rounded-[var(--radius-input)] bg-surface px-3 py-1.5 text-sm font-medium text-text shadow-[var(--elevation-card)]"
+                : "rounded-[var(--radius-input)] px-3 py-1.5 text-sm font-medium text-text-muted hover:text-text"
+            }
           >
             {tab.label}
           </Link>
         );
       })}
-    </NavPills>
+    </div>
   );
 }

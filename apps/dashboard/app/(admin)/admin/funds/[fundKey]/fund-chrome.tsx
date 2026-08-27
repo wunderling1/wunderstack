@@ -6,8 +6,6 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
   Breadcrumbs,
-  NavPills,
-  navPillClassName,
   Select,
 } from "@wunderstack/ui";
 import Link from "next/link";
@@ -65,7 +63,11 @@ export function FundTabNav({ fundKey }: { fundKey: string }) {
   const active = activeFundTab(pathname, fundKey);
 
   return (
-    <NavPills role="tablist" aria-label="Fondstabbladen">
+    <div
+      role="tablist"
+      aria-label="Fondstabbladen"
+      className="inline-flex items-center gap-1 rounded-[var(--radius-control)] border border-border bg-surface-sunk p-1"
+    >
       {FUND_TABS.map((tab) => {
         const href = fundTabHref(fundKey, tab.segment as FundTabSegment);
         const selected = active === tab.segment;
@@ -77,13 +79,17 @@ export function FundTabNav({ fundKey }: { fundKey: string }) {
             role="tab"
             aria-selected={selected}
             aria-current={selected ? "page" : undefined}
-            className={navPillClassName(selected)}
+            className={
+              selected
+                ? "rounded-[var(--radius-input)] bg-surface px-3 py-1.5 text-sm font-medium text-text shadow-[var(--elevation-card)]"
+                : "rounded-[var(--radius-input)] px-3 py-1.5 text-sm font-medium text-text-muted hover:text-text"
+            }
           >
             {tab.label}
           </Link>
         );
       })}
-    </NavPills>
+    </div>
   );
 }
 

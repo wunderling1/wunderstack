@@ -45,7 +45,7 @@ export default async function RoleplayScenariosPage({
         </div>
         <Link
           href={`${base}/new`}
-          className={buttonVariants({ variant: "primary", shape: "control" })}
+          className={buttonVariants({ variant: "primary", size: "default" })}
         >
           Nieuw scenario
         </Link>
