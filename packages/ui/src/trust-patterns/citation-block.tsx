@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { cn } from "../lib/cn.js";
 import { Chip } from "../primitives/chip.js";
+import type { DensitySize } from "./answer-card.js";
 
 /** Verification status of a cited source — drives the trust accent. */
 export type CitationVerification = "verified" | "caution";
@@ -41,42 +42,65 @@ export interface CitationBlockProps {
   verification: CitationVerification;
   /** Human-readable source label (article, section, document). */
   label: string;
-  /** The quoted source fragment. */
-  quote: ReactNode;
+  /**
+   * The quoted source fragment. Optional — omit for early retrieval stubs
+   * ("Gevonden in de CAO") so no empty blockquote is rendered.
+   */
+  quote?: ReactNode;
   /** Optional citation index, rendered as a leading badge. */
   refNumber?: number;
+  /** Density (D18). `md` matches the pre-density look; embed uses `sm`. */
+  size?: DensitySize;
   className?: string;
 }
+
+const PAD: Record<DensitySize, string> = {
+  sm: "px-2.5 py-2",
+  md: "px-3 py-3",
+  lg: "px-3 py-3",
+};
 
 /**
  * Trust-pattern: a cited source shown with its verification status and quoted fragment. The visual
  * translation of the grounding architecture — every claim traces back to a verifiable source.
- * Consolidates the former `source-block` + `citation-badge` (D16).
+ * Consolidates the former `source-block` + `citation-badge` (D16). Density via `size` (D18).
  */
 export function CitationBlock({
   verification,
   label,
   quote,
   refNumber,
+  size = "md",
   className,
 }: CitationBlockProps) {
   const verified = verification === "verified";
+  const hasQuote = quote !== undefined && quote !== null && quote !== "";
   return (
     <div
       className={cn(
-        "rounded-[var(--radius-control)] bg-surface px-3 py-3 shadow-[var(--elevation-card)]",
+        "rounded-[var(--radius-control)] bg-surface shadow-[var(--elevation-card)]",
         "border-l-2",
         verified ? "border-state-verified-fg" : "border-state-caution-fg",
+        PAD[size],
         className,
       )}
     >
-      <div className="mb-2 flex items-center gap-2">
+      <div className={cn("flex items-center gap-2", hasQuote && "mb-2")}>
         {refNumber !== undefined ? <CitationBadge refNumber={refNumber} /> : null}
-        <Chip variant={verification}>{label}</Chip>
+        <Chip variant={verification} size={size === "sm" ? "sm" : "md"}>
+          {label}
+        </Chip>
       </div>
-      <blockquote className="text-sm leading-relaxed text-text-muted">
-        {quote}
-      </blockquote>
+      {hasQuote ? (
+        <blockquote
+          className={cn(
+            "leading-relaxed text-text-muted",
+            size === "sm" ? "text-xs" : "text-sm",
+          )}
+        >
+          {quote}
+        </blockquote>
+      ) : null}
     </div>
   );
 }
