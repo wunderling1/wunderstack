@@ -1,4 +1,5 @@
-import { mkdir, readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import esbuild from "esbuild";
@@ -6,14 +7,14 @@ import tailwindcss from "@tailwindcss/postcss";
 import postcss from "postcss";
 
 /**
- * Builds the embed web-component bundle (Fase 4):
- *  1. Compiles the Tailwind utilities used by the embed + the @wunderstack/ui trust-patterns.
- *  2. Adds the design tokens, rewritten from :root to :host so they resolve inside the shadow tree
- *     (independent of the host page). This is the runtime-theming carrier (D17).
- *  3. Bundles the React app to a single IIFE, injecting the compiled CSS as the `embed:styles` module.
+ * Builds the embed packages (Fase 4 + performance Finding 4):
+ *  1. Vanilla host loader → `dist/embed.js` (~3 KB). React never runs on the fund page.
+ *  2. React panel IIFE → content-hashed `dist/embed-panel.<hash>.js` (loaded only inside `/embed/frame`).
+ *  3. `dist/manifest.json` so the runtime can resolve the hashed panel filename.
  */
 const here = dirname(fileURLToPath(import.meta.url));
 const uiTokens = resolve(here, "../ui/src/tokens");
+const distDir = resolve(here, "dist");
 
 async function buildCss() {
   const entryPath = resolve(here, "src/tailwind.css");
@@ -50,12 +51,18 @@ const stylesPlugin = {
   },
 };
 
-await mkdir(resolve(here, "dist"), { recursive: true });
+await mkdir(distDir, { recursive: true });
+
+// 1. Host-page loader (stable URL /embed.js).
+await copyFile(resolve(here, "src/loader.js"), resolve(distDir, "embed.js"));
+
+// 2. React panel → hashed filename for immutable cache.
+const panelTmp = resolve(distDir, "embed-panel.tmp.js");
 await esbuild.build({
   entryPoints: [resolve(here, "src/index.tsx")],
   bundle: true,
   format: "iife",
-  outfile: resolve(here, "dist/embed.js"),
+  outfile: panelTmp,
   minify: true,
   sourcemap: false,
   target: ["es2020"],
@@ -64,4 +71,21 @@ await esbuild.build({
   plugins: [stylesPlugin],
 });
 
-console.log("Built packages/embed/dist/embed.js");
+const panelSource = await readFile(panelTmp);
+const hash = createHash("sha256").update(panelSource).digest("hex").slice(0, 12);
+const panelFile = `embed-panel.${hash}.js`;
+await writeFile(resolve(distDir, panelFile), panelSource);
+// Stable alias for local tooling / createRequire fallbacks that still look for embed-panel.js.
+await writeFile(resolve(distDir, "embed-panel.js"), panelSource);
+await writeFile(
+  resolve(distDir, "manifest.json"),
+  `${JSON.stringify({ panel: panelFile, hash }, null, 2)}\n`,
+);
+
+// Drop the tmp file (overwrite with hashed content is enough; unlink via empty not needed).
+const { unlink } = await import("node:fs/promises");
+await unlink(panelTmp).catch(() => undefined);
+
+const loaderBytes = (await readFile(resolve(distDir, "embed.js"))).byteLength;
+console.log(`Built packages/embed/dist/embed.js (loader, ${String(loaderBytes)} B)`);
+console.log(`Built packages/embed/dist/${panelFile} (panel)`);

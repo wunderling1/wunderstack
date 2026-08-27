@@ -18,7 +18,7 @@ process.env.DB_APPLICATION_NAME ??= "wunderstack-runtime";
 // Static, universal security headers (security-audit finding #6). These are path-independent and
 // benefit every response (including static assets), so they live here. The Content-Security-Policy
 // and X-Frame-Options are set per request in `proxy.ts` instead, because a strict `script-src` needs
-// a fresh per-request nonce and framing policy differs for the embeddable /widget route.
+// a fresh per-request nonce and framing policy differs for `/embed/frame`.
 const commonSecurityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },

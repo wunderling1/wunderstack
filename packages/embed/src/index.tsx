@@ -4,16 +4,17 @@ import { createRoot } from "react-dom/client";
 import { EmbedApp } from "./embed-app";
 
 /**
- * Embed loader (Fase 4). Boots a framework-agnostic web component: a floating launcher + chat panel
- * rendered by React inside a Shadow DOM, so the host page's CSS never leaks in or out. Config comes
- * from the script tag's `data-*` (the stable snippet: script-src + key + agent); everything variable
+ * Embed panel boot (Fase 4). Runs inside `/embed/frame` (iframe guest), not on the fund host page.
+ * The host only loads the vanilla `/embed.js` loader. React mounts in a Shadow DOM so the guest
+ * document's CSS stays isolated. Config comes from the script tag's `data-*`; everything variable
  * is fetched at runtime from `GET /config`.
  *
  * `data-agent` is a UI hint only — never a trust boundary. After `GET /config`, a mismatched hint is
  * ignored; the instance key decides the agent.
  *
- * `data-mode="inline"` mounts into `[data-wunderstack-embed-slot]` as an always-open panel (marketing
- * demo / dedicated fund page). Default is the launcher a fund pastes on an existing site.
+ * `data-mode="inline"` mounts into `[data-wunderstack-embed-slot]` as an always-open panel (the
+ * iframe frame page always uses inline). Default is the launcher (only relevant if the panel is
+ * loaded without the iframe shell).
  *
  * The script element must be read synchronously at load time (document.currentScript), before the
  * async mount fires.

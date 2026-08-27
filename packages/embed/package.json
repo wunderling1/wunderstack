@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./embed.js": "./dist/embed.js"
+    "./embed.js": "./dist/embed.js",
+    "./embed-panel.js": "./dist/embed-panel.js",
+    "./manifest.json": "./dist/manifest.json"
   },
   "scripts": {
     "build": "node build.mjs",
