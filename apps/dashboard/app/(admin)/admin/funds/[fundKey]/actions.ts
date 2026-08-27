@@ -20,6 +20,7 @@ import { agentKeySchema } from "@wunderstack/shared";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { assertAdmin } from "@/lib/assert-admin";
+import { updateFundConfigCache } from "@/lib/config-cache";
 import { generatePassword, hashPassword } from "@/lib/password";
 
 function str(value: FormDataEntryValue | null): string {
@@ -44,6 +45,7 @@ export type AddAgentState =
   | null;
 
 function revalidateFund(fundKey: string): void {
+  updateFundConfigCache(fundKey);
   revalidatePath(`/admin/funds/${fundKey}`);
   revalidatePath(`/admin/funds/${fundKey}/agents`);
   revalidatePath(`/admin/funds/${fundKey}/branding`);

@@ -4,8 +4,6 @@ import { auth } from "@/auth";
 import { TopBar } from "@/components/top-bar";
 import { decideAccess } from "@/lib/authz";
 
-export const dynamic = "force-dynamic";
-
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const session = await auth();
   const decision = decideAccess(session, "admin");

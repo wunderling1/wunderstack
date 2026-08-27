@@ -1,10 +1,8 @@
-import { getFund, listFundUsers } from "@wunderstack/db";
 import { Card, Chip } from "@wunderstack/ui";
 import { notFound } from "next/navigation";
+import { getFundCached, listFundUsersCached } from "@/lib/fund-lookups";
 import { parseFundKey } from "@/lib/route-params";
-import { AddUserForm, ChangeEmailForm, ResetPasswordForm } from "../manage-forms";
-
-export const dynamic = "force-dynamic";
+import { AddUserForm, ChangeEmailForm, ResetPasswordForm } from "../../manage-forms";
 
 export default async function FundAccountsPage({
   params,
@@ -15,10 +13,10 @@ export default async function FundAccountsPage({
   const fundKey = parseFundKey(raw);
   if (!fundKey) notFound();
 
-  const fund = await getFund(fundKey);
+  const fund = await getFundCached(fundKey);
   if (!fund) notFound();
 
-  const accounts = await listFundUsers(fundKey);
+  const accounts = await listFundUsersCached(fundKey);
   const active = fund.status === "active";
 
   return (

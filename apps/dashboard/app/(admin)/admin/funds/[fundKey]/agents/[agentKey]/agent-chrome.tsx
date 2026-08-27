@@ -31,6 +31,7 @@ export function AgentTabNav({
           <Link
             key={tab.segment || "overview"}
             href={href}
+            prefetch={tab.segment !== ""}
             role="tab"
             aria-selected={selected}
             aria-current={selected ? "page" : undefined}

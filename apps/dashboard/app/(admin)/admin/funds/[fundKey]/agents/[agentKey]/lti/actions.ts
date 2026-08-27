@@ -10,6 +10,7 @@ import {
 } from "@wunderstack/db";
 import { revalidatePath } from "next/cache";
 import { assertAdmin } from "@/lib/assert-admin";
+import { updateFundConfigCache } from "@/lib/config-cache";
 import { parseAgentKey, parseFundKey } from "@/lib/route-params";
 
 export type LtiConsumerFormState =
@@ -30,6 +31,7 @@ function gate(formData: FormData): { fundKey: string } | { error: string } {
 }
 
 function revalidateLti(fundKey: string): void {
+  updateFundConfigCache(fundKey, "roleplay");
   const base = `/admin/funds/${fundKey}/agents/roleplay`;
   revalidatePath(`${base}/lti`);
   revalidatePath(base);

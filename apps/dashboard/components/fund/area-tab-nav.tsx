@@ -28,6 +28,7 @@ export function FundAreaTabNav() {
           <Link
             key={tab.href}
             href={tab.href}
+            prefetch={tab.href !== "/"}
             role="tab"
             aria-selected={selected}
             aria-current={selected ? "page" : undefined}

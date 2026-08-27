@@ -1,4 +1,3 @@
-import { getFund, getInstance } from "@wunderstack/db";
 import {
   BreadcrumbItem,
   BreadcrumbLink,
@@ -8,11 +7,10 @@ import {
 } from "@wunderstack/ui";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
+import { getFundCached, getInstanceCached } from "@/lib/fund-lookups";
 import { agentLabel } from "@/lib/release-manifest";
 import { parseAgentKey, parseFundKey } from "@/lib/route-params";
 import { AgentTabNav } from "./agent-chrome";
-
-export const dynamic = "force-dynamic";
 
 export default async function AgentInstanceLayout({
   children,
@@ -28,7 +26,10 @@ export default async function AgentInstanceLayout({
     notFound();
   }
 
-  const [fund, instance] = await Promise.all([getFund(fundKey), getInstance(fundKey, agentKey)]);
+  const [fund, instance] = await Promise.all([
+    getFundCached(fundKey),
+    getInstanceCached(fundKey, agentKey),
+  ]);
   if (!fund || !instance) {
     notFound();
   }

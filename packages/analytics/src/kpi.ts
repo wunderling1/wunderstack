@@ -9,7 +9,10 @@ import {
   listActiveFunds,
   sql,
   withFundSchema,
+  type Database,
 } from "@wunderstack/db";
+
+import { mapPool } from "./map-pool.js";
 
 /**
  * KPI queries the dashboard consumes (Fase 3 reads these via the read-only `analytics_reader` role).
@@ -55,7 +58,12 @@ export interface KpiSummary {
   refused: number;
   clarified: number;
   errors: number;
-  /** answeredWithCitations / total, in [0,1]; 0 when there are no events. */
+  /** Turn-budget / aborted generation — not a corpus refusal. */
+  timeouts: number;
+  /**
+   * answeredWithCitations / qualityN, in [0,1]. qualityN excludes timeout and error so a hung
+   * generation cannot dilute the v1 quality rate (or inflate a refusal rate).
+   */
   answeredWithCitationsRate: number;
 }
 
@@ -63,33 +71,110 @@ function toNumber(value: unknown): number {
   return typeof value === "number" ? value : Number(value ?? 0);
 }
 
-/** Aggregate outcome counts for a fund over a time window. */
-export async function getKpiSummary(window: KpiWindow): Promise<KpiSummary> {
-  const scope = windowScope(window);
-
-  const [row] = await withFundSchema(window.fundKey, (db) =>
-    db
-      .select({
-        total: sql<number>`count(*)`,
-        answeredWithCitations: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'answered' and ${interactionEvents.citationCount} > 0)`,
-        refused: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'refused')`,
-        clarified: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'clarified')`,
-        errors: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'error')`,
-      })
-      .from(interactionEvents)
-      .where(scope),
-  );
-
+function toSummary(row: {
+  total?: unknown;
+  answeredWithCitations?: unknown;
+  refused?: unknown;
+  clarified?: unknown;
+  errors?: unknown;
+  timeouts?: unknown;
+  qualityN?: unknown;
+} | undefined): KpiSummary {
   const total = toNumber(row?.total);
   const answeredWithCitations = toNumber(row?.answeredWithCitations);
+  const qualityN = toNumber(row?.qualityN);
   return {
     total,
     answeredWithCitations,
     refused: toNumber(row?.refused),
     clarified: toNumber(row?.clarified),
     errors: toNumber(row?.errors),
-    answeredWithCitationsRate: total === 0 ? 0 : answeredWithCitations / total,
+    timeouts: toNumber(row?.timeouts),
+    answeredWithCitationsRate: qualityN === 0 ? 0 : answeredWithCitations / qualityN,
   };
+}
+
+async function loadKpiSummary(db: Database, window: KpiWindow): Promise<KpiSummary> {
+  const [row] = await db
+    .select({
+      total: sql<number>`count(*)`,
+      answeredWithCitations: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'answered' and ${interactionEvents.citationCount} > 0)`,
+      refused: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'refused')`,
+      clarified: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'clarified')`,
+      errors: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'error')`,
+      timeouts: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'timeout')`,
+      qualityN: sql<number>`count(*) filter (where ${interactionEvents.outcome} not in ('timeout', 'error'))`,
+    })
+    .from(interactionEvents)
+    .where(windowScope(window));
+  return toSummary(row);
+}
+
+async function loadTopThemes(db: Database, window: KpiWindow, limit: number): Promise<ThemeCount[]> {
+  const rows = await db
+    .select({ theme: interactionEvents.theme, count: sql<number>`count(*)` })
+    .from(interactionEvents)
+    .where(and(windowScope(window), isNotNull(interactionEvents.theme)))
+    .groupBy(interactionEvents.theme)
+    .orderBy(desc(sql`count(*)`))
+    .limit(limit);
+
+  return rows
+    .filter((row): row is { theme: string; count: number } => row.theme !== null)
+    .map((row) => ({ theme: row.theme, count: toNumber(row.count) }));
+}
+
+async function loadRecentInteractions(
+  db: Database,
+  window: KpiWindow,
+  limit: number,
+): Promise<InteractionLogRow[]> {
+  const rows = await db
+    .select({
+      occurredAt: interactionEvents.occurredAt,
+      question: interactionEvents.question,
+      outcome: interactionEvents.outcome,
+      citationCount: interactionEvents.citationCount,
+    })
+    .from(interactionEvents)
+    .where(windowScope(window))
+    .orderBy(desc(interactionEvents.occurredAt))
+    .limit(limit);
+
+  return rows.map((row) => ({
+    occurredAt: row.occurredAt,
+    question: row.question,
+    outcome: row.outcome,
+    citationCount: toNumber(row.citationCount),
+  }));
+}
+
+async function loadUnansweredQuestions(
+  db: Database,
+  window: KpiWindow,
+  limit: number,
+): Promise<UnansweredQuestion[]> {
+  const rows = await db
+    .select({ question: interactionEvents.question, occurredAt: interactionEvents.occurredAt })
+    .from(interactionEvents)
+    .where(
+      and(
+        windowScope(window),
+        eq(interactionEvents.outcome, "refused"),
+        isNotNull(interactionEvents.question),
+      ),
+    )
+    .orderBy(desc(interactionEvents.occurredAt))
+    .limit(limit);
+
+  return rows
+    .filter((row): row is { question: string; occurredAt: Date } => row.question !== null)
+    .map((row) => ({ question: row.question, occurredAt: row.occurredAt }));
+}
+
+/** Aggregate outcome counts for a fund over a time window. */
+export async function getKpiSummary(window: KpiWindow): Promise<KpiSummary> {
+  return withFundSchema(window.fundKey, (db) => loadKpiSummary(db, window));
 }
 
 export interface ThemeCount {
@@ -99,24 +184,7 @@ export interface ThemeCount {
 
 /** Top themes by volume (null until a classifier populates `theme`; returns [] meanwhile). */
 export async function getTopThemes(window: KpiWindow, limit = 10): Promise<ThemeCount[]> {
-  const rows = await withFundSchema(window.fundKey, (db) =>
-    db
-      .select({ theme: interactionEvents.theme, count: sql<number>`count(*)` })
-      .from(interactionEvents)
-      .where(
-        and(
-          windowScope(window),
-          isNotNull(interactionEvents.theme),
-        ),
-      )
-      .groupBy(interactionEvents.theme)
-      .orderBy(desc(sql`count(*)`))
-      .limit(limit),
-  );
-
-  return rows
-    .filter((row): row is { theme: string; count: number } => row.theme !== null)
-    .map((row) => ({ theme: row.theme, count: toNumber(row.count) }));
+  return withFundSchema(window.fundKey, (db) => loadTopThemes(db, window, limit));
 }
 
 export interface InteractionLogRow {
@@ -131,26 +199,74 @@ export async function getRecentInteractions(
   window: KpiWindow,
   limit = 50,
 ): Promise<InteractionLogRow[]> {
-  const rows = await withFundSchema(window.fundKey, (db) =>
-    db
-      .select({
-        occurredAt: interactionEvents.occurredAt,
-        question: interactionEvents.question,
-        outcome: interactionEvents.outcome,
-        citationCount: interactionEvents.citationCount,
-      })
-      .from(interactionEvents)
-      .where(windowScope(window))
-      .orderBy(desc(interactionEvents.occurredAt))
-      .limit(limit),
-  );
+  return withFundSchema(window.fundKey, (db) => loadRecentInteractions(db, window, limit));
+}
 
-  return rows.map((row) => ({
-    occurredAt: row.occurredAt,
-    question: row.question,
-    outcome: row.outcome,
-    citationCount: toNumber(row.citationCount),
-  }));
+export interface UnansweredQuestion {
+  question: string;
+  occurredAt: Date;
+}
+
+/**
+ * Recent refused questions — the corpus-roadmap signal ("what are users asking that we can't
+ * answer?"). Only rows that logged a question are returned.
+ */
+export async function getUnansweredQuestions(
+  window: KpiWindow,
+  limit = 50,
+): Promise<UnansweredQuestion[]> {
+  return withFundSchema(window.fundKey, (db) => loadUnansweredQuestions(db, window, limit));
+}
+
+export interface FundOverviewLimits {
+  unanswered?: number;
+  themes?: number;
+  log?: number;
+}
+
+export interface FundOverview {
+  summary: KpiSummary;
+  unanswered: UnansweredQuestion[];
+  themes: ThemeCount[];
+  log: InteractionLogRow[];
+}
+
+/**
+ * Fund overview panels in one `withFundSchema` transaction (one BEGIN + SET LOCAL + COMMIT).
+ * postgres.js cannot pipeline concurrent queries on a single connection, so the four selects
+ * run sequentially — cheaper than four parallel transactions that each occupy a pool slot.
+ */
+export async function getFundOverview(
+  window: KpiWindow,
+  limits: FundOverviewLimits = {},
+): Promise<FundOverview> {
+  const unansweredLimit = limits.unanswered ?? 20;
+  const themeLimit = limits.themes ?? 10;
+  const logLimit = limits.log ?? 25;
+  return withFundSchema(window.fundKey, async (db) => {
+    const summary = await loadKpiSummary(db, window);
+    const unanswered = await loadUnansweredQuestions(db, window, unansweredLimit);
+    const themes = await loadTopThemes(db, window, themeLimit);
+    const log = await loadRecentInteractions(db, window, logLimit);
+    return { summary, unanswered, themes, log };
+  });
+}
+
+export interface AgentOverview {
+  summary: KpiSummary;
+  log: InteractionLogRow[];
+}
+
+/** Agent overview: summary + recent log in one fund-schema transaction. */
+export async function getAgentOverview(
+  window: KpiWindow,
+  logLimit = 25,
+): Promise<AgentOverview> {
+  return withFundSchema(window.fundKey, async (db) => {
+    const summary = await loadKpiSummary(db, window);
+    const log = await loadRecentInteractions(db, window, logLimit);
+    return { summary, log };
+  });
 }
 
 export interface AgentActivityRow {
@@ -166,6 +282,12 @@ export interface AgentActivityRow {
   errors: number;
   lastOccurredAt: Date;
 }
+
+/**
+ * Parallel fund-schema reads for `getAgentActivity`. Matches the dev reader-pool size (3);
+ * production has 10. Unbounded `Promise.all` would stall other dashboard queries.
+ */
+const FUND_SCHEMA_READ_CONCURRENCY = 3;
 
 /**
  * Cross-fund agent activity since an instant — the admin agent-overview. Grouped by
@@ -184,8 +306,7 @@ export async function getAgentActivity(since: Date): Promise<AgentActivityRow[]>
         "reading on would silently return public-corpus rows for these funds.",
     );
   }
-  const all: AgentActivityRow[] = [];
-  for (const fund of funds) {
+  const perFund = await mapPool(funds, FUND_SCHEMA_READ_CONCURRENCY, async (fund) => {
     const rows = await withFundSchema(fund.key, (db) =>
       db
         .select({
@@ -195,60 +316,27 @@ export async function getAgentActivity(since: Date): Promise<AgentActivityRow[]>
           total: sql<number>`count(*)`,
           answeredWithCitations: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'answered' and ${interactionEvents.citationCount} > 0)`,
           refused: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'refused')`,
-          errors: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'error')`,
+          // Ops health: timeouts are not corpus refusals, but they are a degraded turn.
+          errors: sql<number>`count(*) filter (where ${interactionEvents.outcome} in ('error', 'timeout'))`,
           lastOccurredAt: sql<string>`max(${interactionEvents.occurredAt})`,
         })
         .from(interactionEvents)
         .where(gte(interactionEvents.occurredAt, since))
         .groupBy(interactionEvents.tenantId, interactionEvents.agentId, interactionEvents.fund),
     );
-    for (const row of rows) {
-      all.push({
-        fundKey: fund.key,
-        tenantId: row.tenantId,
-        agentId: row.agentId,
-        fund: row.fund,
-        total: toNumber(row.total),
-        answeredWithCitations: toNumber(row.answeredWithCitations),
-        refused: toNumber(row.refused),
-        errors: toNumber(row.errors),
-        lastOccurredAt: new Date(row.lastOccurredAt),
-      });
-    }
-  }
+    return rows.map((row) => ({
+      fundKey: fund.key,
+      tenantId: row.tenantId,
+      agentId: row.agentId,
+      fund: row.fund,
+      total: toNumber(row.total),
+      answeredWithCitations: toNumber(row.answeredWithCitations),
+      refused: toNumber(row.refused),
+      errors: toNumber(row.errors),
+      lastOccurredAt: new Date(row.lastOccurredAt),
+    }));
+  });
+  const all = perFund.flat();
   all.sort((a, b) => b.total - a.total);
   return all;
-}
-
-export interface UnansweredQuestion {
-  question: string;
-  occurredAt: Date;
-}
-
-/**
- * Recent refused questions — the corpus-roadmap signal ("what are users asking that we can't
- * answer?"). Only rows that logged a question are returned.
- */
-export async function getUnansweredQuestions(
-  window: KpiWindow,
-  limit = 50,
-): Promise<UnansweredQuestion[]> {
-  const rows = await withFundSchema(window.fundKey, (db) =>
-    db
-      .select({ question: interactionEvents.question, occurredAt: interactionEvents.occurredAt })
-      .from(interactionEvents)
-      .where(
-        and(
-          windowScope(window),
-          eq(interactionEvents.outcome, "refused"),
-          isNotNull(interactionEvents.question),
-        ),
-      )
-      .orderBy(desc(interactionEvents.occurredAt))
-      .limit(limit),
-  );
-
-  return rows
-    .filter((row): row is { question: string; occurredAt: Date } => row.question !== null)
-    .map((row) => ({ question: row.question, occurredAt: row.occurredAt }));
 }

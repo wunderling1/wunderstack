@@ -1,4 +1,4 @@
-import { count, eq, funds, getDb, listInstances, users } from "@wunderstack/db";
+import { count, eq, funds, getDb, users } from "@wunderstack/db";
 import { getAgentActivity } from "@wunderstack/analytics";
 import { AGENT_KEY_LABELS, AGENT_KEYS } from "@wunderstack/shared";
 import {
@@ -13,10 +13,12 @@ import {
   type AgentStatus,
 } from "@wunderstack/ui";
 import Link from "next/link";
+import { listInstancesCached } from "@/lib/fund-lookups";
 import { agentLabel } from "@/lib/release-manifest";
 import { sinceDaysAgo } from "@/lib/window";
 import { CreateFundForm } from "./create-form";
 
+/** KPI surface — always fetch. Config tabs are cached separately. */
 export const dynamic = "force-dynamic";
 
 const WINDOW_DAYS = 30;
@@ -38,7 +40,7 @@ export default async function FundsAdminPage() {
   const rows = await Promise.all(
     fundRows.map(async (fund) => {
       const [instances, accountRows] = await Promise.all([
-        listInstances(fund.key),
+        listInstancesCached(fund.key),
         getDb().select({ n: count() }).from(users).where(eq(users.tenantId, fund.key)),
       ]);
       const fundActivity = activity.filter((row) => row.fundKey === fund.key);

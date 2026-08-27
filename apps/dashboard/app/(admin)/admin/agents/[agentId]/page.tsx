@@ -1,5 +1,5 @@
 import { getAgentActivity } from "@wunderstack/analytics";
-import { getFund, listActiveFunds, listInstances } from "@wunderstack/db";
+import { listActiveFunds } from "@wunderstack/db";
 import {
   AgentStatusBadge,
   buttonVariants,
@@ -15,9 +15,11 @@ import {
 } from "@wunderstack/ui";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { getFundCached, listInstancesCached } from "@/lib/fund-lookups";
 import { agentLabel, getReleaseManifest } from "@/lib/release-manifest";
 import { sinceDaysAgo } from "@/lib/window";
 
+/** KPI surface — always fetch. Config tabs are cached separately. */
 export const dynamic = "force-dynamic";
 
 const WINDOW_DAYS = 30;
@@ -48,14 +50,15 @@ export default async function AgentDetail({
   const total = agentActivity.reduce((sum, row) => sum + row.total, 0);
   const errors = agentActivity.reduce((sum, row) => sum + row.errors, 0);
   const answered = agentActivity.reduce((sum, row) => sum + row.answeredWithCitations, 0);
+  const qualityN = total - errors;
   const status = deriveStatus(total, errors);
 
   const whereItRuns = (
     await Promise.all(
       activeFunds.map(async (fundRow) => {
         const [instances, fund] = await Promise.all([
-          listInstances(fundRow.key),
-          getFund(fundRow.key),
+          listInstancesCached(fundRow.key),
+          getFundCached(fundRow.key),
         ]);
         const instance = instances.find((row) => row.agentKey === agentId);
         if (!instance) return null;
@@ -214,8 +217,8 @@ export default async function AgentDetail({
         )}
         {total > 0 && agentActivity[0] ? (
           <p className="mt-3 text-sm text-text-muted">
-            Totaal {num(total)} vragen · {pct(answered / total)} beantwoord met geverifieerde
-            citaties. Laatste activiteit{" "}
+            Totaal {num(total)} vragen · {pct(qualityN === 0 ? 0 : answered / qualityN)} beantwoord
+            met geverifieerde citaties (timeout en fout tellen niet mee). Laatste activiteit{" "}
             {dateTime.format(
               agentActivity.reduce(
                 (latest, row) => (row.lastOccurredAt > latest ? row.lastOccurredAt : latest),
