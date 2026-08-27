@@ -27,6 +27,21 @@ export {
 } from "./contracts/chat.js";
 
 export {
+  interactionOutcomes,
+  interactionOutcomeSchema,
+  settledRunOutcomes,
+  settledRunOutcomeSchema,
+  streamErrorOutcomes,
+  streamErrorOutcomeSchema,
+  classifySettledRunOutcome,
+  classifyThrownRunOutcome,
+  isQualityOutcome,
+  type InteractionOutcome,
+  type SettledRunOutcome,
+  type StreamErrorOutcome,
+} from "./contracts/interaction-outcome.js";
+
+export {
   agentChannels,
   agentChannelSchema,
   type AgentChannel,

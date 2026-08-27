@@ -1,7 +1,7 @@
 export { cn } from "./lib/cn.js";
 
 // Primitives
-export { Button, buttonVariants, type ButtonProps } from "./primitives/button.js";
+export { Button, buttonVariants, type ButtonProps, type ButtonSize } from "./primitives/button.js";
 export { IconButton, type IconButtonProps } from "./primitives/icon-button.js";
 export { Field, type FieldProps } from "./primitives/field.js";
 export { Textarea, type TextareaProps } from "./primitives/textarea.js";
@@ -61,6 +61,13 @@ export {
   DialogDescription,
   type DialogContentProps,
 } from "./primitives/dialog.js";
+export {
+  NavPills,
+  NavPill,
+  navPillClassName,
+  type NavPillsProps,
+  type NavPillProps,
+} from "./primitives/nav-pills.js";
 
 // Trust-patterns (layer 3, D16) — the visual translation of the grounding architecture
 export {
@@ -70,7 +77,12 @@ export {
   type CitationBadgeProps,
   type CitationVerification,
 } from "./trust-patterns/citation-block.js";
-export { AnswerCard, type AnswerCardProps, type AnswerRole } from "./trust-patterns/answer-card.js";
+export {
+  AnswerCard,
+  type AnswerCardProps,
+  type AnswerRole,
+  type DensitySize,
+} from "./trust-patterns/answer-card.js";
 export { RefusalNotice, type RefusalNoticeProps } from "./trust-patterns/refusal-notice.js";
 export {
   AgentStatusBadge,
@@ -78,3 +90,13 @@ export {
   type AgentStatus,
 } from "./trust-patterns/agent-status-badge.js";
 export { KpiTile, type KpiTileProps } from "./trust-patterns/kpi-tile.js";
+export {
+  CardSection,
+  type CardSectionProps,
+} from "./trust-patterns/card-section.js";
+export {
+  AnswerProgress,
+  type AnswerProgressProps,
+  type AnswerProgressStep,
+} from "./trust-patterns/answer-progress.js";
+export { Composer, type ComposerProps } from "./trust-patterns/composer.js";

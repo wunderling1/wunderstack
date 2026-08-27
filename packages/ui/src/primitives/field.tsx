@@ -1,19 +1,34 @@
+import { cva, type VariantProps } from "class-variance-authority";
 import type { InputHTMLAttributes } from "react";
 import { cn } from "../lib/cn.js";
 
-export type FieldProps = InputHTMLAttributes<HTMLInputElement>;
+const fieldVariants = cva(
+  [
+    "w-full rounded-[var(--radius-pill)] border border-border bg-surface text-text",
+    "placeholder:text-text-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-page",
+    "disabled:cursor-not-allowed disabled:opacity-50",
+  ],
+  {
+    variants: {
+      size: {
+        sm: "h-8 px-3 text-xs",
+        md: "h-10 px-4 text-sm",
+        lg: "h-12 px-5 text-base",
+      },
+    },
+    defaultVariants: {
+      size: "md",
+    },
+  },
+);
 
-/** Pill-shaped text field. */
-export function Field({ className, ...props }: FieldProps) {
-  return (
-    <input
-      className={cn(
-        "h-10 w-full rounded-[var(--radius-pill)] border border-border bg-surface px-4 text-sm text-text",
-        "placeholder:text-text-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-page",
-        "disabled:cursor-not-allowed disabled:opacity-50",
-        className,
-      )}
-      {...props}
-    />
-  );
+export interface FieldProps
+  extends Omit<InputHTMLAttributes<HTMLInputElement>, "size">,
+    VariantProps<typeof fieldVariants> {}
+
+/** Pill-shaped text field. Density via `size` (D18); `md` matches the pre-density look. */
+export function Field({ className, size, ...props }: FieldProps) {
+  return <input className={cn(fieldVariants({ size }), className)} {...props} />;
 }
+
+export { fieldVariants };

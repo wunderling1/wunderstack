@@ -3,6 +3,8 @@ import { cn } from "../lib/cn.js";
 
 export type AnswerRole = "agent" | "user";
 
+export type DensitySize = "sm" | "md" | "lg";
+
 export interface AnswerCardProps {
   role: AnswerRole;
   children: ReactNode;
@@ -14,16 +16,36 @@ export interface AnswerCardProps {
   agentSubLabel?: string;
   /**
    * Full-bleed footer content rendered directly after the body — no outer padding.
-   * Each section inside footer is responsible for its own `border-t border-border` and padding.
-   * This is the seam for bronnen, vervolgvragen and feedback strips.
+   * Each section inside footer is responsible for its own `border-t border-border` and padding
+   * (prefer `CardSection`). This is the seam for bronnen, vervolgvragen and feedback strips.
    */
   footer?: ReactNode;
+  /** Density (D18). `md` matches the pre-density look; embed uses `sm`. */
+  size?: DensitySize;
   className?: string;
 }
 
+const BODY: Record<DensitySize, string> = {
+  sm: "px-4 py-3 text-sm leading-relaxed",
+  md: "px-8 py-6 text-base leading-relaxed",
+  lg: "px-8 py-6 text-base leading-relaxed",
+};
+
+const HEADER_GAP: Record<DensitySize, string> = {
+  sm: "mb-2",
+  md: "mb-4",
+  lg: "mb-4",
+};
+
+const USER_PAD: Record<DensitySize, string> = {
+  sm: "px-3.5 py-2 text-sm leading-relaxed",
+  md: "px-5 py-3 text-base leading-relaxed",
+  lg: "px-5 py-3 text-base leading-relaxed",
+};
+
 /**
  * Trust-pattern: one turn in a grounded conversation — the agent's answer or the user's question
- * (formerly `message-bubble`, D16).
+ * (formerly `message-bubble`, D16). Density via `size` (D18).
  *
  * Agent variant is a sectioned card: `overflow-hidden` with no outer padding; body lives in a
  * padded inner div; footer sections span the full card width separated by hairlines.
@@ -34,6 +56,7 @@ export function AnswerCard({
   agentLabel,
   agentSubLabel,
   footer,
+  size = "md",
   className,
 }: AnswerCardProps) {
   const isUser = role === "user";
@@ -44,8 +67,9 @@ export function AnswerCard({
         <div
           className={cn(
             // Bottom-right stays square: the sharp corner points back at the sender.
-            "max-w-[85%] rounded-[var(--radius-card)] rounded-br-none px-5 py-3 text-base leading-relaxed",
+            "max-w-[85%] rounded-[var(--radius-card)] rounded-br-none",
             "bg-primary text-on-primary shadow-[var(--elevation-raised)]",
+            USER_PAD[size],
             className,
           )}
         >
@@ -61,13 +85,17 @@ export function AnswerCard({
         className="w-full overflow-hidden rounded-[var(--radius-card)] bg-surface shadow-[var(--elevation-card)]"
       >
         {/* Body — padded */}
-        <div className="px-8 py-6 text-base leading-relaxed text-text">
+        <div className={cn(BODY[size], "text-text")}>
           {agentLabel !== undefined ? (
-            <div className="mb-4 flex items-center gap-2">
+            <div className={cn("flex items-center gap-2", HEADER_GAP[size])}>
               <AgentSparkle />
-              <span className="text-sm font-semibold text-text">{agentLabel}</span>
+              <span className={cn("font-semibold text-text", size === "sm" ? "text-xs" : "text-sm")}>
+                {agentLabel}
+              </span>
               {agentSubLabel !== undefined ? (
-                <span className="text-sm text-text-muted">· {agentSubLabel}</span>
+                <span className={cn("text-text-muted", size === "sm" ? "text-xs" : "text-sm")}>
+                  · {agentSubLabel}
+                </span>
               ) : null}
             </div>
           ) : null}
