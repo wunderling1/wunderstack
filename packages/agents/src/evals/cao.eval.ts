@@ -1667,7 +1667,8 @@ async function answerQualityChecks(): Promise<Check[]> {
     const answer = generated.text;
     await sleep(2000);
 
-    const scores = await scoreAnswerCase(testCase, passages, answer, NOT_FOUND_MESSAGE);
+    // G2-answer scores the CAO agent only; the arbo agent is measured through its own fund set.
+    const scores = await scoreAnswerCase(testCase, passages, answer, NOT_FOUND_MESSAGE, "cao");
     // Persist id/question/answerRaw + finishReason/answerChars so a failed under-refusal, citation,
     // or truncation case is inspectable from the run artefact without regenerating (Tier B / Gate C
     // close-out etd-012 diagnostic).

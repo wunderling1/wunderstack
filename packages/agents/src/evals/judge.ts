@@ -390,8 +390,8 @@ export function scoreRefusalCalibration(answer: string, testCase: GoldenCase, no
 export function scoreHardHallucination(
   answer: string,
   passages: GoldenPassage[],
-  userSupplied = "",
-  agentKey: HardFactAgentKey = "cao",
+  userSupplied: string,
+  agentKey: HardFactAgentKey,
 ): { score: number; invented: string[] } {
   // Grounding = retrieved context + what the user themselves put on the table. A `derived` case asks
   // "en bij 24 uur?"; the agent echoing "24 uur" is not a hallucination, so the user's question/history
@@ -499,6 +499,7 @@ export async function scoreAnswerCase(
   passages: GoldenPassage[],
   answer: string,
   notFoundMessage: string,
+  agentKey: HardFactAgentKey,
 ): Promise<CaseScores> {
   const context = assembleEvalContext(passages);
 
@@ -511,7 +512,7 @@ export async function scoreAnswerCase(
   // User-supplied numbers (this turn's question + prior history) count as grounding: a `derived` case
   // like "en bij 24 uur?" must not flag the agent for echoing the 24 the user provided.
   const userSupplied = [testCase.question, ...(testCase.history ?? []).map((message) => message.content)].join(" ");
-  const hardHallucination = scoreHardHallucination(prose, passages, userSupplied).score;
+  const hardHallucination = scoreHardHallucination(prose, passages, userSupplied, agentKey).score;
 
   if (testCase.category === "refusal") {
     // Refusal cases now receive a real generated answer (against near-miss distractor context), so
