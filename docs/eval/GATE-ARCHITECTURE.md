@@ -3,11 +3,11 @@
 > **Status:** CANONIEK. Dit is de enige levende bron voor de gate-logica van de CAO-agent.
 > **Vervangt als levende identifiers:** Gates A–D / B2 / B-integration / F, de eval-labels E0–E13,
 > en de plannummers P1–P8. Die blijven alleen bestaan in de mappingtabel (Bijlage A).
-> **Geverifieerd tegen:** `packages/agents/src/evals/cao.eval.ts` + de eval-run van 2026-07-21 op
-> branch `fix/eval-gate-enforcement` (zie het changelog en §3). "Integraal groen" gold voor de
-> **toen bestaande** fonds-sets — dat was alleen `etd` op de fixtureset. De later toegevoegde sets op
-> echt geïngeste corpora (`demo`, `etd-full`) zijn nog niet groen geweest: de refusal-guard faalt daar
-> (`SLOTVERSLAG-ingest-herstelplan-2026-07-31.md`). Er is dus **geen bevroren volledig groene run**.
+> **Geverifieerd tegen:** `packages/agents/src/evals/cao.eval.ts` + de nightly eval-run van
+> **2026-08-29** @7219450 (`generatedAt` 2026-08-29T10:06:50Z, artefact: nightly CI `eval-report`).
+> Integraal groen op alle gates; G2-answer hardHallucination 100% (11/11 checks, 38/38 cases).
+> Vier fonds-sets (`demo`, `etd`, `etd-full`, `arbo.oomt`) staan groen op G3-fund. De checkcounts
+> hieronder zijn **runwaarden uit dat artefact**, geen contract — een nieuwe run kan afwijken.
 > **Restructure-plan:** `PLAN-gate-restructure.md`.
 
 Dit document heeft twee helften:
@@ -108,7 +108,7 @@ productie (`cao/agent.ts`), niet in de eval-harness, en is daarom géén registr
 | `G1-contract` | G1 | — | Gate A + Gate D-contract |
 | `G1-roleplay-contract` | G1 | — | nieuw (rollenspelfamilie, fase 6) |
 | `G2-retrieval` | G2 | Scaleway | Gate B |
-| `G2-multi-turn` | G2 | Scaleway + Mistral | Gate B2 (nu case-categorie van G2-retrieval) |
+| `G2-multi-turn` | G2 | Scaleway + Mistral | Gate B2 (eigen gate-id in `gates.ts`; scoort elliptische condensatie + serve-path coupling) |
 | `G2-answer` | G2 | Scaleway + Mistral | Gate C |
 | `G2-roleplay-persona` | G2 | Mistral | nieuw (rollenspelfamilie, fase 6) |
 | `G2-roleplay-review` | G2 | Mistral | nieuw (rollenspelfamilie, fase 6) |
@@ -162,20 +162,20 @@ op latency blijft backlog (`cao.eval.ts`), niet in dit model.
 | **Karakter** | **Change-detector, geen gedragsbewijs.** Bewijst dat de regels *bestaan*, niet dat het model ze volgt (dat is G2/G3). Hoort daarom niet in het klantverhaal als kwaliteitsbewijs. |
 | **Blocking** | CI: exit 1 → job `verify` faalt. |
 | **Herkomst** | Gate A (excl. fixture-hash → invariant Fixture-hygiëne, §5) + Gate D-contract. |
-| **Nulmeting 2026-07-21** | PASS (13/13). |
+| **Nulmeting 2026-07-21** | PASS (23/23). Zie nightly 2026-08-29 @7219450 voor actuele checkcount (23/23). |
 
 ### G2 — GEDRAG
 
 | Veld | Inhoud |
 |---|---|
 | **Faalscenario's** | (a) Retrieval vindt het juiste artikel/lid niet — ook niet in multi-turn-gesprekken. (b) Antwoorden hallucineren, citeren fout, weigeren te veel of te weinig. |
-| **Checks** | **G2-retrieval:** recall@k + MRR op golden passages; productie-`rerank()` zonder failures; MRR-delta ≥ 0. Bevat case-categorie `multi-turn` (elliptical-detectie → condensatie → retrieval), gerapporteerd als aparte regel binnen dezelfde gate. **G2-answer:** absolute floors op hardHallucination, softFaithfulness, relevance, citationCorrectness, completeness, refusalCalibration, citationVerification, orphan/dangling, over/underRefusal. |
+| **Checks** | **G2-retrieval:** recall@k + MRR op golden passages; productie-`rerank()` zonder failures; MRR-delta ≥ 0. **G2-multi-turn:** elliptische condensatie → retrieval + serve-path citation coupling (eigen gate-id, 11 checks @ nightly 2026-08-29). **G2-answer:** absolute floors op hardHallucination, softFaithfulness, relevance, citationCorrectness, completeness, refusalCalibration, citationVerification, orphan/dangling, over/underRefusal. |
 | **Bewijst niet** | Iets over een **echt CAO-corpus**. G2 scoort 31 handgecureerde fixture-passages die `scripts/ingest/fixtures.ts` rechtstreeks uit `golden-passages.jsonl` laadt — zonder PDF-parse en zonder `chunk.ts`. Parse-kwaliteit, chunkgrenzen en structuurankers liggen dus volledig buiten bereik. Aangetoond in Fase 3 van het ingest-herstelplan: G2 stond groen terwijl de productie-ingest 0 van 107 chunks van een echte CAO-PDF ankerde. |
 | **Drempels** | Zie §4. Bronlabel per drempel verplicht. |
-| **Regressie** | G2-answer toetst óók ±tolerance vs baseline (nu op de PR-hot-path; zie besluit B2). `refusalCalibration` en under-refusal-*rate* zitten **niet** in de regressieband — te noisy bij N=3 refusal-fixtures; de absolute floor ≥ 0.90 en de under-refusal-**count**-gate ≤ 1 blijven de bescherming. |
+| **Regressie** | G2-answer toetst óók ±tolerance vs baseline (nu op de PR-hot-path; zie besluit B2). `refusalCalibration` en under-refusal-*rate* zitten **niet** in de regressieband — te noisy bij N=10 refusal-fixtures (`golden-set.base.jsonl`); de absolute floor ≥ 0.90 en de under-refusal-**count**-gate ≤ 1 blijven de bescherming. |
 | **Blocking** | CI bij same-repo (`EVAL_REQUIRE_ALL=1`). Fork-PR: `skipped`, nooit `passed`. |
 | **Herkomst** | Gate B + Gate B2 (als case-categorie) + Gate C. |
-| **Nulmeting 2026-07-21** | PASS. Retrieval hit@1 95.8% / recall 100% / MRR 0.979; multi-turn 4/4; answer alle floors gehaald (hardHall 100%, softFaith 100%, relevance 96.8%, citVerif 100%, underRefusal 0%). |
+| **Nulmeting 2026-07-21** | PASS. Retrieval hit@1 95.8% / recall 100% / MRR 0.979; G2-multi-turn 11/11; answer alle floors gehaald (hardHall 100%, softFaith 100%, relevance 96.8%, citVerif 100%, underRefusal 0%). |
 
 ### G1/G2 — de rollenspelfamilie
 
@@ -242,6 +242,22 @@ terwijl `main` open blijft. Zo blokkeert een ingest-probleem precies daar waar h
 dat pad is het rapport onvoorwaardelijk (alleen een dry-run schrijft niets), dus daar bestaat geen
 ingest zonder rapport. Dát het pad gebruikt is, blijft een aanname.
 
+### Wat deze gates NIET meten
+
+Deze paragraaf is bedoeld voor fondsen en auditors — wat een groene gate **niet** belooft:
+
+1. **G3-fund scoort geen antwoorden.** De fondslaag meet retrieval-composition, reachability, recall en
+   minScore-probes op de echte pipeline. Near-miss-cases in een fonds-set worden expliciet niet
+   door de answer-judge gescoord; faithfulness, hallucinatie en refusal-kalibratie op fondscontent
+   horen bij G2-answer (base layer) of een toekomstige opt-in vanaf `contentStatus: fund-reviewed`.
+2. **De relatieve regressielaag staat uit.** `baseline.json` is corpus v4 terwijl `GOLDEN_CORPUS_VERSION`
+   v5 is; `retrievalRegressionChecks`, `answerRegressionChecks` en de fixture-hash-guard returnen
+   `[]` tot een nieuwe baseline is opgenomen (F1b). De absolute vloeren dragen de bescherming.
+3. **Soft judge-metrics zijn een self-grade.** `softFaithfulness`, `relevance` en `completeness` worden
+   door hetzelfde modelfamily beoordeeld als de generator. P4 (externe judge) is retired; de
+   deterministische gates (hardHallucination, citation-verification count, orphan/dangling) zijn de
+   harde belofte.
+
 ---
 
 ## 3. Drempeltabel (met bronlabel)
@@ -255,7 +271,7 @@ genoemd) · `[?]` **bron onbekend — te herleiden of te herzien**.
 > conservatief-provisioneel gemarkeerd i.p.v. als bewezen. Zie changelog §6.
 
 > **Let op — count vs. rate.** Een aantal G2-answer-gates gate op een **absoluut aantal cases**
-> (bv. "≤ 1 van 31 cases met een unverified citatie"), niet op een percentage. De onderliggende
+> (bv. "≤ 1 van 38 answerable cases met een unverified citatie"), niet op een percentage. De onderliggende
 > *rate* wordt wel gerapporteerd voor trend, maar de gate is de count. Dit staat expliciet in de
 > tabel; de bron is `ANSWER_THRESHOLDS` in `cao.eval.ts`.
 
@@ -277,7 +293,7 @@ genoemd) · `[?]` **bron onbekend — te herleiden of te herzien**.
 | relevance | ≥ 0.84 *(besluit open: 0.84 vs 0.85 — B1)* | rate | `[E]` gemeten judge-ruis 0.845–0.865 @ 3 samples; 0.84 net onder de spread (PLAN-v3 Fase 14.0 stap 3, `golden-set.REVIEW.md`). B1 = terug naar 0.85? **Sinds 2026-08-22: answerable cases only.** |
 | citationCorrectness | ≥ 0.75 | rate | `[C]` bron niet gevonden → herijk na ≥ 14 nightly-runs. **Sinds Fase 4 actie 6: gemiddelde over answerable cases (refusals uitgesloten)** — waarde verschuift t.o.v. de oude baseline, herijk vereist. |
 | completeness | ≥ 0.70 | rate | `[C]` bron niet gevonden → herijk na ≥ 14 nightly-runs. **Sinds 2026-08-22: answerable cases only.** |
-| refusalCalibration | ≥ 0.90 | rate | `[C]` bron niet gevonden → herijk na ≥ 14 nightly-runs. Nulmeting 100%. **Sinds 2026-08-22: alleen absolute floor, geen regressiecheck** (B2: N=3 noisy; count-gate ≤ 1 is de bescherming). |
+| refusalCalibration | ≥ 0.90 | rate | `[C]` bron niet gevonden → herijk na ≥ 14 nightly-runs. Nulmeting 100%. **Sinds 2026-08-22: alleen absolute floor, geen regressiecheck** (B2: N=10 refusal-fixtures in `golden-set.base.jsonl` noisy; count-gate ≤ 1 is de bescherming). |
 | citationVerification | ≤ 1 case unverified | **count** | `[X]` kernbelofte (rate 0.98 = trend-only) |
 | orphanRate | ≤ 0 | rate | `[X]` citatie-integriteit is binair |
 | danglingMarker | ≤ 1 case | **count** | `[X]` citatie-integriteit (rate = trend-only) |
