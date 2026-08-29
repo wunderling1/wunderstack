@@ -3,11 +3,8 @@
  * Replaces hand-written FUND_SET_META: a new corpus is fixture + profile, no code edit.
  */
 
+import { isGroundedAgentKey, type GroundedAgentKey } from "@wunderstack/shared";
 import { z } from "zod";
-
-import type { AgentKey } from "../runtime/registry.js";
-
-import { AGENT_EVAL_PROFILES } from "./agent-profile.js";
 
 export const fundSetIngestSchema = z
   .object({
@@ -37,9 +34,13 @@ export function parseFundSetProfile(raw: unknown): FundSetProfile {
   return fundSetProfileSchema.parse(raw);
 }
 
-/** Reject profiles whose agentKey is not in the eval registry. */
-export function assertKnownAgentKey(agentKey: string): asserts agentKey is AgentKey {
-  if (!(agentKey in AGENT_EVAL_PROFILES)) {
+/**
+ * Reject profiles whose agentKey is not a grounded agent. AGENT_EVAL_PROFILES is
+ * `Record<AgentKey, …>` over the same keys, so this is the eval-registry check without
+ * importing agent-profile.ts (which would cycle through golden-set → judge → harness).
+ */
+export function assertKnownAgentKey(agentKey: string): asserts agentKey is GroundedAgentKey {
+  if (!isGroundedAgentKey(agentKey)) {
     throw new Error(
       `Fund set profile agentKey "${agentKey}" is not registered in AGENT_EVAL_PROFILES. ` +
         "Add the agent eval profile before adding this fund set.",
