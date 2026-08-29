@@ -68,13 +68,13 @@ export interface ParsedGenerationOutput {
  */
 export function stripChunkIdsFromProse(answer: string): string {
   return answer
-    .replace(/\s*\.?[ \t]*Citaat:\s*"[^"]*"\s*\[chunk_id=[^\]]+\]/gi, "")
-    .replace(/\s*\[chunk_id=[^\]]+\]/gi, "")
-    .replace(/\s*\bchunk_id=[A-Za-z0-9._-]+/gi, "")
+    .replace(/[ \t]*\.?[ \t]*Citaat:\s*"[^"]*"[ \t]*\[chunk_id=[^\]]+\]/gi, "")
+    .replace(/[ \t]*\[chunk_id=[^\]]+\]/gi, "")
+    .replace(/[ \t]*\bchunk_id=[A-Za-z0-9._-]+/gi, "")
     .replace(/ +([.,;:])/g, "$1")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
-    .replace(/ {2,}/g, " ")
+    .replace(/(?<=\S) {2,}/g, " ")
     .trimEnd();
 }
 

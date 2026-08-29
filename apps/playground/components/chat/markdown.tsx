@@ -78,7 +78,11 @@ function buildComponents(meta: CitationMarkerMeta | undefined): Components {
     strong: ({ children }) => <strong className="font-semibold">{cite(children)}</strong>,
     em: ({ children }) => <em className="italic">{cite(children)}</em>,
     ul: ({ children }) => <ul className="mb-2 list-disc space-y-1 pl-5 last:mb-0">{children}</ul>,
-    ol: ({ children }) => <ol className="mb-2 list-decimal space-y-1 pl-5 last:mb-0">{children}</ol>,
+    ol: ({ start, children }) => (
+      <ol start={start} className="mb-2 list-decimal space-y-1 pl-5 last:mb-0">
+        {children}
+      </ol>
+    ),
     li: ({ children }) => <li className="leading-relaxed">{cite(children)}</li>,
     h1: ({ children }) => <h1 className="mb-2 mt-3 text-base font-semibold first:mt-0">{cite(children)}</h1>,
     h2: ({ children }) => <h2 className="mb-2 mt-3 text-base font-semibold first:mt-0">{cite(children)}</h2>,
