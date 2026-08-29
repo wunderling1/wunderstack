@@ -64,6 +64,9 @@ import {
 } from "@wunderstack/shared";
 
 import { detectClarification } from "../cao/clarify.js";
+import { caoProfile } from "../cao/profile.js";
+import { arboProfile } from "../arbo/profile.js";
+import type { AgentRuntimeProfile } from "../runtime/profile.js";
 import { condenseQuery, isElliptical, retrievalQueriesForFollowUp } from "../runtime/condense.js";
 import { generateAnswerWithRepair } from "../runtime/generate-answer.js";
 import { verifyAndBuild } from "../cao/agent.js";
@@ -105,6 +108,12 @@ import {
 import { acquireEvalLock, EvalAlreadyRunningError } from "./eval-lock.js";
 import { appendFundRecords, fundRecordsFromReport, resolveCommitSha, verifyFundRecordsRecorded } from "./fund-ledger.js";
 import { unregisteredFundSetChecks } from "./fund-gate.js";
+import {
+  chunksToPassages,
+  fundAnswerLayerChecks,
+  shouldRunFundAnswerLayer,
+  type FundAnswerCaseServed,
+} from "./fund-answer-layer.js";
 import { extraPromptContractChecks } from "./agent-profile.js";
 import { corpusIsolationContractChecks, corpusIsolationLiveChecks } from "./corpus-isolation.js";
 import { createEvalHarness, type EvalCheck as Check, type GateGroup, type GateRunResult } from "./harness.js";
@@ -148,6 +157,11 @@ const EVAL_LLM_MODEL = env.EVAL_GENERATION_MODEL ?? DEFAULT_LLM_MODEL;
 const K_VALUES = [1, 3, 5] as const;
 /** Primary "what the model sees" metric — must match RERANK_CONFIG.topK (5) and production topK. */
 const PRIMARY_K = 5;
+
+const GROUNDED_AGENT_PROFILES: Record<"cao" | "arbo", AgentRuntimeProfile> = {
+  cao: caoProfile,
+  arbo: arboProfile,
+};
 
 /** True when a missing-key gate must fail rather than skip (set on the merge-to-main CI job). */
 const REQUIRE_ALL = env.EVAL_REQUIRE_ALL === "1" || env.EVAL_REQUIRE_ALL === "true";
@@ -1128,6 +1142,68 @@ function fixtureReachabilityCheck(set: GoldenFundSet, diagnoses: FundCaseDiagnos
   };
 }
 
+async function serveFundAnswerCases(set: GoldenFundSet): Promise<FundAnswerCaseServed[]> {
+  const profile = GROUNDED_AGENT_PROFILES[set.agentKey as "cao" | "arbo"];
+  if (!profile) {
+    throw new Error(`Fund answer layer does not support agentKey "${set.agentKey}"`);
+  }
+  const served: FundAnswerCaseServed[] = [];
+  for (const testCase of set.cases) {
+    const query = await fundCaseQuery(testCase);
+    const result = await retrieveContext({
+      query,
+      fund: set.fund,
+      agentKey: set.agentKey,
+      topK: PRODUCTION_DEFAULTS.topK,
+      minScore: PRODUCTION_DEFAULTS.minScore,
+    });
+    const passages = chunksToPassages(result.chunks);
+    const context = assemble(result.chunks, {
+      rewriteMs: 0,
+      embedMs: 0,
+      searchMs: 0,
+      rerankMs: 0,
+      totalMs: 0,
+    }).context;
+    const userSupplied = [testCase.question, ...(testCase.history ?? []).map((message) => message.content)].join(
+      " ",
+    );
+    const generated = await generateAnswerWithRepair({
+      chunkContentById: new Map(passages.map((passage) => [passage.id, passage.content])),
+      userSupplied,
+      maxAttempts: env.EVAL_GENERATION_SAMPLES ?? 2,
+      generate: (extraMessages) =>
+        retryWithBackoff(
+          () =>
+            generateText({
+              model: EVAL_LLM_MODEL,
+              messages: [
+                { role: "system", content: profile.systemInstructions },
+                { role: "user", content: profile.buildAnswerPrompt(context, query) },
+                ...extraMessages,
+              ],
+              temperature: GENERATION_CONFIG.temperature,
+              maxTokens: GENERATION_CONFIG.maxTokens,
+              stop: GENERATION_CONFIG.stop,
+            }),
+          { baseDelayMs: 5000, maxAttempts: 8 },
+        ).then((textResult) => ({
+          text: textResult.text,
+          usage: textResult.usage,
+          finishReason: textResult.finishReason,
+        })),
+    });
+    served.push({
+      testCase,
+      rawAnswer: generated.text,
+      passages,
+      userSupplied,
+    });
+    await sleep(2000);
+  }
+  return served;
+}
+
 async function fundLayerChecks(set: GoldenFundSet): Promise<Check[]> {
   const agentKey = set.agentKey;
   const answerable = set.cases.filter((testCase) => testCase.category !== "refusal");
@@ -1177,11 +1253,18 @@ async function fundLayerChecks(set: GoldenFundSet): Promise<Check[]> {
     `  refusal guard — ${String(emptyProbes)}/${String(MIN_SCORE_PROBES.length)} out-of-corpus probes returned 0 hits ` +
       `(need >= ${String(requiredEmpty)})`,
   );
-  // Say out loud what this layer does NOT score, so an unscored case can never look covered.
-  console.log(
-    `  near-miss cases — ${String(nearMiss.length)} present, NOT scored here (needs the answer layer; ` +
-      `see docs/eval/BESLUIT-refusal-guard-2026-07-31.md)\n`,
-  );
+  // Say out loud what this layer does NOT score on starter/scaffold, so an unscored case can never look covered.
+  const runAnswerLayer = shouldRunFundAnswerLayer(set.contentStatus, TIER);
+  if (runAnswerLayer) {
+    console.log(
+      `  answer layer — will score ${String(set.cases.length)} case(s) deterministically (contentStatus=fund-reviewed)\n`,
+    );
+  } else {
+    console.log(
+      `  near-miss cases — ${String(nearMiss.length)} present, NOT scored here (needs contentStatus=fund-reviewed on nightly/onboarding; ` +
+        `see docs/eval/BESLUIT-refusal-guard-2026-07-31.md)\n`,
+    );
+  }
   for (const diagnosis of diagnoses) {
     const where = diagnosis.rank === null ? "-" : `rank ${String(diagnosis.rank)}`;
     console.log(
@@ -1220,7 +1303,7 @@ async function fundLayerChecks(set: GoldenFundSet): Promise<Check[]> {
     (check) => (recallAdvisory ? { ...check, advisory: true } : check),
   );
 
-  return [
+  const baseChecks: Check[] = [
     // Composition first: when the corpus is not what it claims to be, every number below — including
     // reachability — is measured against the wrong documents.
     ...corpusCompositionCheck(set, corpusDocuments),
@@ -1232,6 +1315,14 @@ async function fundLayerChecks(set: GoldenFundSet): Promise<Check[]> {
       detail: `${String(emptyProbes)}/${String(MIN_SCORE_PROBES.length)} probes empty at minScore ${String(PRODUCTION_DEFAULTS.minScore)}`,
     },
   ];
+
+  if (!runAnswerLayer) {
+    return baseChecks;
+  }
+
+  const profile = GROUNDED_AGENT_PROFILES[set.agentKey as "cao" | "arbo"];
+  const served = await serveFundAnswerCases(set);
+  return [...baseChecks, ...fundAnswerLayerChecks(set.key, set.agentKey, profile.notFoundMessage, served)];
 }
 
 /** Condense an elliptical fund follow-up before retrieval, mirroring the production multi-turn path. */
@@ -1667,7 +1758,6 @@ async function answerQualityChecks(): Promise<Check[]> {
     const answer = generated.text;
     await sleep(2000);
 
-    // G2-answer scores the CAO agent only; the arbo agent is measured through its own fund set.
     const scores = await scoreAnswerCase(testCase, passages, answer, NOT_FOUND_MESSAGE, "cao");
     // Persist id/question/answerRaw + finishReason/answerChars so a failed under-refusal, citation,
     // or truncation case is inspectable from the run artefact without regenerating (Tier B / Gate C
@@ -1807,8 +1897,6 @@ function writeRunArtefact(passed: boolean): boolean {
     commitSha: resolveCommitSha(env.GITHUB_SHA),
     corpusVersion: GOLDEN_CORPUS_VERSION,
     passed,
-    // Empty onlyGates = the full registry ran. Non-empty makes the artefact self-identifying as
-    // partial, so a green report cannot be read as a verdict about gates that never executed.
     config: reportConfigFromEnv({
       requireAll: REQUIRE_ALL,
       onlyGates: GATE_FILTER,

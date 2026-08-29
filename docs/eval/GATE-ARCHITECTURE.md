@@ -65,9 +65,14 @@ gate-ids. `none` is een sentinel van `scripts/ci/resolve-path-scope.sh`, geen ga
 | `EVAL_TIER` | Wanneer (CI) | Content floors |
 |---|---|---|
 | `pr` | `pull_request` | advisory |
-| `merge` | `merge_group` / `push` | blocking |
-| `nightly` | ook `workflow_dispatch` + `run_db_gates` (spiegelt de cron) | blocking |
+| `merge` | `merge_group` / `push` / `workflow_dispatch` + `run_db_gates` | blocking |
 | `nightly` | `schedule` (en lokale default) | blocking |
+
+| `contentStatus` | Retrieval (G3-fund) | Antwoordlaag (G3-fund) |
+|---|---|---|
+| `scaffold` | composition + reachability + refusal-guard blocking; recall advisory op PR | uit |
+| `starter` | idem scaffold | uit |
+| `fund-reviewed` | recall blocking ook op PR | aan op nightly + onboarding (`merge`); deterministische vloeren (dangling, unverifiable, hard-fact, refusal-hygiëne) |
 
 | Fondsset | `contentStatus` |
 |---|---|
@@ -77,7 +82,8 @@ gate-ids. `none` is een sentinel van `scripts/ci/resolve-path-scope.sh`, geen ga
 | `arbo.oomt` | `starter` |
 
 Exit-criterium: zodra een fonds de set accordeert gaat `contentStatus` naar `fund-reviewed` en
-blokkeren content floors (en de recall-drempels van die set) óók op de PR.
+blokkeren content floors (en de recall-drempels van die set) óók op de PR; de antwoordlaag
+draait op nightly en onboarding.
 
 ---
 
@@ -247,10 +253,11 @@ ingest zonder rapport. Dát het pad gebruikt is, blijft een aanname.
 
 Deze paragraaf is bedoeld voor fondsen en auditors — wat een groene gate **niet** belooft:
 
-1. **G3-fund scoort geen antwoorden.** De fondslaag meet retrieval-composition, reachability, recall en
-   minScore-probes op de echte pipeline. Near-miss-cases in een fonds-set worden expliciet niet
-   door de answer-judge gescoord; faithfulness, hallucinatie en refusal-kalibratie op fondscontent
-   horen bij G2-answer (base layer) of een toekomstige opt-in vanaf `contentStatus: fund-reviewed`.
+1. **G3-fund scoort geen antwoorden op starter/scaffold.** De fondslaag meet daar retrieval-composition,
+   reachability, recall en minScore-probes op de echte pipeline. Near-miss-cases worden expliciet niet
+   gescoord tot `contentStatus: fund-reviewed`; dan draait de deterministische antwoordlaag (dangling,
+   unverifiable, hard-fact, refusal-hygiëne) op nightly en onboarding. Judge-metrics (faithfulness,
+   relevance) blijven bij G2-answer (base layer).
 2. **De relatieve regressielaag meet trend, geen absolute waarheid.** `baseline.json` staat sinds
    2026-08-29 op corpus v5 (zie §4.4), dus `retrievalRegressionChecks`, `answerRegressionChecks` en
    de fixture-hash-guard draaien weer. Ze vergelijken tegen één opgenomen run met ±5 punten
@@ -461,8 +468,7 @@ zelf, dus de job erft de bescherming zonder extra `ci.yml`-stap.
 de nightly-configuratie (`EVAL_TIER=nightly`, `EVAL_JUDGE_SAMPLES=3`, `EVAL_GENERATION_SAMPLES=3`,
 `EVAL_REQUIRE_ALL=1`, `EVAL_REQUIRE_DB=1`). Hiermee draaien `retrievalRegressionChecks`,
 `answerRegressionChecks` en de fixture-hash-guard weer; tussen v4 en deze opname stonden ze uit
-(F1b). `REL_TOLERANCE` is ongewijzigd (0.05). Het artefact van de verificatierun ná de opname staat
-in [`run-2026-08-29-baseline-v5.json`](./run-2026-08-29-baseline-v5.json).
+(F1b). `REL_TOLERANCE` is ongewijzigd (0.05).
 
 ### 4.5 Geaccepteerd residu — `sourceRef`-formaat (E4)
 
