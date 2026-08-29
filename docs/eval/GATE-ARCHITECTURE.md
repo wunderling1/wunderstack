@@ -251,9 +251,10 @@ Deze paragraaf is bedoeld voor fondsen en auditors — wat een groene gate **nie
    minScore-probes op de echte pipeline. Near-miss-cases in een fonds-set worden expliciet niet
    door de answer-judge gescoord; faithfulness, hallucinatie en refusal-kalibratie op fondscontent
    horen bij G2-answer (base layer) of een toekomstige opt-in vanaf `contentStatus: fund-reviewed`.
-2. **De relatieve regressielaag staat uit.** `baseline.json` is corpus v4 terwijl `GOLDEN_CORPUS_VERSION`
-   v5 is; `retrievalRegressionChecks`, `answerRegressionChecks` en de fixture-hash-guard returnen
-   `[]` tot een nieuwe baseline is opgenomen (F1b). De absolute vloeren dragen de bescherming.
+2. **De relatieve regressielaag meet trend, geen absolute waarheid.** `baseline.json` staat sinds
+   2026-08-29 op corpus v5 (zie §4.4), dus `retrievalRegressionChecks`, `answerRegressionChecks` en
+   de fixture-hash-guard draaien weer. Ze vergelijken tegen één opgenomen run met ±5 punten
+   tolerantie; de absolute vloeren blijven de harde bescherming.
 3. **Soft judge-metrics zijn een self-grade.** `softFaithfulness`, `relevance` en `completeness` worden
    door hetzelfde modelfamily beoordeeld als de generator. P4 (externe judge) is retired; de
    deterministische gates (hardHallucination, citation-verification count, orphan/dangling) zijn de
@@ -455,6 +456,13 @@ regressiecheck vergelijkt daarna tegen een rode referentie en dekt de degradatie
 
 De CI-`write-baseline`-job draait de eval mét `EVAL_WRITE_BASELINE`; de guard zit in het eval-proces
 zelf, dus de job erft de bescherming zonder extra `ci.yml`-stap.
+
+**Huidige baseline: corpus v5**, opgenomen 2026-08-29 op commit `3838beb` vanuit een groene run met
+de nightly-configuratie (`EVAL_TIER=nightly`, `EVAL_JUDGE_SAMPLES=3`, `EVAL_GENERATION_SAMPLES=3`,
+`EVAL_REQUIRE_ALL=1`, `EVAL_REQUIRE_DB=1`). Hiermee draaien `retrievalRegressionChecks`,
+`answerRegressionChecks` en de fixture-hash-guard weer; tussen v4 en deze opname stonden ze uit
+(F1b). `REL_TOLERANCE` is ongewijzigd (0.05). Het artefact van de verificatierun ná de opname staat
+in [`run-2026-08-29-baseline-v5.json`](./run-2026-08-29-baseline-v5.json).
 
 ### 4.5 Geaccepteerd residu — `sourceRef`-formaat (E4)
 
