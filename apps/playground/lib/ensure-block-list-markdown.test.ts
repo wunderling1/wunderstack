@@ -15,8 +15,8 @@ describe("ensureBlockListMarkdown", () => {
       "Dit zijn de stappen: 1. **Zet het voertuig vast** - Schakel de tractie uit - Zet de parkeerrem vast 2. **Berg de sleutel op** - Minimaal 5 meter weg.";
     const restored = ensureBlockListMarkdown(flat);
     assert.match(restored, /\n\n1\. \*\*Zet het voertuig vast\*\*/);
-    assert.match(restored, /\n   - Schakel de tractie uit/);
+    assert.match(restored, /\n {3}- Schakel de tractie uit/);
     assert.match(restored, /\n\n2\. \*\*Berg de sleutel op\*\*/);
-    assert.match(restored, /\n   - Minimaal 5 meter weg\./);
+    assert.match(restored, /\n {3}- Minimaal 5 meter weg\./);
   });
 });
