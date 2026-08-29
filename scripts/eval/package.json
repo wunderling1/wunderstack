@@ -5,12 +5,15 @@
   "type": "module",
   "scripts": {
     "harvest-feedback": "tsx --env-file-if-exists=../../.env harvest-feedback.ts",
+    "list-fund-sets": "tsx list-fund-sets.ts",
     "rerank-ablation": "tsx --env-file-if-exists=../../.env rerank-ablation.ts",
     "refusal-guard-probe": "tsx --env-file-if-exists=../../.env refusal-guard-probe.ts",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test:unit": "tsx --test *.test.ts"
   },
   "dependencies": {
+    "@wunderstack/agents": "workspace:*",
     "@wunderstack/ai": "workspace:*",
     "@wunderstack/rag": "workspace:*",
     "@wunderstack/shared": "workspace:*",

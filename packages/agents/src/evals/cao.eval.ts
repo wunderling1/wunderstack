@@ -3,7 +3,7 @@
  *
  * Single process / single `eval-report.json` for every registered agent (see agent-profile.ts).
  * CAO owns the G2 base golden set; other agents contribute G1 prompt contracts and G3-fund sets
- * via `FUND_SET_META.agentKey`. Do not add a second `*.eval.ts` for agent 3 — add a profile.
+ * via fund-set profile sidecars (`fixtures/fund-sets/<key>.json`). Do not add a second `*.eval.ts` for agent 3 — add a profile.
  *
  * The golden set is split into two physical layers (see golden-set.ts):
  *   BASE — golden-set.base.jsonl + golden-passages.jsonl: corpus-agnostic behavioral cases that run
@@ -103,7 +103,7 @@ import {
   type CheckKind,
 } from "./content-policy.js";
 import { acquireEvalLock, EvalAlreadyRunningError } from "./eval-lock.js";
-import { appendFundRecords, fundRecordsFromReport, resolveCommitSha } from "./fund-ledger.js";
+import { appendFundRecords, fundRecordsFromReport, resolveCommitSha, verifyFundRecordsRecorded } from "./fund-ledger.js";
 import { extraPromptContractChecks } from "./agent-profile.js";
 import { corpusIsolationContractChecks, corpusIsolationLiveChecks } from "./corpus-isolation.js";
 import { createEvalHarness, type EvalCheck as Check, type GateGroup, type GateRunResult } from "./harness.js";
@@ -155,6 +155,8 @@ const REQUIRE_ALL = env.EVAL_REQUIRE_ALL === "1" || env.EVAL_REQUIRE_ALL === "tr
  * Content floors are advisory only when tier === "pr".
  */
 const TIER = resolveTier(env.EVAL_TIER);
+/** PR runs exercise G3-fund but must not append to the committed promotion ledger. */
+const PERSIST_FUND_LEDGER = TIER !== "pr";
 const CONTENT_GATES_BLOCKING = contentGatesBlocking(TIER);
 
 /** Recall/MRR bar shape, shared by the in-memory Gate B and the nightly Gate B-integration. */
@@ -1055,7 +1057,7 @@ function diagnoseFundCases(
 
 /**
  * Corpus-composition guard (2026-08-24). Asserts the fund holds exactly the documents its fund set
- * declares (`FUND_SET_META.expectedDocuments`).
+ * declares (`expectedDocuments` on the fund-set profile).
  *
  * This is the gate that was missing. Fund "elektronische-detailhandel" silently gained a second,
  * unrelated CAO — 668 foreign chunks against its own 245, because `ingest <dir>` takes every
@@ -1773,9 +1775,15 @@ async function runGate(spec: GateSpec): Promise<boolean> {
       `path scope excludes this gate (EVAL_PATH_SCOPE=${PATH_SCOPE.join(",")})`,
     );
   }
-  // A perFundSet gate with zero discovered sets has nothing to run and emits no report.
+  // A perFundSet gate with zero discovered sets has nothing to measure — fail, not pass silently.
   if (spec.perFundSet === true && goldenFundSets.length === 0) {
-    return true;
+    return pushGate(spec, [
+      {
+        name: "at least one fund set is registered",
+        ok: false,
+        detail: "no golden-set.<key>.jsonl fixtures with fund-sets/<key>.json profiles were discovered",
+      },
+    ]);
   }
   if (!credentialsAvailable(spec.requires)) {
     return pushUnavailable(spec, requirementLabel(spec.requires));
@@ -1792,7 +1800,7 @@ async function runGate(spec: GateSpec): Promise<boolean> {
 }
 
 /** Assemble the E9 run artefact from the accumulators and write it (also on failure). */
-function writeRunArtefact(passed: boolean): void {
+function writeRunArtefact(passed: boolean): boolean {
   const report: EvalReport = {
     schemaVersion: EVAL_REPORT_SCHEMA_VERSION,
     generatedAt: new Date().toISOString(),
@@ -1830,12 +1838,24 @@ function writeRunArtefact(passed: boolean): void {
   console.log(`\nRun artefact written: ${path}`);
 
   // The artefact is gitignored and overwritten by the next run, so each per-fund outcome also lands
-  // as a durable line that `pnpm promote-check` can read back (Fase 4).
+  // as a durable line that `pnpm promote-check` can read back (Fase 4). PR runs skip append so the
+  // committed ledger stays unchanged; nightly/push CI bot-commits the append.
   const records = fundRecordsFromReport(report);
-  if (records.length > 0) {
+  let ledgerOk = true;
+  if (records.length > 0 && PERSIST_FUND_LEDGER) {
     const ledger = appendFundRecords(records);
     console.log(`Promotion ledger: ${String(ledger.appended)} of ${String(records.length)} fund record(s) added to ${ledger.path}`);
+    const verify = verifyFundRecordsRecorded(records);
+    if (!verify.ok) {
+      console.error(
+        `[fund-ledger] passed G3-fund outcome(s) missing from ledger: ${verify.missing.join(", ")}`,
+      );
+      ledgerOk = false;
+    }
+  } else if (records.length > 0) {
+    console.log(`Promotion ledger: skipped append (tier=${TIER}; PR must not write gate-results/)`);
   }
+  return passed && ledgerOk;
 }
 
 /**
@@ -1878,7 +1898,7 @@ async function main(): Promise<void> {
   } finally {
     // Always leave a downloadable artefact — a crashed or failed run is exactly when it matters.
     // If a gate threw, the run did not complete, so it is recorded as not passed.
-    writeRunArtefact(completed && allPassed);
+    allPassed = writeRunArtefact(completed && allPassed);
   }
 
   if (!allPassed) {

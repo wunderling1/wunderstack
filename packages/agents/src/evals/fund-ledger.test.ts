@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 
-import { fundRecordsFromReport, unrecorded, FUND_LEDGER_SCHEMA_VERSION } from "./fund-ledger.js";
+import {
+  fundRecordsFromReport,
+  readFundLedger,
+  unrecorded,
+  verifyFundRecordsRecorded,
+  FUND_LEDGER_SCHEMA_VERSION,
+} from "./fund-ledger.js";
 import type { EvalReport, FundLayerReport, GateReport, GateStatus } from "./report-writer.js";
 
 function fundLayer(key: string, fund: string, corpusVersion: string): FundLayerReport {
@@ -160,5 +169,52 @@ describe("unrecorded", () => {
 
   it("appends everything into an empty ledger", () => {
     assert.equal(unrecorded([], base).length, 1);
+  });
+});
+
+describe("verifyFundRecordsRecorded", () => {
+  const passedRecord = fundRecordsFromReport(
+    report({
+      funds: [fundLayer("demo", "demo", "demo-1")],
+      gates: [fundGate("demo", "demo-1", "passed")],
+    }),
+  )[0]!;
+
+  it("passes when every passed outcome is present in the ledger file", () => {
+    const dir = mkdtempSync(join(tmpdir(), "ledger-"));
+    const path = join(dir, "g3-fund.jsonl");
+    writeFileSync(path, `${JSON.stringify(passedRecord)}\n`, "utf8");
+    const verify = verifyFundRecordsRecorded([passedRecord], path);
+    assert.equal(verify.ok, true);
+    assert.deepEqual(verify.missing, []);
+  });
+
+  it("fails when a passed outcome is absent from the ledger file", () => {
+    const dir = mkdtempSync(join(tmpdir(), "ledger-"));
+    const path = join(dir, "g3-fund.jsonl");
+    writeFileSync(path, "", "utf8");
+    const verify = verifyFundRecordsRecorded([passedRecord], path);
+    assert.equal(verify.ok, false);
+    assert.deepEqual(verify.missing, ["demo"]);
+  });
+
+  it("ignores failed outcomes when verifying", () => {
+    const failed = fundRecordsFromReport(
+      report({
+        funds: [fundLayer("demo", "demo", "demo-1")],
+        gates: [fundGate("demo", "demo-1", "failed", ["guard"])],
+      }),
+    );
+    const dir = mkdtempSync(join(tmpdir(), "ledger-"));
+    const path = join(dir, "g3-fund.jsonl");
+    writeFileSync(path, "", "utf8");
+    const verify = verifyFundRecordsRecorded(failed, path);
+    assert.equal(verify.ok, true);
+  });
+});
+
+describe("readFundLedger", () => {
+  it("returns an empty list for a missing file", () => {
+    assert.deepEqual(readFundLedger("/tmp/does-not-exist-g3-fund.jsonl"), []);
   });
 });

@@ -9,8 +9,12 @@
  * is the cheapest thing that makes the answer auditable, and it needs no infrastructure to read. The
  * review moment is when several funds start re-ingesting often (decision D1).
  *
- * Dependency-free by design, like `report-writer.ts`: the ledger must never be the reason a run
- * crashes, so every failure here degrades to a logged warning.
+ * CI is the writer of the committed ledger (nightly/push bot-commit). Locally and on PR runs the
+ * append still updates the workspace copy for promote-check, but PR runs must not leave git diffs
+ * on `docs/eval/gate-results/` — see `shouldPersistFundLedger` in `cao.eval.ts`.
+ *
+ * Fail-closed: after append, `verifyFundRecordsRecorded` ensures every passed G3-fund outcome is
+ * readable back from disk. A green fund gate without a ledger line fails the run.
  */
 
 import { execFileSync } from "node:child_process";
@@ -123,9 +127,9 @@ export function unrecorded(
 }
 
 /** Records already in the ledger. Unparseable lines are ignored here; the reader reports on those. */
-function readExisting(): FundGateRecord[] {
+export function readFundLedger(ledgerPath: string = LEDGER_PATH): FundGateRecord[] {
   try {
-    return readFileSync(LEDGER_PATH, "utf8")
+    return readFileSync(ledgerPath, "utf8")
       .split("\n")
       .filter((line) => line.trim() !== "")
       .flatMap((line) => {
@@ -140,9 +144,13 @@ function readExisting(): FundGateRecord[] {
   }
 }
 
+function readExisting(): FundGateRecord[] {
+  return readFundLedger(LEDGER_PATH);
+}
+
 /**
  * Append records that are not in the ledger yet. Returns the repo-relative path and how many lines
- * were added; never throws, because a bookkeeping problem must not fail a run that already finished.
+ * were added.
  */
 export function appendFundRecords(records: readonly FundGateRecord[]): { path: string; appended: number } {
   const relativePath = relative(repoRoot, LEDGER_PATH);
@@ -157,4 +165,21 @@ export function appendFundRecords(records: readonly FundGateRecord[]): { path: s
     console.error(`[fund-ledger] failed to append to ${relativePath}:`, error instanceof Error ? error.message : error);
     return { path: relativePath, appended: 0 };
   }
+}
+
+/**
+ * After append, every passed fund outcome must be readable from the ledger. Idempotent replays
+ * (0 appended, record already present) still pass.
+ */
+export function verifyFundRecordsRecorded(
+  records: readonly FundGateRecord[],
+  ledgerPath: string = LEDGER_PATH,
+): { ok: boolean; missing: string[] } {
+  const passed = records.filter((record) => record.status === "passed");
+  if (passed.length === 0) {
+    return { ok: true, missing: [] };
+  }
+  const seen = new Set(readFundLedger(ledgerPath).map(identity));
+  const missing = passed.filter((record) => !seen.has(identity(record))).map((record) => record.setKey);
+  return { ok: missing.length === 0, missing };
 }

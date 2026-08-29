@@ -40,6 +40,8 @@ jobs:
     # to exercise the DB gates; skip the paid verify eval otherwise.
     if: github.event_name != 'workflow_dispatch' || inputs.run_db_gates == true
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     env:
       # Ephemeral, local, thrown away with the runner — so these credentials are not a secret.
       GATE_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/wunderstack
@@ -187,11 +189,24 @@ jobs:
         if: env.GATE_DB == 'true'
         run: |
           pnpm --filter @wunderstack/ingest ingest:fixtures
-          pnpm --filter @wunderstack/ingest ingest demo-corpus --fund demo --agent cao --version 1 --prune
+          # Second agent on fund demo for G3-isolation — no golden set, stays explicit.
           pnpm --filter @wunderstack/ingest ingest arbo-corpus --fund demo --agent arbo --version 1 --prune
-          pnpm --filter @wunderstack/ingest ingest arbo-oomt --fund oomt --agent arbo --version arbo-oomt-2 --prune
-          pnpm --filter @wunderstack/ingest ingest input/cao_elektronische_detailhandel.pdf \
-            --fund elektronische-detailhandel --agent cao --version 1 --prune
+          PROFILES="$(pnpm --filter @wunderstack/eval-scripts list-fund-sets)"
+          if [ -z "$PROFILES" ] || [ "$PROFILES" = "[]" ]; then
+            echo "No fund set profiles — refusing empty ingest loop"
+            exit 1
+          fi
+          echo "$PROFILES" | jq -c '.[] | select(.ingest != null)' | while read -r row; do
+            SOURCE="$(echo "$row" | jq -r '.ingest.source')"
+            FUND="$(echo "$row" | jq -r '.fund')"
+            AGENT="$(echo "$row" | jq -r '.agentKey')"
+            VERSION="$(echo "$row" | jq -r '.ingest.version')"
+            PRUNE_FLAG=""
+            if [ "$(echo "$row" | jq -r '.ingest.prune')" = "true" ]; then
+              PRUNE_FLAG="--prune"
+            fi
+            pnpm --filter @wunderstack/ingest ingest "$SOURCE" --fund "$FUND" --agent "$AGENT" --version "$VERSION" $PRUNE_FLAG
+          done
         env:
           DATABASE_URL: ${{ env.GATE_DATABASE_URL }}
           SCALEWAY_API_KEY: ${{ secrets.SCALEWAY_API_KEY }}
@@ -243,6 +258,34 @@ jobs:
           path: packages/agents/eval-report.json
           if-no-files-found: warn
 
+      # Nightly/push: persist G3-fund outcomes to git so promote-check on a fresh clone has evidence.
+      # PR runs skip append in cao.eval.ts (EVAL_TIER=pr) — promotion history must not be written on PRs.
+      - name: Commit promotion ledger
+        if: success() && env.GATE_DB == 'true' && (github.event_name == 'schedule' || github.event_name == 'push')
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/eval/gate-results/
+          if git diff --staged --quiet; then
+            echo "Ledger unchanged — nothing to commit"
+            exit 0
+          fi
+          git commit -m "chore(eval): update G3-fund promotion ledger [skip ci]"
+          git pull --rebase origin main
+          git push
+
+      - name: Upload promotion ledger (PR artefact)
+        if: always() && github.event_name == 'pull_request' && env.GATE_DB == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: g3-fund-ledger
+          path: docs/eval/gate-results/g3-fund.jsonl
+          if-no-files-found: warn
+
+      - name: Verify promotion ledger unchanged on PR
+        if: always() && github.event_name == 'pull_request'
+        run: git diff --exit-code docs/eval/gate-results/
+
       # Promotion ledger check (offline): may this fund be promoted at HEAD? Reads the ledger the
       # eval just appended and the structure reports ingest just wrote. A NO-GO is the signal —
       # including "ledger still empty for this fund" — not a skip.
@@ -251,7 +294,12 @@ jobs:
         run: |
           set -uo pipefail
           STATUS=0
-          for fund in demo etd etd-full oomt; do
+          PROMOTE_KEYS="$(pnpm --filter @wunderstack/eval-scripts list-fund-sets --promote-keys)"
+          if [ -z "$PROMOTE_KEYS" ]; then
+            echo "No promote-check keys from fund set profiles"
+            exit 1
+          fi
+          for fund in $PROMOTE_KEYS; do
             echo "::group::promote-check $fund HEAD"
             pnpm promote-check "$fund" HEAD || STATUS=1
             echo "::endgroup::"

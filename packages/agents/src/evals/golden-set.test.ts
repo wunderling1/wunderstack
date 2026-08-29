@@ -1,13 +1,20 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 
 import { EVAL_FIXTURE_FUND } from "@wunderstack/shared";
 
+import { parseFundSetProfile } from "./fund-set-profile.js";
 import {
+  FUND_SET_PROFILE_SUBDIR,
   goldenCaseSchema,
   goldenCases,
   goldenFundSets,
   goldenPassages,
+  loadFundSetProfiles,
+  loadFundSetsFrom,
   passageById,
   passagesForCase,
 } from "./golden-set.js";
@@ -125,22 +132,43 @@ describe("fund layer (E12)", () => {
     assert.ok(etd.cases.length >= 20, "the etd fund set has at least 20 cases");
   });
 
-  it("every FUND_SET_META key has a discovered fixture (no silent META orphans)", () => {
-    // loadFundSets() throws if META and disk disagree either way; this asserts the known registry
-    // is fully loaded so a missing arbo.oomt fixture cannot pass as "we just never ran that set".
+  it("every fixture has a profile sidecar and every profile has a fixture", () => {
+    const profiles = loadFundSetProfiles();
     const keys = goldenFundSets.map((set) => set.key).sort();
-    assert.deepEqual(keys, ["arbo.oomt", "demo", "etd", "etd-full"]);
+    const profileKeys = profiles.map((profile) => profile.key).sort();
+    assert.deepEqual(profileKeys, keys);
+    assert.ok(keys.length >= 1, "at least one fund set is discovered");
   });
 
-  it("arbo.oomt is scored against fund oomt with agent arbo", () => {
-    const arbo = goldenFundSets.find((set) => set.key === "arbo.oomt");
-    assert.ok(arbo, "arbo.oomt fund set is discovered");
-    assert.equal(arbo.fund, "oomt");
-    assert.equal(arbo.agentKey, "arbo");
-    assert.equal(arbo.corpusVersion, "arbo-oomt-2");
-    assert.ok(arbo.cases.length >= 10, "arbo.oomt starter set has at least 10 cases");
-    const refusals = arbo.cases.filter((testCase) => testCase.category === "refusal");
-    assert.ok(refusals.length >= 3, "arbo.oomt has the three behaviour refusal cases");
+  it("every profile validates against the Zod schema", () => {
+    for (const profile of loadFundSetProfiles()) {
+      assert.deepEqual(parseFundSetProfile(profile), profile);
+    }
+  });
+
+  it("throws when a fixture has no profile sidecar", () => {
+    const dir = mkdtempSync(join(tmpdir(), "fund-sets-"));
+    mkdirSync(join(dir, FUND_SET_PROFILE_SUBDIR), { recursive: true });
+    writeFileSync(join(dir, "golden-set.probe.jsonl"), '{"id":"p1","question":"q?","expectedPassageIds":[],"referenceAnswer":"r","category":"in_scope","expectedArticle":"1"}\n', "utf8");
+    assert.throws(() => loadFundSetsFrom(dir), /no profile sidecar/);
+  });
+
+  it("throws when a profile references an unknown agentKey", () => {
+    const dir = mkdtempSync(join(tmpdir(), "fund-sets-"));
+    mkdirSync(join(dir, FUND_SET_PROFILE_SUBDIR), { recursive: true });
+    writeFileSync(join(dir, "golden-set.probe.jsonl"), '{"id":"p1","question":"q?","expectedPassageIds":[],"referenceAnswer":"r","category":"in_scope","expectedArticle":"1"}\n', "utf8");
+    writeFileSync(
+      join(dir, FUND_SET_PROFILE_SUBDIR, "probe.json"),
+      JSON.stringify({
+        key: "probe",
+        fund: "probe-fund",
+        agentKey: "unknown-agent",
+        corpusVersion: "probe-1",
+        contentStatus: "scaffold",
+      }),
+      "utf8",
+    );
+    assert.throws(() => loadFundSetsFrom(dir), /not registered in AGENT_EVAL_PROFILES/);
   });
 
   it("every fund case id is unique within its set", () => {

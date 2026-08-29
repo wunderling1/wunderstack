@@ -1,0 +1,13 @@
+{
+  "key": "etd-full",
+  "fund": "elektronische-detailhandel",
+  "agentKey": "cao",
+  "corpusVersion": "etd-full-1",
+  "contentStatus": "starter",
+  "expectedDocuments": ["cao_elektronische_detailhandel"],
+  "ingest": {
+    "source": "input/cao_elektronische_detailhandel.pdf",
+    "version": "1",
+    "prune": true
+  }
+}

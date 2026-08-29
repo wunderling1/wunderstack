@@ -2,7 +2,7 @@
  * Per-agent eval profile — the seam that keeps gate *content* agent-generic.
  *
  * A new agent = an {@link AGENT_PROFILES} entry + an eval profile here + (optional) base golden set
- * + fund fixtures in FUND_SET_META. Do not add a third `*.eval.ts`. G2-retrieval / G2-answer run only
+ * + fund fixtures as profile sidecars in fixtures/fund-sets/. Do not add a third `*.eval.ts`. G2-retrieval / G2-answer run only
  * for profiles with `hasBaseGoldenSet` (today: cao). G1 prompt checks and G3-fund (via set.agentKey)
  * cover every registered agent in one process / one `eval-report.json`.
  *

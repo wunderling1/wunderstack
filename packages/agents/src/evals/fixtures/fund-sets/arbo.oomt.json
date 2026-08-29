@@ -1,0 +1,13 @@
+{
+  "key": "arbo.oomt",
+  "fund": "oomt",
+  "agentKey": "arbo",
+  "corpusVersion": "arbo-oomt-2",
+  "contentStatus": "starter",
+  "expectedDocuments": ["arbo_catalogus_oomt"],
+  "ingest": {
+    "source": "arbo-oomt",
+    "version": "arbo-oomt-2",
+    "prune": true
+  }
+}

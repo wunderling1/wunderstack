@@ -1,0 +1,8 @@
+{
+  "key": "etd",
+  "fund": "eval-fixtures",
+  "agentKey": "cao",
+  "corpusVersion": "etd-1",
+  "contentStatus": "starter",
+  "expectedDocuments": ["Golden eval fixtures"]
+}

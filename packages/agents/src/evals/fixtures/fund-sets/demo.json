@@ -1,0 +1,13 @@
+{
+  "key": "demo",
+  "fund": "demo",
+  "agentKey": "cao",
+  "corpusVersion": "demo-1",
+  "contentStatus": "scaffold",
+  "expectedDocuments": ["cao-fictief"],
+  "ingest": {
+    "source": "demo-corpus",
+    "version": "1",
+    "prune": true
+  }
+}
