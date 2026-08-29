@@ -6,11 +6,35 @@ import { fileURLToPath } from "node:url";
 import type { RetrievedChunk } from "@wunderstack/rag";
 import { z } from "zod";
 
-const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
+import { assertKnownAgentKey, parseFundSetProfile, type FundSetProfile } from "./fund-set-profile.js";
+
+const defaultFixturesDir = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
+export const FUND_SET_PROFILE_SUBDIR = "fund-sets";
 
 /** Raw bytes of a fixture file (used both for parsing and for the content hash below). */
-function readFixture(filename: string): string {
+function readFixture(filename: string, fixturesDir: string = defaultFixturesDir): string {
   return readFileSync(join(fixturesDir, filename), "utf8");
+}
+
+function readFundSetProfile(key: string, fixturesDir: string): FundSetProfile {
+  const profilePath = join(fixturesDir, FUND_SET_PROFILE_SUBDIR, `${key}.json`);
+  let raw: string;
+  try {
+    raw = readFileSync(profilePath, "utf8");
+  } catch {
+    throw new Error(
+      `Fund set fixture "golden-set.${key}.jsonl" has no profile sidecar. ` +
+        `Add ${join(FUND_SET_PROFILE_SUBDIR, `${key}.json`)} next to the fixture.`,
+    );
+  }
+  const profile = parseFundSetProfile(JSON.parse(raw) as unknown);
+  if (profile.key !== key) {
+    throw new Error(
+      `Fund set profile "${profilePath}" key "${profile.key}" does not match fixture key "${key}".`,
+    );
+  }
+  assertKnownAgentKey(profile.agentKey);
+  return profile;
 }
 
 function parseJsonl<T>(raw: string, schema: z.ZodType<T>): T[] {
@@ -95,8 +119,8 @@ export type GoldenCaseCategory = z.infer<typeof goldenCaseCategorySchema>;
  *     → rerank → assemble), matched on article/lid — NOT against fixtures. That is the whole point of
  *     the fund layer: it proves the pipeline surfaces the right CAO article on the actual corpus. It
  *     needs a DB, so it is nightly-only (skips on PRs, required on the nightly). Each fund set carries
- *     its OWN corpusVersion (FUND_SET_META) and is reported separately (base-scores vs fund-scores) in
- *     eval-report.json — closing the audit's "two-layer split exists only as a console label".
+ *     its OWN corpusVersion (fund-set profile sidecar) and is reported separately (base-scores vs
+ *     fund-scores) in eval-report.json — closing the audit's "two-layer split exists only as a console label".
  *
  * Curation policy (E10, unchanged): the fixture files are the single source of truth and are curated
  * BY HAND. The base set grows through the co-creation process (docs/golden-set-cocreation.md), still
@@ -246,87 +270,19 @@ export const goldenFundCaseSchema = z
 export type GoldenFundCase = z.infer<typeof goldenFundCaseSchema>;
 
 /**
- * Per-fund-set metadata, keyed by the filename token (golden-set.<key>.jsonl). Kept in code (like
- * GOLDEN_CORPUS_VERSION) so each set has ONE typed source of truth for its snapshot version and its
- * integration target fund. A fund set file with no entry here fails loud at load — registering a new
- * fund is a deliberate act, never an accidental glob match.
- *
- * `fund` is the `retrieveContext` fund the cases are scored against. For ETD this is the reserved
- * fund the verbatim ETD article passages are ingested into (scripts/ingest/fixtures.ts,
- * EVAL_FIXTURE_FUND); a production ETD deployment would ingest the full CAO PDF under its own fund id
- * and only this value changes. `corpusVersion` is that fund's own snapshot tag (independent of the
- * base GOLDEN_CORPUS_VERSION), so a fund can re-embed without touching the base baseline.
+ * Per-fund-set metadata loaded from `fixtures/fund-sets/<key>.json`. A fund set file with no profile
+ * fails loud at load — registering a new fund is fixture + sidecar, never a code edit.
  */
 export interface FundSetMeta {
   fund: string;
   corpusVersion: string;
   /** Retrieval agent key — defaults to cao for legacy fund sets. */
   agentKey?: string;
-  /**
-   * Review status of this set's CONTENT. Determines whether a content miss is merge-blocking.
-   *   scaffold      — invented text, exists to exercise the pipeline (CAO Fictief, arbo-fictief)
-   *   starter       — real source text, hand-built start set, not yet fund-reviewed
-   *   fund-reviewed — a fund has signed off on the content; from here content is the promise
-   *
-   * Exit criterion: once a fund signs off, contentStatus becomes fund-reviewed and completeness,
-   * relevance and this set's recall floors block on the PR too. That is not a tightening of the
-   * promise — it is the moment the content becomes the promise.
-   *
-   * Required — no default. A new fund set must declare its status explicitly.
-   */
   contentStatus: "scaffold" | "starter" | "fund-reviewed";
-  /**
-   * The documents this fund's corpus must consist of — `documents.title`, which the ingest sets to
-   * `basename(filePath, extname(filePath))` (or a literal, as the fixtures ingest does).
-   *
-   * Declared, because a retrieval number only means something once you know what it was measured
-   * against. On 2026-08-24 fund "elektronische-detailhandel" also held a second, unrelated CAO —
-   * 668 foreign chunks against 245 of its own, because `ingest <dir>` takes EVERY supported file and
-   * one had been dropped into `scripts/ingest/input/`. G3-fund read that as a ranking collapse
-   * (hit@1 92.9% -> 64.3%) and G3-isolation stayed green: nothing crossed a fund boundary, the wrong
-   * document simply arrived inside one. Omit only for a fund whose composition is deliberately open.
-   */
   expectedDocuments?: readonly string[];
+  ingest?: FundSetProfile["ingest"];
+  minScore?: number;
 }
-
-const FUND_SET_META: Record<string, FundSetMeta> = {
-  // ETD — CAO Elektrotechnische Detailhandel 2023. Scored against the ingested ETD passages
-  // (fund "eval-fixtures"); review log: fixtures/golden-set.REVIEW.md (fund layer section).
-  etd: {
-    fund: "eval-fixtures",
-    corpusVersion: "etd-1",
-    contentStatus: "starter",
-    expectedDocuments: ["Golden eval fixtures"],
-  },
-  // Demo — the fictional "CAO Fictief" (Fase 5, tenant zero). Scored against the ingested demo corpus
-  // (fund "demo", from scripts/ingest/demo-corpus). Runs on the nightly integration gate once that
-  // corpus is ingested into the gate DB; base gates are unaffected (base fixture hash unchanged).
-  demo: {
-    fund: "demo",
-    corpusVersion: "demo-1",
-    contentStatus: "scaffold",
-    expectedDocuments: ["cao-fictief"],
-  },
-  // ETD-full — the SAME CAO as `etd` above, but the complete 62-page PDF as the production ingest
-  // stores it, under its own fund. Where `etd` scores hand-curated verbatim passages, this set scores
-  // what the pipeline actually produced from the source document, so it is the only fund set that can
-  // catch an ingest regression. Starter set, built from the template in
-  // docs/eval/golden-sets/TEMPLATE-starter.md; not yet reviewed by a fund.
-  "etd-full": {
-    fund: "elektronische-detailhandel",
-    corpusVersion: "etd-full-1",
-    contentStatus: "starter",
-    expectedDocuments: ["cao_elektronische_detailhandel"],
-  },
-  // Arbo — OOMT sample arbocatalogus (scripts/ingest/arbo-oomt/arbo_catalogus_oomt.pdf).
-  "arbo.oomt": {
-    fund: "oomt",
-    corpusVersion: "arbo-oomt-2",
-    agentKey: "arbo",
-    contentStatus: "starter",
-    expectedDocuments: ["arbo_catalogus_oomt"],
-  },
-};
 
 export interface GoldenFundSet {
   /** Filename token (golden-set.<key>.jsonl), e.g. "etd" or "arbo.oomt". */
@@ -346,16 +302,32 @@ export interface GoldenFundSet {
   fixtureHash: string;
   /** Document titles this fund's corpus must consist of; undefined = composition not pinned. */
   expectedDocuments?: readonly string[];
+  /** CI ingest recipe when this set owns a dedicated corpus ingest step. */
+  ingest?: FundSetProfile["ingest"];
+  minScore?: number;
 }
 
 const FUND_SET_FILE_RE = /^golden-set\.(.+)\.jsonl$/;
+const FUND_SET_PROFILE_FILE_RE = /^(.+)\.json$/;
+
+/** Load and validate every fund-set profile sidecar in `fixturesDir/fund-sets/`. */
+export function loadFundSetProfiles(fixturesDir: string = defaultFixturesDir): FundSetProfile[] {
+  const profileDir = join(fixturesDir, FUND_SET_PROFILE_SUBDIR);
+  const profiles: FundSetProfile[] = [];
+  for (const file of readdirSync(profileDir).sort((a, b) => a.localeCompare(b))) {
+    const match = FUND_SET_PROFILE_FILE_RE.exec(file);
+    const key = match?.[1];
+    if (!key) continue;
+    profiles.push(readFundSetProfile(key, fixturesDir));
+  }
+  return profiles;
+}
 
 /**
  * Discover the fund layers: every golden-set.<key>.jsonl in the fixtures dir except the base set.
- * Deterministic order (sorted by key) so the run artefact is stable. Each discovered file must have a
- * FUND_SET_META entry or the load throws.
+ * Deterministic order (sorted by key). Each discovered file must have a profile sidecar and vice versa.
  */
-function loadFundSets(): GoldenFundSet[] {
+export function loadFundSetsFrom(fixturesDir: string = defaultFixturesDir): GoldenFundSet[] {
   const sets: GoldenFundSet[] = [];
   for (const file of readdirSync(fixturesDir).sort((a, b) => a.localeCompare(b))) {
     const match = FUND_SET_FILE_RE.exec(file);
@@ -363,37 +335,32 @@ function loadFundSets(): GoldenFundSet[] {
     if (!key || key === "base") {
       continue;
     }
-    const meta = FUND_SET_META[key];
-    if (!meta) {
-      throw new Error(
-        `Fund set fixture "${file}" has no FUND_SET_META entry (key "${key}"). ` +
-          "Register the fund (target fund + corpusVersion) in golden-set.ts before adding the file.",
-      );
-    }
-    const raw = readFixture(file);
+    const profile = readFundSetProfile(key, fixturesDir);
+    const raw = readFixture(file, fixturesDir);
     sets.push({
       key,
-      fund: meta.fund,
-      agentKey: meta.agentKey ?? "cao",
-      corpusVersion: meta.corpusVersion,
-      contentStatus: meta.contentStatus,
+      fund: profile.fund,
+      agentKey: profile.agentKey,
+      corpusVersion: profile.corpusVersion,
+      contentStatus: profile.contentStatus,
       file,
       cases: parseJsonl(raw, goldenFundCaseSchema),
       fixtureHash: createHash("sha256").update(raw).digest("hex"),
-      ...(meta.expectedDocuments === undefined ? {} : { expectedDocuments: meta.expectedDocuments }),
+      ...(profile.expectedDocuments === undefined ? {} : { expectedDocuments: profile.expectedDocuments }),
+      ...(profile.ingest === undefined ? {} : { ingest: profile.ingest }),
+      ...(profile.minScore === undefined ? {} : { minScore: profile.minScore }),
     });
   }
-  // Reverse guard: a META entry without a fixture must fail loud (same severity as fixture without
-  // META). Discovery is file-driven; without this check an orphan META key is silently never scored.
-  for (const key of Object.keys(FUND_SET_META)) {
+  const profileKeys = loadFundSetProfiles(fixturesDir).map((profile) => profile.key);
+  for (const key of profileKeys) {
     if (!sets.some((set) => set.key === key)) {
       throw new Error(
-        `FUND_SET_META key "${key}" has no fixture file golden-set.${key}.jsonl. ` +
-          "Add the fixture (see docs/eval/golden-sets/) or remove the META entry.",
+        `Fund set profile "${key}" has no fixture file golden-set.${key}.jsonl. ` +
+          "Add the fixture (see docs/eval/golden-sets/) or remove the profile.",
       );
     }
   }
   return sets;
 }
 
-export const goldenFundSets: GoldenFundSet[] = loadFundSets();
+export const goldenFundSets: GoldenFundSet[] = loadFundSetsFrom(defaultFixturesDir);

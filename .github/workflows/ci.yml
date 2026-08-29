@@ -189,11 +189,24 @@ jobs:
         if: env.GATE_DB == 'true'
         run: |
           pnpm --filter @wunderstack/ingest ingest:fixtures
-          pnpm --filter @wunderstack/ingest ingest demo-corpus --fund demo --agent cao --version 1 --prune
+          # Second agent on fund demo for G3-isolation — no golden set, stays explicit.
           pnpm --filter @wunderstack/ingest ingest arbo-corpus --fund demo --agent arbo --version 1 --prune
-          pnpm --filter @wunderstack/ingest ingest arbo-oomt --fund oomt --agent arbo --version arbo-oomt-2 --prune
-          pnpm --filter @wunderstack/ingest ingest input/cao_elektronische_detailhandel.pdf \
-            --fund elektronische-detailhandel --agent cao --version 1 --prune
+          PROFILES="$(pnpm --filter @wunderstack/eval-scripts list-fund-sets)"
+          if [ -z "$PROFILES" ] || [ "$PROFILES" = "[]" ]; then
+            echo "No fund set profiles — refusing empty ingest loop"
+            exit 1
+          fi
+          echo "$PROFILES" | jq -c '.[] | select(.ingest != null)' | while read -r row; do
+            SOURCE="$(echo "$row" | jq -r '.ingest.source')"
+            FUND="$(echo "$row" | jq -r '.fund')"
+            AGENT="$(echo "$row" | jq -r '.agentKey')"
+            VERSION="$(echo "$row" | jq -r '.ingest.version')"
+            PRUNE_FLAG=""
+            if [ "$(echo "$row" | jq -r '.ingest.prune')" = "true" ]; then
+              PRUNE_FLAG="--prune"
+            fi
+            pnpm --filter @wunderstack/ingest ingest "$SOURCE" --fund "$FUND" --agent "$AGENT" --version "$VERSION" $PRUNE_FLAG
+          done
         env:
           DATABASE_URL: ${{ env.GATE_DATABASE_URL }}
           SCALEWAY_API_KEY: ${{ secrets.SCALEWAY_API_KEY }}
@@ -281,7 +294,12 @@ jobs:
         run: |
           set -uo pipefail
           STATUS=0
-          for fund in demo etd etd-full oomt; do
+          PROMOTE_KEYS="$(pnpm --filter @wunderstack/eval-scripts list-fund-sets --promote-keys)"
+          if [ -z "$PROMOTE_KEYS" ]; then
+            echo "No promote-check keys from fund set profiles"
+            exit 1
+          fi
+          for fund in $PROMOTE_KEYS; do
             echo "::group::promote-check $fund HEAD"
             pnpm promote-check "$fund" HEAD || STATUS=1
             echo "::endgroup::"

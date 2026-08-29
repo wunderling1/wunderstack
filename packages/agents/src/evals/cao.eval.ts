@@ -3,7 +3,7 @@
  *
  * Single process / single `eval-report.json` for every registered agent (see agent-profile.ts).
  * CAO owns the G2 base golden set; other agents contribute G1 prompt contracts and G3-fund sets
- * via `FUND_SET_META.agentKey`. Do not add a second `*.eval.ts` for agent 3 — add a profile.
+ * via fund-set profile sidecars (`fixtures/fund-sets/<key>.json`). Do not add a second `*.eval.ts` for agent 3 — add a profile.
  *
  * The golden set is split into two physical layers (see golden-set.ts):
  *   BASE — golden-set.base.jsonl + golden-passages.jsonl: corpus-agnostic behavioral cases that run
@@ -1057,7 +1057,7 @@ function diagnoseFundCases(
 
 /**
  * Corpus-composition guard (2026-08-24). Asserts the fund holds exactly the documents its fund set
- * declares (`FUND_SET_META.expectedDocuments`).
+ * declares (`expectedDocuments` on the fund-set profile).
  *
  * This is the gate that was missing. Fund "elektronische-detailhandel" silently gained a second,
  * unrelated CAO — 668 foreign chunks against its own 245, because `ingest <dir>` takes every
@@ -1775,9 +1775,15 @@ async function runGate(spec: GateSpec): Promise<boolean> {
       `path scope excludes this gate (EVAL_PATH_SCOPE=${PATH_SCOPE.join(",")})`,
     );
   }
-  // A perFundSet gate with zero discovered sets has nothing to run and emits no report.
+  // A perFundSet gate with zero discovered sets has nothing to measure — fail, not pass silently.
   if (spec.perFundSet === true && goldenFundSets.length === 0) {
-    return true;
+    return pushGate(spec, [
+      {
+        name: "at least one fund set is registered",
+        ok: false,
+        detail: "no golden-set.<key>.jsonl fixtures with fund-sets/<key>.json profiles were discovered",
+      },
+    ]);
   }
   if (!credentialsAvailable(spec.requires)) {
     return pushUnavailable(spec, requirementLabel(spec.requires));

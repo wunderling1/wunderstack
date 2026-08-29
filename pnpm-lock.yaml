@@ -627,6 +627,9 @@ importers:
 
   scripts/eval:
     dependencies:
+      '@wunderstack/agents':
+        specifier: workspace:*
+        version: link:../../packages/agents
       '@wunderstack/ai':
         specifier: workspace:*
         version: link:../../packages/ai
