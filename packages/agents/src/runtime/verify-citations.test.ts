@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import type { ModelCitation } from "@wunderstack/shared";
 
-import { verifyCitations } from "./verify-citations.js";
+import { verifyCitations, stripFailedMarkers } from "./verify-citations.js";
 
 const content = new Map<string, string>([
   ["vakantie-ouderen", "Oudere werknemers hebben recht op de volgende extra vakantiedagen: 55 t/m 59 jaar: twee dagen."],
@@ -182,5 +182,24 @@ describe("verifyCitations", () => {
     );
     assert.deepEqual(result.strippedMarkers, [1]);
     assert.equal(result.verified.length, 0);
+  });
+});
+
+describe("stripFailedMarkers", () => {
+  it("preserves newlines and nested indent when stripping a citation marker", () => {
+    const nested =
+      "1. **Zet het voertuig vast** [1]\n   - Controleer of het voertuig niet kan wegrollen\n   - Schakel het voertuig uit\n1. **Berg de contactsleutel op** [2]\n   - Berg de sleutel op";
+    const stripped = stripFailedMarkers(nested, [1]);
+    assert.equal(stripped.includes("\n"), true);
+    assert.match(stripped, /\n {3}- Controleer/);
+    assert.match(stripped, /\n {3}- Schakel/);
+    assert.match(stripped, /1\. \*\*Berg de contactsleutel op\*\* \[2\]/);
+    assert.equal(stripped.includes("[1]"), false);
+  });
+
+  it("collapses double spaces mid-line after removing a marker", () => {
+    const prose = "Je hebt recht op  25 dagen [1].";
+    const stripped = stripFailedMarkers(prose, [1]);
+    assert.equal(stripped, "Je hebt recht op 25 dagen.");
   });
 });
