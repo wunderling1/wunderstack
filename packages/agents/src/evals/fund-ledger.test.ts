@@ -114,6 +114,24 @@ describe("fundRecordsFromReport", () => {
     ]);
   });
 
+  it("records fund-reviewed answer-layer failures in failedChecks", () => {
+    const records = fundRecordsFromReport(
+      report({
+        funds: [{ ...fundLayer("reviewed", "reviewed-fund", "reviewed-1"), contentStatus: "fund-reviewed" }],
+        gates: [
+          fundGate("reviewed", "reviewed-1", "failed", [
+            'fund "reviewed" answer: hard-fact guard — no ungrounded hard facts',
+          ]),
+        ],
+      }),
+    );
+
+    assert.equal(records[0]?.status, "failed");
+    assert.deepEqual(records[0]?.failedChecks, [
+      'fund "reviewed" answer: hard-fact guard — no ungrounded hard facts',
+    ]);
+  });
+
   it("does not let a key match a longer key that starts with it", () => {
     // "etd" must not pick up the "etd-full" gate: that would report one fund's verdict as another's.
     const records = fundRecordsFromReport(
