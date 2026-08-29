@@ -8,7 +8,24 @@ import { Composer } from "./composer";
 import { MessageList } from "./message-list";
 import { Starters } from "./starters";
 import { ChatThread } from "./thread";
-import { useChat } from "./use-chat";
+import { useChat, type ChatMessage } from "./use-chat";
+
+/** Align a new turn to the top of the thread so the answer is readable from the start. */
+function scrollChildToStart(container: HTMLElement, child: HTMLElement): void {
+  const nextTop =
+    container.scrollTop + (child.getBoundingClientRect().top - container.getBoundingClientRect().top);
+  container.scrollTo({ top: Math.max(0, nextTop), behavior: "smooth" });
+}
+
+function lastUserMessageId(messages: ChatMessage[]): string | undefined {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message?.role === "user") {
+      return message.id;
+    }
+  }
+  return undefined;
+}
 
 interface ChatProps {
   /** Restrict answers to one O&O fund's corpus. */
@@ -27,9 +44,6 @@ interface ChatProps {
   statusLabels?: TenantPublicConfig["statusLabels"];
 }
 
-/** Distance from the bottom (px) within which we consider the user "pinned" to the latest message. */
-const NEAR_BOTTOM_THRESHOLD = 80;
-
 export function Chat({
   fund,
   agent = "cao",
@@ -41,20 +55,17 @@ export function Chat({
 }: ChatProps) {
   const { messages, isStreaming, send, sendFeedback } = useChat(fund, agent);
   const scrollRef = useRef<HTMLDivElement>(null);
-  // Whether the user was at the bottom before the latest update. Only then do we auto-scroll, so
-  // streaming text does not yank the viewport away from someone reading earlier content.
-  const pinnedToBottom = useRef(true);
+  const lastUserId = lastUserMessageId(messages);
 
-  const onScroll = () => {
-    const el = scrollRef.current;
-    if (!el) return;
-    pinnedToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight <= NEAR_BOTTOM_THRESHOLD;
-  };
-
+  // Scroll only when a new user turn starts. Stick-to-bottom would land on follow-up chips once the
+  // answer footer grows, so the user never sees the start of the reply they just got.
   useEffect(() => {
-    if (!pinnedToBottom.current) return;
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages]);
+    if (lastUserId === undefined) return;
+    const container = scrollRef.current;
+    const target = container?.querySelector(`[data-message-id="${lastUserId}"]`);
+    if (!container || !(target instanceof HTMLElement)) return;
+    scrollChildToStart(container, target);
+  }, [lastUserId]);
 
   const empty = messages.length === 0;
 
@@ -62,7 +73,6 @@ export function Chat({
     <ChatThread
       className={embedded ? "" : "mx-auto w-full max-w-3xl"}
       scrollRef={scrollRef}
-      onScroll={onScroll}
       composer={
         <div className="flex flex-col gap-2">
           <Composer disabled={isStreaming} onSend={send} />
