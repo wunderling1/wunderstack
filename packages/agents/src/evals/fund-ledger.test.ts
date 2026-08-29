@@ -5,7 +5,6 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 
 import {
-  appendFundRecords,
   fundRecordsFromReport,
   readFundLedger,
   unrecorded,
