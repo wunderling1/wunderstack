@@ -21,7 +21,7 @@ Tightening the scorer makes the gate stricter than the baseline it was admitted 
 
 ## When to pick up
 
-Together with the baseline re-record after corpus v5 (refusal fixtures 3 → 10; see [`baseline-v5-RERECORD.md`](../../packages/agents/src/evals/fixtures/baseline-v5-RERECORD.md)). Do not land a stricter citation scorer without a fresh green baseline under `EVAL_WRITE_BASELINE=1`.
+The corpus v5 baseline was recorded on 2026-08-29 (see GATE-ARCHITECTURE.md §4.4), so the relative layer is live again. Do not land a stricter citation scorer without re-recording a fresh green baseline under `EVAL_WRITE_BASELINE=1`.
 
 ## Acceptance
 

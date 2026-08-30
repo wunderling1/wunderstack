@@ -54,6 +54,7 @@ function report(overrides: Partial<EvalReport> = {}): EvalReport {
     config: {
       requireAll: true,
       judgeSamples: 3,
+      generationSamples: 3,
       writeBaseline: false,
       onlyGates: [],
       tier: "nightly",

@@ -153,6 +153,23 @@ describe("fund layer (E12)", () => {
     assert.throws(() => loadFundSetsFrom(dir), /no profile sidecar/);
   });
 
+  it("throws when a profile has no fixture file", () => {
+    const dir = mkdtempSync(join(tmpdir(), "fund-sets-"));
+    mkdirSync(join(dir, FUND_SET_PROFILE_SUBDIR), { recursive: true });
+    writeFileSync(
+      join(dir, FUND_SET_PROFILE_SUBDIR, "orphan.json"),
+      JSON.stringify({
+        key: "orphan",
+        fund: "orphan-fund",
+        agentKey: "cao",
+        corpusVersion: "orphan-1",
+        contentStatus: "scaffold",
+      }),
+      "utf8",
+    );
+    assert.throws(() => loadFundSetsFrom(dir), /has no fixture file/);
+  });
+
   it("throws when a profile references an unknown agentKey", () => {
     const dir = mkdtempSync(join(tmpdir(), "fund-sets-"));
     mkdirSync(join(dir, FUND_SET_PROFILE_SUBDIR), { recursive: true });
