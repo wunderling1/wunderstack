@@ -38,6 +38,22 @@ interface Props {
 const DEFAULT_ARTICLE_50 =
   "Je praat met een AI-assistent. Antwoorden kunnen onjuist zijn; controleer belangrijke informatie bij de bron.";
 
+/** Align a new turn to the top of the thread so the answer is readable from the start. */
+function scrollChildToStart(container: HTMLElement, child: HTMLElement): void {
+  const nextTop =
+    container.scrollTop + (child.getBoundingClientRect().top - container.getBoundingClientRect().top);
+  container.scrollTo({ top: Math.max(0, nextTop), behavior: "smooth" });
+}
+
+function lastUserTurnIndex(turns: Turn[]): number | undefined {
+  for (let i = turns.length - 1; i >= 0; i--) {
+    if (turns[i]?.role === "user") {
+      return i;
+    }
+  }
+  return undefined;
+}
+
 /** Map the curated tenant theme onto the design tokens (runtime theming, D17). */
 function themeStyle(theme: EmbedConfig["theme"] | undefined): CSSProperties {
   const style: Record<string, string> = {};
@@ -87,9 +103,18 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
     };
   }, [endpoint, agentKey]);
 
+  const lastUserIndex = lastUserTurnIndex(turns);
+
+  // Scroll only when a new user turn starts (or the panel opens onto an existing thread).
+  // Stick-to-bottom would land on follow-up chips once the answer footer grows.
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [turns, open]);
+    if (!open) return;
+    if (lastUserIndex === undefined) return;
+    const container = scrollRef.current;
+    const target = container?.querySelector(`[data-turn-index="${String(lastUserIndex)}"]`);
+    if (!container || !(target instanceof HTMLElement)) return;
+    scrollChildToStart(container, target);
+  }, [lastUserIndex, open]);
 
   const article50 = config?.article50 ?? DEFAULT_ARTICLE_50;
   const tagline = config?.texts.tagline ?? "Stel je vraag";
@@ -225,7 +250,7 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
           />
         ) : null}
         {turns.map((turn, index) => (
-          <div key={index} className="flex flex-col gap-2">
+          <div key={index} data-turn-index={index} className="flex flex-col gap-2">
             {turn.refused ? (
               <RefusalNotice>{turn.text}</RefusalNotice>
             ) : (
