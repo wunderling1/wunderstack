@@ -4,6 +4,7 @@ import { CitationBadge } from "@wunderstack/ui";
 import { memo, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { ensureBlockListMarkdown } from "@/lib/ensure-block-list-markdown";
 
 /**
  * Renders assistant answers as Markdown. The LLM emits Markdown (bold, lists, tables); showing it
@@ -77,13 +78,17 @@ function buildComponents(meta: CitationMarkerMeta | undefined): Components {
     p: ({ children }) => <p className="mb-2 last:mb-0">{cite(children)}</p>,
     strong: ({ children }) => <strong className="font-semibold">{cite(children)}</strong>,
     em: ({ children }) => <em className="italic">{cite(children)}</em>,
-    ul: ({ children }) => <ul className="mb-2 list-disc space-y-1 pl-5 last:mb-0">{children}</ul>,
+    ul: ({ children }) => (
+      <ul className="my-2 list-outside list-disc space-y-1 pl-5 last:mb-0">{children}</ul>
+    ),
     ol: ({ start, children }) => (
-      <ol start={start} className="mb-2 list-decimal space-y-1 pl-5 last:mb-0">
+      <ol start={start} className="my-2 list-outside list-decimal space-y-1 pl-6 last:mb-0">
         {children}
       </ol>
     ),
-    li: ({ children }) => <li className="leading-relaxed">{cite(children)}</li>,
+    li: ({ children }) => (
+      <li className="leading-relaxed [&>p]:mb-0 [&>p]:inline">{cite(children)}</li>
+    ),
     h1: ({ children }) => <h1 className="mb-2 mt-3 text-base font-semibold first:mt-0">{cite(children)}</h1>,
     h2: ({ children }) => <h2 className="mb-2 mt-3 text-base font-semibold first:mt-0">{cite(children)}</h2>,
     h3: ({ children }) => <h3 className="mb-1 mt-2 text-sm font-semibold first:mt-0">{cite(children)}</h3>,
@@ -133,7 +138,7 @@ export const Markdown = memo(function Markdown({
 }) {
   return (
     <ReactMarkdown remarkPlugins={[remarkGfm]} components={buildComponents(citationMarkers)}>
-      {children}
+      {ensureBlockListMarkdown(children)}
     </ReactMarkdown>
   );
 });
