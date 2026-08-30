@@ -145,7 +145,7 @@ Per corpus:
 1. Bron-PDF in `scripts/ingest/input/` (de bestaande intake-map; er staat al een CAO-PDF, dus dit is
    het bestaande pad, geen nieuw mechanisme).
 2. `pnpm --filter @wunderstack/ingest ingest <path> --fund <fund> --version <v>`
-3. `FUND_SET_META`-regel toevoegen in `packages/agents/src/evals/golden-set.ts` — zónder registratie
+3. profile sidecar toevoegen in `fixtures/fund-sets/<key>.json` — zónder sidecar
    faalt het laden bewust. **Let op:** dit bestand valt onder `700-evals.mdc`; deze registratie is de
    bedoelde data-plane-uitbreiding en géén C4-interventie, maar raak in dezelfde wijziging niets
    anders in `src/evals/` aan.

@@ -66,6 +66,7 @@ gate-ids. `none` is een sentinel van `scripts/ci/resolve-path-scope.sh`, geen ga
 |---|---|---|
 | `pr` | `pull_request` | advisory |
 | `merge` | `merge_group` / `push` | blocking |
+| `nightly` | ook `workflow_dispatch` + `run_db_gates` (spiegelt de cron) | blocking |
 | `nightly` | `schedule` (en lokale default) | blocking |
 
 | Fondsset | `contentStatus` |
@@ -250,9 +251,10 @@ Deze paragraaf is bedoeld voor fondsen en auditors — wat een groene gate **nie
    minScore-probes op de echte pipeline. Near-miss-cases in een fonds-set worden expliciet niet
    door de answer-judge gescoord; faithfulness, hallucinatie en refusal-kalibratie op fondscontent
    horen bij G2-answer (base layer) of een toekomstige opt-in vanaf `contentStatus: fund-reviewed`.
-2. **De relatieve regressielaag staat uit.** `baseline.json` is corpus v4 terwijl `GOLDEN_CORPUS_VERSION`
-   v5 is; `retrievalRegressionChecks`, `answerRegressionChecks` en de fixture-hash-guard returnen
-   `[]` tot een nieuwe baseline is opgenomen (F1b). De absolute vloeren dragen de bescherming.
+2. **De relatieve regressielaag meet trend, geen absolute waarheid.** `baseline.json` staat sinds
+   2026-08-29 op corpus v5 (zie §4.4), dus `retrievalRegressionChecks`, `answerRegressionChecks` en
+   de fixture-hash-guard draaien weer. Ze vergelijken tegen één opgenomen run met ±5 punten
+   tolerantie; de absolute vloeren blijven de harde bescherming.
 3. **Soft judge-metrics zijn een self-grade.** `softFaithfulness`, `relevance` en `completeness` worden
    door hetzelfde modelfamily beoordeeld als de generator. P4 (externe judge) is retired; de
    deterministische gates (hardHallucination, citation-verification count, orphan/dangling) zijn de
@@ -288,7 +290,7 @@ genoemd) · `[?]` **bron onbekend — te herleiden of te herzien**.
 ### G2-answer (absolute floors)
 | Metric | Drempel | Type | Bron |
 |---|---|---|---|
-| hardHallucination | ≥ 0.98 | rate | `[X]` kernbelofte bewijsbare betrouwbaarheid. **2026-08-29:** groen @7219450 (100%, 38/38) met `EVAL_GENERATION_SAMPLES=3`; rode run 2026-08-26 @0cc9b362 (97,4%, 37/38) = enkel `etd-d03` fabricatie "60 uur" bij samples=2 — generatievariantie, geen vloerherijking. |
+| hardHallucination | ≥ 0.98 | rate | `[X]` kernbelofte bewijsbare betrouwbaarheid. **2026-08-29:** één groene run @ `EVAL_GENERATION_SAMPLES=3` (100%, 38/38); de rode run @ samples=2 is niet gearchiveerd. |
 | softFaithfulness | ≥ 0.80 | rate | `[C]` conservatief uit PLAN P5-range 0.80–0.90 (`PLAN-eval-gates.md` §P5); herijk na ≥ 14 nightly-runs. Nulmeting 100%. **Sinds 2026-08-22: gemiddelde over answerable cases (refusals uitgesloten)** — zelfde uitsluiting als citationCorrectness (actie 6). |
 | relevance | ≥ 0.84 *(besluit open: 0.84 vs 0.85 — B1)* | rate | `[E]` gemeten judge-ruis 0.845–0.865 @ 3 samples; 0.84 net onder de spread (PLAN-v3 Fase 14.0 stap 3, `golden-set.REVIEW.md`). B1 = terug naar 0.85? **Sinds 2026-08-22: answerable cases only.** |
 | citationCorrectness | ≥ 0.75 | rate | `[C]` bron niet gevonden → herijk na ≥ 14 nightly-runs. **Sinds Fase 4 actie 6: gemiddelde over answerable cases (refusals uitgesloten)** — waarde verschuift t.o.v. de oude baseline, herijk vereist. |
@@ -353,7 +355,7 @@ CI-config; falen = rode `verify`, maar ze verschijnen niet in het lagenmodel of 
 | Skip ≠ pass | een gate die niet kan draaien wordt ROOD waar hij verplicht is (`EVAL_REQUIRE_ALL`/`_DB`), env bereikt de eval echt (turbo `passThroughEnv`) | E0/E8 · zie §4.2 |
 | Eén verified-answer-seam | `generateVerifiedAnswer`/`generateAnswerWithRepair` gedeeld door `answer()`, `answerStream()` én de eval | zie §4.3 |
 | Judge-robuustheid | exact één parse-retry, fail-loud, geen default scores; mediaan over `EVAL_JUDGE_SAMPLES`. **P4 (judge ≠ generator) vervallen 2026-08-22:** judge = generator = productie-Large; soft metrics hebben self-preference; blocking floors blijven deterministisch | E2/P3b |
-| Golden-set-schema | refusal-cases ≥ 1 distractor; loader gooit zonder `FUND_SET_META` | E3/E12 |
+| Golden-set-schema | refusal-cases ≥ 1 distractor; loader gooit zonder profile sidecar `fixtures/fund-sets/<key>.json` | E3/E12 |
 | Shared assemble | eval-context = productie-`assemble()` (snapshot-test); geaccepteerd residu: `sourceRef`-formaat (zie §4.5) | E4 |
 | K-alignment | candidateK 15 → topK 5 = wat het model ziet = wat de gate meet | E6 |
 | Baseline-integriteit | een baseline die zelf de absolute G2-floors niet haalt mag niet geschreven worden (write-guard, live) | zie §4.4 |
@@ -454,6 +456,13 @@ regressiecheck vergelijkt daarna tegen een rode referentie en dekt de degradatie
 
 De CI-`write-baseline`-job draait de eval mét `EVAL_WRITE_BASELINE`; de guard zit in het eval-proces
 zelf, dus de job erft de bescherming zonder extra `ci.yml`-stap.
+
+**Huidige baseline: corpus v5**, opgenomen 2026-08-29 op commit `3838beb` vanuit een groene run met
+de nightly-configuratie (`EVAL_TIER=nightly`, `EVAL_JUDGE_SAMPLES=3`, `EVAL_GENERATION_SAMPLES=3`,
+`EVAL_REQUIRE_ALL=1`, `EVAL_REQUIRE_DB=1`). Hiermee draaien `retrievalRegressionChecks`,
+`answerRegressionChecks` en de fixture-hash-guard weer; tussen v4 en deze opname stonden ze uit
+(F1b). `REL_TOLERANCE` is ongewijzigd (0.05). Het artefact van de verificatierun ná de opname staat
+in [`run-2026-08-29-baseline-v5.json`](./run-2026-08-29-baseline-v5.json).
 
 ### 4.5 Geaccepteerd residu — `sourceRef`-formaat (E4)
 
