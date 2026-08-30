@@ -212,5 +212,9 @@ function stripMarkers(answer: string, markers: number[]): string {
   for (const marker of markers) {
     result = result.replaceAll(`[${String(marker)}]`, "");
   }
-  return result.replace(/\s{2,}/g, " ").trim();
+  return result
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/(?<=\S) {2,}/g, " ")
+    .replace(/ +([.,;:])/g, "$1")
+    .trim();
 }

@@ -143,6 +143,39 @@ describe("stripChunkIdsFromProse", () => {
     const prose = 'Het relevante citaat: "de werknemer heeft recht op loon" staat in artikel 12.';
     assert.equal(stripChunkIdsFromProse(prose), prose);
   });
+
+  it("preserves leading indent on nested list sub-bullets", () => {
+    const nested =
+      "1. **Zet het voertuig vast en schakel het uit** [1]\n   - Controleer of het voertuig niet kan wegrollen\n   - Schakel het voertuig uit\n1. **Berg de contactsleutel op** [2]\n   - Berg de sleutel op een veilige plek";
+    const stripped = stripChunkIdsFromProse(nested);
+    assert.equal(stripped, nested);
+    assert.match(stripped, /\n {3}- Controleer/);
+    assert.match(stripped, /\n {3}- Berg de sleutel/);
+  });
+
+  it("collapses double spaces mid-line but not leading indent", () => {
+    assert.equal(stripChunkIdsFromProse("**Maak  spanningsloos** [1]"), "**Maak spanningsloos** [1]");
+    assert.equal(
+      stripChunkIdsFromProse("1. Stap [1]\n   - subpunt"),
+      "1. Stap [1]\n   - subpunt",
+    );
+  });
+
+  it("preserves nested indent when stripping chunk_id from a list item", () => {
+    const prose =
+      "1. **Zet het voertuig vast** [1]\n   - Controleer [2]. Citaat: \"Controleer\" [chunk_id=abc-123].";
+    const stripped = stripChunkIdsFromProse(prose);
+    assert.match(stripped, /\n {3}- Controleer \[2\]/);
+    assert.equal(stripped.includes("chunk_id"), false);
+  });
+
+  it("does not join the next list item when stripping a chunk_id on its own line", () => {
+    const prose = "1. **Zet vast** [1]\n[chunk_id=abc-123]\n2. **Berg op** [2]";
+    const stripped = stripChunkIdsFromProse(prose);
+    assert.match(stripped, /^1\. \*\*Zet vast\*\* \[1\]$/m);
+    assert.match(stripped, /^2\. \*\*Berg op\*\* \[2\]$/m);
+    assert.equal(stripped.includes("chunk_id"), false);
+  });
 });
 
 describe("parseGenerationOutput strips leaked chunk_id from answer prose", () => {
