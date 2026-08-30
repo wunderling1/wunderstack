@@ -1,4 +1,5 @@
 @import "@wunderstack/ui/styles.css";
 
-/* Scan UI package for Tailwind class names */
+/* Scan UI package + this app (chat markdown list utilities live in components/). */
 @source "../../../packages/ui/src";
+@source "..";

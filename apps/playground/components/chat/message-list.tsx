@@ -44,16 +44,17 @@ export function MessageList({
   return (
     <div className="flex flex-col gap-6">
       {messages.map((message) => (
-        <MessageBubble
-          key={message.id}
-          message={message}
-          fund={fund}
-          agent={agent}
-          onFeedback={onFeedback}
-          onFollowUp={onFollowUp}
-          followUpsDisabled={followUpsDisabled}
-          statusLabels={statusLabels ?? DEFAULT_PROGRESS_STEPS}
-        />
+        <div key={message.id} data-message-id={message.id}>
+          <MessageBubble
+            message={message}
+            fund={fund}
+            agent={agent}
+            onFeedback={onFeedback}
+            onFollowUp={onFollowUp}
+            followUpsDisabled={followUpsDisabled}
+            statusLabels={statusLabels ?? DEFAULT_PROGRESS_STEPS}
+          />
+        </div>
       ))}
     </div>
   );
