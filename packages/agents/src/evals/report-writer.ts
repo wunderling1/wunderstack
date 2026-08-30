@@ -38,7 +38,8 @@ const reportPath = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "ev
 //     and an aggregate count without that sentence is not diagnosable.
 // v10: advisory-failed / not-applicable gate statuses + ReportCheck.advisory — scaffold-content
 //     quality floors are measured on the PR path without merge-blocking (content-policy.ts).
-export const EVAL_REPORT_SCHEMA_VERSION = 10;
+// v11: config.generationSamples — EVAL_GENERATION_SAMPLES that shaped Gate C outcomes (B2).
+export const EVAL_REPORT_SCHEMA_VERSION = 11;
 
 export interface ReportCheck {
   name: string;
@@ -244,6 +245,8 @@ export interface EvalReport {
   config: {
     requireAll: boolean;
     judgeSamples: number;
+    /** Best-of-N generation attempts per Gate C case (EVAL_GENERATION_SAMPLES). */
+    generationSamples: number;
     writeBaseline: boolean;
     /** Gate ids this run was restricted to (EVAL_ONLY). Empty = the whole registry ran. */
     onlyGates: string[];

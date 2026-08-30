@@ -104,6 +104,7 @@ import {
 } from "./content-policy.js";
 import { acquireEvalLock, EvalAlreadyRunningError } from "./eval-lock.js";
 import { appendFundRecords, fundRecordsFromReport, resolveCommitSha, verifyFundRecordsRecorded } from "./fund-ledger.js";
+import { unregisteredFundSetChecks } from "./fund-gate.js";
 import { extraPromptContractChecks } from "./agent-profile.js";
 import { corpusIsolationContractChecks, corpusIsolationLiveChecks } from "./corpus-isolation.js";
 import { createEvalHarness, type EvalCheck as Check, type GateGroup, type GateRunResult } from "./harness.js";
@@ -129,6 +130,7 @@ import {
   type RoleplayPersonaReport,
   type RoleplayReviewReport,
 } from "./report-writer.js";
+import { reportConfigFromEnv } from "./report-config.js";
 import { roleplayContractChecks } from "./roleplay-contract.js";
 import { runRoleplayPersonaGate, runRoleplayReviewGate } from "./roleplay-gates.js";
 import { retryWithBackoff, sleep } from "./retry.js";
@@ -1776,14 +1778,9 @@ async function runGate(spec: GateSpec): Promise<boolean> {
     );
   }
   // A perFundSet gate with zero discovered sets has nothing to measure — fail, not pass silently.
-  if (spec.perFundSet === true && goldenFundSets.length === 0) {
-    return pushGate(spec, [
-      {
-        name: "at least one fund set is registered",
-        ok: false,
-        detail: "no golden-set.<key>.jsonl fixtures with fund-sets/<key>.json profiles were discovered",
-      },
-    ]);
+  const unregistered = unregisteredFundSetChecks(goldenFundSets.length);
+  if (unregistered.length > 0) {
+    return pushGate(spec, unregistered);
   }
   if (!credentialsAvailable(spec.requires)) {
     return pushUnavailable(spec, requirementLabel(spec.requires));
@@ -1809,17 +1806,15 @@ function writeRunArtefact(passed: boolean): boolean {
     commitSha: resolveCommitSha(env.GITHUB_SHA),
     corpusVersion: GOLDEN_CORPUS_VERSION,
     passed,
-    config: {
+    // Empty onlyGates = the full registry ran. Non-empty makes the artefact self-identifying as
+    // partial, so a green report cannot be read as a verdict about gates that never executed.
+    config: reportConfigFromEnv({
       requireAll: REQUIRE_ALL,
-      judgeSamples: env.EVAL_JUDGE_SAMPLES ?? 1,
-      writeBaseline: env.EVAL_WRITE_BASELINE === "1" || env.EVAL_WRITE_BASELINE === "true",
-      // Empty = the full registry ran. Non-empty makes the artefact self-identifying as partial, so
-      // a green report cannot be read as a verdict about gates that never executed.
       onlyGates: GATE_FILTER,
       tier: TIER,
       contentGatesBlocking: CONTENT_GATES_BLOCKING,
       pathScope: PATH_SCOPE,
-    },
+    }),
     models: {
       generator: EVAL_LLM_MODEL,
       judge: JUDGE_MODEL,

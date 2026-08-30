@@ -8,7 +8,7 @@
 | Wat | Pad |
 |---|---|
 | De set zelf | `packages/agents/src/evals/fixtures/golden-set.<key>.jsonl` |
-| Registratie (verplicht) | `FUND_SET_META` in `packages/agents/src/evals/golden-set.ts` met `agentKey: "arbo"` |
+| Registratie (verplicht) | profile sidecar `fixtures/fund-sets/<key>.json` met `agentKey: "arbo"` |
 | Nulmeting | `docs/eval/golden-sets/NULMETING-<key>-<datum>.md` |
 
 Een META-entry zonder fixturebestand **faalt hard** (omgekeerde guard). Een fixture zonder META idem.

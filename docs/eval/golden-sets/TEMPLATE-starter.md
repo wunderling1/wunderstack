@@ -14,10 +14,10 @@
 | Wat | Pad |
 |---|---|
 | De set zelf | `packages/agents/src/evals/fixtures/golden-set.<key>.jsonl` |
-| Registratie (verplicht) | `FUND_SET_META` in `packages/agents/src/evals/golden-set.ts` |
+| Registratie (verplicht) | profile sidecar `fixtures/fund-sets/<key>.json` |
 | Nulmeting | `docs/eval/golden-sets/NULMETING-<key>-<datum>.md` |
 
-Een setbestand zonder `FUND_SET_META`-entry **faalt hard bij het laden**. Dat is opzet: een fonds
+Een setbestand zonder profile sidecar **faalt hard bij het laden**. Dat is opzet: een fonds
 registreren is een bewuste daad, nooit een toevallige glob-match. De entry noemt het `fund` waartegen
 de cases worden gescoord en een eigen `corpusVersion`, los van de base-versie.
 
@@ -117,7 +117,7 @@ zelf berekend totaal** als CAO-tekst.
    niet als `expectedArticle` gebruiken — en dat is precies de informatie die je wil hebben.
 3. **Schrijf elk antwoord over uit de chunk**, met bedragen en percentages letterlijk. Verzin niets;
    een fout referentie-antwoord maakt de gate blind in plaats van streng.
-4. **Registreer het fonds** in `FUND_SET_META` en draai de eerste run als **nulmeting**.
+4. **Voeg een profile sidecar toe** in `fixtures/fund-sets/<key>.json` en draai de eerste run als **nulmeting**.
 5. **Rapporteer de uitkomst eerlijk**, inclusief rood. Niets cosmetisch groen maken, geen vragen
    schrappen om te slagen. Een rode nulmeting is een meting; een groene nulmeting die tot stand kwam
    door de vragen aan te passen is niets.

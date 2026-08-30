@@ -77,6 +77,27 @@ describe("verifyAndBuild — G4 hard-fact guard", () => {
     assert.ok(!result.answer.includes("120 uur"), "the ungrounded number is gone");
   });
 
+  it("refuses pro-rata vacation fabrication (etd-d03: 60 uur not in passages)", () => {
+    const vakantieUren =
+      "5.2. Aantal vakantie-uren per jaar. Een fulltime werknemer die een heel jaar in dienst is, heeft recht op 190 uur vakantie per jaar. Een fulltime werknemer krijgt een extra vakantiedag (7,6 uur) als hij zich gedurende het hele kalenderjaar niet ziek heeft gemeld bij de werkgever.";
+    const naarRato =
+      "5.1. Naar rato. Voor deeltijders en werknemers die gedurende het jaar in dienst zijn getreden, gelden de vakantierechten naar evenredigheid, zoals omschreven in artikel 5.2 en 5.3.";
+    const arbeidsduur =
+      "4.1. Arbeidsduur. De gemiddelde arbeidsduur per week van een fulltime werknemer is 38 uur.";
+    const grounding = `${vakantieUren} ${naarRato} ${arbeidsduur}`;
+    const retrieval = retrievalWithGrounding(grounding);
+    const prose =
+      "Een werknemer met een contract van 12 uur per week heeft recht op 60 uur vakantie per jaar.";
+    const result = verifyAndBuild(
+      prose,
+      retrieval,
+      "Hoeveel vakantiedagen is dat per jaar? Ik werk 12 uur per week.",
+    );
+    assert.equal(result.hardFactGuardTriggered, true);
+    assert.equal(result.answer, NOT_FOUND_MESSAGE);
+    assert.ok(!result.answer.includes("60 uur"), "the fabricated pro-rata total is gone");
+  });
+
   it("treats a user-supplied number as grounding (no false refusal on an echoed premise)", () => {
     const retrieval = retrievalWithGrounding("De CAO kent een naar-rato-berekening.");
     const result = verifyAndBuild("Bij 120 uur geldt dat naar rato.", retrieval, "en bij 120 uur?");

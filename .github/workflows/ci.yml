@@ -238,14 +238,15 @@ jobs:
           EVAL_REQUIRE_ALL: ${{ (github.event_name == 'merge_group' || github.event_name == 'push' || github.event_name == 'schedule' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)) && '1' || '0' }}
           # Median over 3 samples damps single-draw judge noise on the merge/nightly path (Tier B).
           # PRs keep 1 to keep the hot path cheap; write-baseline also uses 3 (see below).
-          EVAL_JUDGE_SAMPLES: ${{ (github.event_name == 'schedule' || github.event_name == 'merge_group' || github.event_name == 'push') && '3' || '1' }}
+          EVAL_JUDGE_SAMPLES: ${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_db_gates == true) || github.event_name == 'merge_group' || github.event_name == 'push') && '3' || '1' }}
           # Best-of-N generation attempts per Gate C case. Set to 3 exactly where the answer gate is
           # required (mirrors EVAL_REQUIRE_ALL, incl. same-repo PRs) to tame single-sample variance on
           # the count-based citation-verification / dangling gates; explicit 2 (= production default)
           # on cheap/fork paths where B/C skip. write-baseline also uses 3 (see below).
-          EVAL_GENERATION_SAMPLES: ${{ (github.event_name == 'merge_group' || github.event_name == 'push' || github.event_name == 'schedule' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)) && '3' || '2' }}
+          EVAL_GENERATION_SAMPLES: ${{ (github.event_name == 'merge_group' || github.event_name == 'push' || github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_db_gates == true) || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)) && '3' || '2' }}
           # Content floors are advisory on pull_request; merge_group/push = merge; schedule = nightly.
-          EVAL_TIER: ${{ github.event_name == 'pull_request' && 'pr' || (github.event_name == 'schedule' && 'nightly' || 'merge') }}
+          # workflow_dispatch + run_db_gates mirrors schedule so manual DB-gate runs match the cron.
+          EVAL_TIER: ${{ github.event_name == 'pull_request' && 'pr' || ((github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_db_gates == true)) && 'nightly' || 'merge') }}
           EVAL_PATH_SCOPE: ${{ env.EVAL_PATH_SCOPE }}
 
       # Per-run artefact (E9): commit SHA, model ids, per-case scores, aggregates, gate results,
@@ -260,8 +261,10 @@ jobs:
 
       # Nightly/push: persist G3-fund outcomes to git so promote-check on a fresh clone has evidence.
       # PR runs skip append in cao.eval.ts (EVAL_TIER=pr) — promotion history must not be written on PRs.
+      # workflow_dispatch + run_db_gates is included on purpose: a write path you can only observe at
+      # 03:00 is a write path you cannot verify (it failed eleven nights unnoticed, see FINDING above).
       - name: Commit promotion ledger
-        if: success() && env.GATE_DB == 'true' && (github.event_name == 'schedule' || github.event_name == 'push')
+        if: success() && env.GATE_DB == 'true' && (github.event_name == 'schedule' || github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.run_db_gates == true))
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
