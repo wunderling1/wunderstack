@@ -19,4 +19,8 @@ eval-report.json
 # Local baseline diagnostic dumps (throwaway; regenerated on demand).
 baseline-v4-*-dump.json
 
+# Scratch and debug output. scripts/check-root.sh sends throwaway files here, so it has
+# to be ignored for that advice to hold.
+tmp/
+
 .DS_Store

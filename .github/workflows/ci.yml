@@ -111,6 +111,9 @@ jobs:
       - name: Depcruise (arrow rule)
         run: pnpm depcruise
 
+      - name: Repo root allowlist
+        run: pnpm check-root
+
       - name: UI boundaries
         run: pnpm check-ui-boundaries
 
