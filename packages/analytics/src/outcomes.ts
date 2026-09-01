@@ -9,7 +9,7 @@ import {
   withFundSchema,
   type Database,
 } from "@wunderstack/db";
-import { refusedReasons, type TurnOutcomeValue } from "@wunderstack/shared";
+import { refusedReasons } from "@wunderstack/shared";
 
 import { RETRIEVAL_STRONG_MIN_SCORE } from "./retrieval-strength.js";
 import type { RetrievalStrength } from "./retrieval-strength.js";
@@ -244,11 +244,6 @@ export function deriveFundStatus(statuses: AgentOperationalStatus[]): AgentOpera
   return statuses.reduce((worst, status) =>
     STATUS_RANK[status] > STATUS_RANK[worst] ? status : worst,
   );
-}
-
-/** Helper for tests — map raw outcome string to OutcomeCounts bucket. */
-export function countOutcome(counts: OutcomeCounts, outcome: TurnOutcomeValue): OutcomeCounts {
-  return { ...counts, [outcome]: counts[outcome] + 1 };
 }
 
 export function emptyRefusedStrength(): RefusedStrengthCounts {

@@ -113,7 +113,12 @@ function onlyGroup<T>(groups: T[]): T {
 function turn(
   id: string,
   minutesFromNoon: number,
-  overrides: { sessionId?: string; agentId?: string; outcome?: string; channel?: string | null } = {},
+  overrides: {
+    sessionId?: string;
+    agentId?: string;
+    outcome?: string;
+    channel?: string | null;
+  } = {},
 ) {
   return {
     id,

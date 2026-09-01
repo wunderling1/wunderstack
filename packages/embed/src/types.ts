@@ -1,15 +1,19 @@
 import { z } from "zod";
 
 /**
- * Local mirrors of the runtime contracts (Fase 4). The embed cannot import @wunderstack/shared (it
- * parses process.env at import — server-only) nor the runtime's app-local contract (package → app is
- * forbidden). These are the minimal shapes the embed reads off the NDJSON stream + GET /config.
+ * Local mirrors of the runtime contracts (Fase 4). The embed cannot import `@wunderstack/shared`
+ * (it parses `process.env` at import — server-only) nor the runtime's app-local contract (package →
+ * app is forbidden). These are the minimal shapes the embed reads off the NDJSON stream + GET
+ * /config.
  *
  * They are defined as Zod schemas and validated at the boundary (see .cursor/rules/300-typescript.mdc:
  * "Antwoorden van externe API's"). The embed runs on third-party pages, so a malformed or hostile
  * /config or stream line is dropped instead of flowing into the UI (e.g. `theme.primary` lands in a
  * CSS `color-mix(...)` string). Unknown keys are stripped, so the runtime may add fields without
  * breaking an older embed bundle.
+ *
+ * Discriminators match `@wunderstack/shared` `chatEventSchema`:
+ * `status | text | citations | followups | done | error`.
  */
 
 export const embedCitationSchema = z.object({
@@ -26,23 +30,45 @@ export const embedCitationSchema = z.object({
 });
 export type EmbedCitation = z.infer<typeof embedCitationSchema>;
 
-/** Discriminators must match `@wunderstack/shared` `chatEventSchema`: status|text|citations|followups|done|error. */
+const embedWritableTurnOutcomeSchema = z.object({
+  outcome: z.string(),
+  outcomeReason: z.string().nullable(),
+});
+
+export const chatStatusPhases = ["searching", "retrieved", "generating"] as const;
+
 export const chatEventSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("status"), phase: z.string(), count: z.number().optional() }),
+  z.object({
+    type: z.literal("status"),
+    phase: z.enum(chatStatusPhases),
+    count: z.number().int().nonnegative().optional(),
+    topScore: z.number().min(0).max(1).nullable().optional(),
+  }),
   z.object({ type: z.literal("text"), delta: z.string() }),
   z.object({
     type: z.literal("citations"),
     found: z.boolean(),
     needsClarification: z.boolean(),
+    turnOutcome: embedWritableTurnOutcomeSchema,
+    retrievedCount: z.number().int().nonnegative(),
+    topScore: z.number().min(0).max(1).nullable(),
     citations: z.array(embedCitationSchema),
-    answer: z.string(),
     citationVerificationFailed: z.boolean(),
+    answer: z.string(),
   }),
   z.object({
     type: z.literal("followups"),
     questions: z.array(z.string().min(1).max(200)).max(3),
   }),
-  z.object({ type: z.literal("done"), traceId: z.string().nullable() }),
+  z.object({
+    type: z.literal("done"),
+    usage: z.object({
+      promptTokens: z.number().int().nonnegative(),
+      completionTokens: z.number().int().nonnegative(),
+      totalTokens: z.number().int().nonnegative(),
+    }),
+    traceId: z.string().nullable(),
+  }),
   z.object({ type: z.literal("error"), message: z.string() }),
 ]);
 export type ChatEvent = z.infer<typeof chatEventSchema>;

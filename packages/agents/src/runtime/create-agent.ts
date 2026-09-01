@@ -35,12 +35,11 @@ export function retrievalSignalsFromHits(hits: { score: number }[]): {
   retrievedCount: number;
   topScore: number | null;
 } {
-  if (hits.length === 0) {
-    return { retrievedCount: 0, topScore: null };
-  }
-  let topScore = hits[0]!.score;
+  // No index access: `noUncheckedIndexedAccess` makes `hits[0]` (and `const [first] = hits`)
+  // possibly-undefined even after a length guard. Seeding with null covers the empty case too.
+  let topScore: number | null = null;
   for (const hit of hits) {
-    if (hit.score > topScore) {
+    if (topScore === null || hit.score > topScore) {
       topScore = hit.score;
     }
   }
@@ -229,9 +228,9 @@ export function verifyAndBuild(
   }
 
   return {
-    answer,
-    citations,
-    found: true,
+    answer: profile.notFoundMessage,
+    citations: [],
+    found: false,
     turnOutcome: refused("no_coverage"),
     verificationFailed,
     hardFactGuardTriggered: false,

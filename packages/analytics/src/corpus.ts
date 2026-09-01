@@ -30,11 +30,35 @@ export const CORPUS_FINGERPRINT_LENGTH = 12;
  */
 export function corpusFingerprint(docs: CorpusDocRow[]): string | null {
   if (docs.length === 0) return null;
-  const material = [...docs]
-    .sort((a, b) => a.sourceUri.localeCompare(b.sourceUri))
-    .map((doc) => `${doc.sourceUri}\n${doc.version}\n${doc.contentHash}`)
-    .join("\n\n");
-  return createHash("sha256").update(material).digest("hex").slice(0, CORPUS_FINGERPRINT_LENGTH);
+  const agentKey = docs[0]?.agentKey ?? "";
+  const material = [
+    agentKey,
+    ...[...docs]
+      .sort((a, b) => a.sourceUri.localeCompare(b.sourceUri))
+      .map((doc) => `${doc.sourceUri}\n${doc.version}\n${doc.contentHash}`),
+  ].join("\n\n");
+  return createHash("sha256").update(material).digest("hex");
+}
+
+/** Short label for UI — full hash is stored on new pins. */
+export function corpusFingerprintDisplay(fingerprint: string): string {
+  return fingerprint.slice(0, CORPUS_FINGERPRINT_LENGTH);
+}
+
+/** Legacy 12-char pins still match the full hash prefix. */
+export function corpusFingerprintMatchesPinned(
+  fingerprint: string | null,
+  pinnedReleaseTag: string | null,
+): boolean {
+  if (fingerprint === null || pinnedReleaseTag === null) return false;
+  if (pinnedReleaseTag === fingerprint) return true;
+  if (
+    pinnedReleaseTag.length === CORPUS_FINGERPRINT_LENGTH &&
+    fingerprint.startsWith(pinnedReleaseTag)
+  ) {
+    return true;
+  }
+  return false;
 }
 
 /**

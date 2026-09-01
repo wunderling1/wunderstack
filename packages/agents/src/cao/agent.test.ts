@@ -187,12 +187,22 @@ describe("verifyAndBuild — G4 citation coupling", () => {
     assert.ok(result.answer.includes("[1]"));
   });
 
-  it("classifies a claimless model refusal as no_coverage, not answered", () => {
+  it("classifies claimless model prose as no_coverage and does not serve it as a normal answer", () => {
+    const retrieval = retrievalWithGrounding(grounding);
+    const result = verifyAndBuild("Ja, dat mag volgens de CAO.", retrieval, "");
+    assert.equal(result.unverifiable, false);
+    assert.equal(result.answer, NOT_FOUND_MESSAGE);
+    assert.equal(result.found, false);
+    assert.deepEqual(result.turnOutcome, refused("no_coverage"));
+    assert.notEqual(result.turnOutcome.outcome, "answered");
+  });
+
+  it("classifies exact not-found prose like empty retrieval: notFoundMessage and found false", () => {
     const retrieval = retrievalWithGrounding(grounding);
     const result = verifyAndBuild(NOT_FOUND_MESSAGE, retrieval, "");
     assert.equal(result.unverifiable, false);
     assert.equal(result.answer, NOT_FOUND_MESSAGE);
-    assert.equal(result.found, true);
+    assert.equal(result.found, false);
     assert.deepEqual(result.turnOutcome, refused("no_coverage"));
     assert.notEqual(result.turnOutcome.outcome, "answered");
   });

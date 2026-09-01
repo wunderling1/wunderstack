@@ -102,6 +102,8 @@ export interface ConversationList {
   conversationTotal: number;
   /** Matching exercise sessions (0 when an outcome/reason filter is set). */
   exerciseTotal: number;
+  /** True when the turn scan cap was hit — counts and grouping are then a floor. */
+  truncated: boolean;
 }
 
 /** What the Activity block needs beyond the question count it already has (S22). */
@@ -315,8 +317,10 @@ async function loadGroundedConversations(
   items: GroundedConversation[];
   questionTotal: number;
   conversationTotal: number;
+  truncated: boolean;
 }> {
   const rows = await scanWindow(db, query);
+  const truncated = rows.length >= CONVERSATION_TURN_SCAN_CAP;
 
   let questionTotal = 0;
   const selected: Array<ConversationGroup<TurnRow>> = [];
@@ -333,7 +337,7 @@ async function loadGroundedConversations(
     .sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())
     .slice(0, CONVERSATION_LIST_LIMIT);
 
-  return { items, questionTotal, conversationTotal: selected.length };
+  return { items, questionTotal, conversationTotal: selected.length, truncated };
 }
 
 async function loadExercises(
@@ -374,20 +378,24 @@ async function loadConversationList(
 ): Promise<ConversationList> {
   const grounded = includeGroundedTurns(query)
     ? await loadGroundedConversations(db, query)
-    : { items: [] as GroundedConversation[], questionTotal: 0, conversationTotal: 0 };
+    : {
+        items: [] as GroundedConversation[],
+        questionTotal: 0,
+        conversationTotal: 0,
+        truncated: false,
+      };
   const exercise = includeExerciseSessions(query)
     ? await loadExercises(db, query)
     : { items: [] as ExerciseConversation[], total: 0 };
 
-  const items: ConversationItem[] = [...grounded.items, ...exercise.items]
-    .sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())
-    .slice(0, CONVERSATION_LIST_LIMIT);
+  const items: ConversationItem[] = [...grounded.items, ...exercise.items];
 
   return {
     items,
     questionTotal: grounded.questionTotal,
     conversationTotal: grounded.conversationTotal,
     exerciseTotal: exercise.total,
+    truncated: grounded.truncated,
   };
 }
 

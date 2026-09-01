@@ -13,8 +13,21 @@ function row(
   minutes: number,
   sessionId = "tab-1",
   agentId = "cao",
-): { id: string; sessionId: string; agentId: string; occurredAt: Date } {
-  return { id, sessionId, agentId, occurredAt: new Date(NOON + minutes * 60_000) };
+  channel: string | null = "playground",
+): {
+  id: string;
+  sessionId: string;
+  agentId: string;
+  occurredAt: Date;
+  channel: string | null;
+} {
+  return {
+    id,
+    sessionId,
+    agentId,
+    occurredAt: new Date(NOON + minutes * 60_000),
+    channel,
+  };
 }
 
 test("questions in one sitting are one conversation", () => {
@@ -106,4 +119,17 @@ test("mcp and api carry no thread id; playground, embed and pre-channel rows do"
   assert.equal(isThreadedChannel("playground"), true);
   assert.equal(isThreadedChannel("embed"), true);
   assert.equal(isThreadedChannel(null), true);
+});
+
+test("three MCP turns with one session id are three conversations", () => {
+  const groups = groupIntoConversations([
+    row("mcp-1", 0, "shared-host", "cao", "mcp"),
+    row("mcp-2", 1, "shared-host", "cao", "mcp"),
+    row("mcp-3", 2, "shared-host", "cao", "mcp"),
+  ]);
+  assert.equal(groups.length, 3);
+  assert.deepEqual(
+    groups.map((group) => group.questions.map((question) => question.id)),
+    [["mcp-1"], ["mcp-2"], ["mcp-3"]],
+  );
 });
