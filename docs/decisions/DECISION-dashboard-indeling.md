@@ -95,11 +95,11 @@ Deze tabel stuurde PR-1 t/m PR-7. D1 en D2 zijn na de audit geamendeerd (A1, A2)
    `fund_oomt.interaction_events` van 27 augustus, die geen huidig codepad kan hebben
    geschreven; zolang die er staat, telt hij dubbel in Gesprekken (F-41, F-42).
 
-2. **Corpusversie die de poort beoordeelde (S13, S14).** Goedkeuring en gate-uitslag moeten
-   naar dezelfde versie verwijzen. Dat begrip — de versie die de poort heeft beoordeeld, per
-   agent — bestaat niet in de code. `corpusVersionLabel` pakt de eerste niet-lege
-   documentversie, fondsbreed. De goedkeuringsactie bewaakt die waarde server-side, maar dat
-   is een slot op een willekeurig getal. S13/S14 zijn niet ingevuld tot dit begrip bestaat.
+2. ~~**Corpusversie die de poort beoordeelde (S13, S14).**~~ **Besloten op 1 september 2026,
+   nog te bouwen.** Het ontbrekende begrip wordt de **corpusvingerafdruk**: één waarde per
+   agent per fonds, afgeleid over de hele documentset van die agent — per document
+   `(source_uri, version, content_hash)`, gesorteerd op `source_uri`, sha256, afgekort. Zie
+   amendement A5.
 
 3. **As van de fondsstatus (S12).** De aggregatieregel is vastgelegd (laagste stand). Waar de
    standen zelf op gebaseerd zijn, is dat niet. De huidige as meet alleen storing (foutratio
@@ -125,6 +125,32 @@ rest van de reeks opruimt.
 
 **A4 — O-1.** Zie open eind 1. Besloten: oefen-turns uit `interaction_events`.
 
+**A5 — S13/S14: de corpusvingerafdruk.** Een documentversie is geen corpusversie. Met meer dan
+één document pakt `corpusVersionLabel` er willekeurig één en zegt de goedkeuring niets over de
+rest. Daarom krijgt "het corpus waar deze agent op staat" een eigen, afleidbare waarde.
+
+*Wat het is.* Per agent per fonds: sha256 over de gesorteerde tripletten
+`(source_uri, version, content_hash)` van álle documenten van die agent, afgekort tot twaalf
+tekens. Deterministisch, geen opslag nodig, en gevoelig voor precies de drie dingen die het
+corpus veranderen: een document erbij, een nieuwe versie, of gewijzigde inhoud.
+
+*Wat goedkeuren gaat betekenen.* `pinned_release_tag` bewaart die vingerafdruk in plaats van een
+documentversie. Goedgekeurd = de gepinde vingerafdruk is gelijk aan de huidige. Elke
+corpuswijziging maakt de goedkeuring dus verlopen in plaats van stilzwijgend geldig te blijven —
+dat is het hele punt. De kolom blijft `text` en krijgt geen migratie; alleen de betekenis
+verandert. Gecontroleerd op 1 september: buiten de goedkeurings-UI leest niets deze kolom, dus
+er hangt geen retrieval- of runtimegedrag aan.
+
+*Wat het niet oplost.* De poort blijft "onbekend" zolang `getReleaseManifest` een stub is. Pas
+als de release-manifest-track (PLAN-ui-ecosystem §7) landt en dezelfde vingerafdruk vastlegt, is
+"poort en goedkeuring wijzen naar hetzelfde corpus" controleerbaar in plaats van beloofd. Tot dan
+claimt de fondspagina niets over de poort en heet de losse documentversie wat hij is: de laatst
+geladen versie.
+
+*Gevolg voor bestaande data.* Gepinde waarden als `1` en `arbo-oomt-2` matchen geen vingerafdruk,
+dus die agents lezen na de bouw als niet goedgekeurd. Dat is juist: ze waren goedgekeurd op een
+willekeurige waarde. Opnieuw goedkeuren is één handeling per agent.
+
 ## Bewust niet in deze reeks
 
 Clustering op Signalen, visuele lagen (activiteitspuls, clusterkaart, sparklines,
@@ -136,4 +162,4 @@ voordat de cijfers eronder kloppen.
 Dit document stond niet in de repo tijdens de implementatie en de audit van 1 september
 2026. De auditor heeft S9–S21 teruggehaald uit het implementatietranscript
 (sessie `9f44104e`, 9:48) en de verificatieprompt. S20 is niet teruggevonden. De
-amendementen A1–A4 zijn de weging van 1 september 13:09 op die audit.
+amendementen A1–A5 zijn de weging van 1 september op die audit.
