@@ -33,6 +33,14 @@ export function fundStatusFromAgents(
   return deriveFundStatus(agents.map((agent) => agent.status));
 }
 
+/**
+ * Label for one agent's corpus: the version of its most recently ingested document. Callers pass
+ * versions newest-first (`getCorpusOverview` orders on `ingested_at desc`) — order is the meaning
+ * here, so an unordered list would silently produce a different answer.
+ *
+ * This is the latest loaded version, not the version a release gate assessed. That second concept
+ * does not exist yet (DECISION-dashboard-indeling.md, open eind 2).
+ */
 export function corpusVersionLabel(versions: string[]): string {
   const latest = versions.find((version) => version.length > 0);
   return latest ?? "n.n.b.";

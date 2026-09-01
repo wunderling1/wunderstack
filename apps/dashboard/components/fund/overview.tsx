@@ -173,7 +173,7 @@ function StatusBlock({ model, hrefs }: { model: OverviewModel; hrefs: OverviewHr
                   {agent.lastOccurredAt ? dateTime.format(agent.lastOccurredAt) : "—"}
                 </TableCell>
                 <TableCell className="font-mono text-xs text-text-muted">
-                  {agent.kind === "grounded" ? model.corpusVersion : "—"}
+                  {agent.kind === "grounded" ? agent.corpusVersion : "—"}
                 </TableCell>
                 <TableCell>
                   <AgentStatusBadge

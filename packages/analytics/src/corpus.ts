@@ -4,6 +4,8 @@ export interface CorpusDocRow {
   title: string;
   sourceUri: string;
   fund: string;
+  /** Which agent's corpus this document belongs to — cao and arbo do not share a version. */
+  agentKey: string;
   version: string;
   ingestedAt: Date;
   chunkCount: number;
@@ -24,6 +26,7 @@ export async function getCorpusOverview(
         title: documents.title,
         sourceUri: documents.sourceUri,
         fund: documents.fund,
+        agentKey: documents.agentKey,
         version: documents.version,
         ingestedAt: documents.ingestedAt,
         chunkCount: sql<number>`count(${chunks.id})`,
@@ -39,6 +42,7 @@ export async function getCorpusOverview(
     title: row.title,
     sourceUri: row.sourceUri,
     fund: row.fund,
+    agentKey: row.agentKey,
     version: row.version,
     ingestedAt: row.ingestedAt,
     chunkCount: Number(row.chunkCount ?? 0),
