@@ -54,6 +54,20 @@ describe("interaction event contract (Fase 1)", () => {
     assert.equal(parsed.userId, "u-9");
   });
 
+  it("rejects an exercise agent: a session is not an interaction event", () => {
+    const rejected = interactionEventInputSchema.safeParse({
+      tenantId: "oomt",
+      agentId: "roleplay",
+      fund: "oomt",
+      sessionId: "s-4",
+      turnOutcome: answeredGrounded(),
+      retrievedCount: 0,
+      topScore: null,
+      question: "oh dat is vervelend",
+    });
+    assert.equal(rejected.success, false);
+  });
+
   it("accepts an optional channel and rejects unknown values", () => {
     const parsed = interactionEventInputSchema.parse({
       tenantId: "demo",

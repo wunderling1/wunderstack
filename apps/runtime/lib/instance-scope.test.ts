@@ -55,6 +55,19 @@ describe("resolveRequestScope (keyed)", () => {
       assert.notEqual(cao.agentKey, arbo.agentKey);
     }
   });
+
+  it("an exercise instance key is refused here, so no event can carry it", () => {
+    const result = resolveRequestScope(
+      instance({ tenantId: "oomt", agentKey: "roleplay" }),
+      undefined,
+      allow,
+    );
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.equal(result.status, 400);
+      assert.equal(result.error, "unknown_agent");
+    }
+  });
 });
 
 describe("resolveRequestScope (unconfigured-open)", () => {

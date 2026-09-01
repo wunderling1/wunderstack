@@ -17,10 +17,7 @@ test("zero events is onboarding, not a 0% rate", () => {
 
 test("one degraded agent makes the fund not operational", () => {
   assert.equal(
-    fundStatusFromAgents([
-      { total: 10, errors: 0 },
-      { total: 10, errors: 3 },
-    ]),
+    fundStatusFromAgents([{ status: "operational" }, { status: "degraded" }]),
     "degraded",
   );
   assert.equal(fundStatusFromAgents([]), "offline");

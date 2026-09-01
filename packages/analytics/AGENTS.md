@@ -17,3 +17,8 @@ fondsschema’s ([ADR-multitenant-database.md](../../docs/architecture/ADR-multi
   geen user-identificatie in embed v1 (zie `docs/decisions/DECISION-analytics-retention.md`).
 - **Best-effort schrijven:** een falende of niet-geconfigureerde DB mag nooit een antwoord breken;
   `recordInteractionEvent` degradeert naar `{ recorded: false }`.
+- **Alleen grounded agents schrijven hier.** `agentId` in het event-contract is een
+  `groundedAgentKeySchema`, geen vrije string. Een oefenagent heeft geen uitkomst maar een
+  sessieverloop en leeft in `roleplay_sessions`; zijn volume lees je met `getExerciseActivity`.
+  Twee tabellen, twee begrippen — zo hoeft geen enkele query de ander eruit te filteren
+  (`DECISION-dashboard-indeling.md`, open eind 1).
