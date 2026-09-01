@@ -53,7 +53,7 @@ Bron: `docs/decisions/DECISION-dashboard-indeling.md` (S9–S21) en
 | Eerste echte meting via `measurementStartedAt(fundKey)` = `min(occurred_at) WHERE outcome_reason IS NOT NULL` | Live query 1 sept 2026 (na `0003_turn_outcome` op alle actieve fondsen): **null**. `demo` 5 events, `elektronische-detailhandel` 103, `eval-fixtures` 0, `oomt` 119 — allemaal `outcome_reason` leeg. `0003` zet historische rijen op `unknown`. D6-regel tot de eerste classificeerde turn: “meting nog niet gestart”, geen verzonnen datum. |
 | KPI-scope = fondsschema (`fundKey`), niet `tenant_id` | — |
 
-**PR-1 DoD — bestaande routes (ongeauth, 1 sept 2026, `:3002`):** `/login` 200; overige surfaces 307 naar login (geen 404). Lijst: `lib/existing-routes.test.ts`.
+**PR-1 DoD — bestaande routes (ongeauth, 1 sept 2026, `:3002`):** `/login` 200; overige surfaces 307 naar login (geen 404). `lib/existing-routes.test.ts` leidt de lijst af uit de app-boom, dus een nieuwe of verwijderde route valt daar om. De live check draait alleen met `DASHBOARD_ORIGIN` gezet; groen zonder die var bewijst niets over de routes.
 
 ## PR-4 — Gesprekken
 
