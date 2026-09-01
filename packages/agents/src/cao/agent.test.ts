@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { answeredGrounded, clarifiedOutcome, refused } from "@wunderstack/shared";
+import { answeredGrounded, refused } from "@wunderstack/shared";
 import type { RetrievedChunk } from "@wunderstack/rag";
 
 import type { AgentStreamEvent, AgentUsage } from "../types.js";
