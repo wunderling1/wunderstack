@@ -39,8 +39,9 @@ export async function updateFundThemeAction(
     );
     await updateFundTheme({ fundKey, theme });
     updateFundConfigCache(fundKey);
-    revalidatePath(`/admin/funds/${fundKey}/branding`);
+    revalidatePath(`/admin/funds/${fundKey}/instellingen`);
     revalidatePath(`/admin/funds/${fundKey}`);
+    revalidatePath("/instellingen");
     return { ok: true };
   } catch (error) {
     if (error instanceof Error && error.name === "ZodError") {

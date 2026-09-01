@@ -16,6 +16,9 @@ export const FUND_MIGRATION_PROVISION = "0001_provision";
 /** Roleplay tables + turn counter. Applied to existing schemas by `migrate-fund-schemas`. */
 export const FUND_MIGRATION_ROLEPLAY = "0002_roleplay";
 
+/** Turn outcome classification columns on `interaction_events` (PR-A2). */
+export const FUND_MIGRATION_TURN_OUTCOME = "0003_turn_outcome";
+
 export function createSchemaSql(schemaName: string): string {
   return `CREATE SCHEMA IF NOT EXISTS ${quoteIdent(schemaName)}`;
 }
@@ -166,7 +169,10 @@ export function createEventsExplicitSql(schemaName: string): string {
   trace_id text,
   occurred_at timestamptz NOT NULL DEFAULT now(),
   outcome text NOT NULL,
+  outcome_reason text,
   citation_count integer NOT NULL DEFAULT 0,
+  retrieved_count integer NOT NULL DEFAULT 0,
+  top_score double precision,
   question text,
   theme text,
   channel text,
@@ -344,6 +350,19 @@ export function roleplayAlterSql(schemaName: string): string[] {
   const q = quoteIdent(schemaName);
   return [
     `ALTER TABLE ${q}.roleplay_sessions ADD COLUMN IF NOT EXISTS review_started_at timestamptz`,
+  ];
+}
+
+/** Columns added for PR-A2 turn-outcome classification — IF NOT EXISTS so existing schemas catch up. */
+export function turnOutcomeAlterSql(schemaName: string): string[] {
+  const q = quoteIdent(schemaName);
+  return [
+    `ALTER TABLE ${q}.interaction_events ADD COLUMN IF NOT EXISTS outcome_reason text`,
+    `ALTER TABLE ${q}.interaction_events ADD COLUMN IF NOT EXISTS retrieved_count integer NOT NULL DEFAULT 0`,
+    `ALTER TABLE ${q}.interaction_events ADD COLUMN IF NOT EXISTS top_score double precision`,
+    `UPDATE ${q}.interaction_events SET outcome = 'unknown' WHERE outcome IS NOT NULL`,
+    `ALTER TABLE ${q}.interaction_events DROP CONSTRAINT IF EXISTS interaction_events_outcome_check`,
+    `ALTER TABLE ${q}.interaction_events ADD CONSTRAINT interaction_events_outcome_check CHECK (outcome IN ('answered', 'refused', 'clarified', 'error', 'unknown'))`,
   ];
 }
 

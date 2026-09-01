@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { recordInteractionEvent, type InteractionOutcome } from "@wunderstack/analytics";
+import { recordInteractionEvent } from "@wunderstack/analytics";
 import { getTenantId } from "@wunderstack/tenant";
-import { env } from "@wunderstack/shared";
+import { env, errored, type WritableTurnOutcome } from "@wunderstack/shared";
 import { getAgentById } from "@/lib/agent";
 import {
   DEFAULT_CHAT_HEARTBEAT_MS,
@@ -165,9 +165,10 @@ export async function POST(request: Request): Promise<Response> {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       // Outcome dimensions observed off the event stream, written to the event-log after the turn.
-      let found: boolean | undefined;
-      let needsClarification = false;
+      let turnOutcome: WritableTurnOutcome | undefined;
       let citationCount = 0;
+      let retrievedCount = 0;
+      let topScore: number | null = null;
       let traceId: string | null = null;
 
       const { sawError } = await pipeChatNdjsonStream({
@@ -188,10 +189,14 @@ export async function POST(request: Request): Promise<Response> {
         workSignal,
         heartbeatMs: HEARTBEAT_MS,
         onEvent: (event) => {
-          if (event.type === "citations") {
-            found = event.found;
-            needsClarification = event.needsClarification;
+          if (event.type === "status" && event.phase === "retrieved") {
+            retrievedCount = event.count ?? 0;
+            topScore = event.topScore ?? null;
+          } else if (event.type === "citations") {
+            turnOutcome = event.turnOutcome;
             citationCount = event.citations.length;
+            retrievedCount = event.retrievedCount;
+            topScore = event.topScore;
           } else if (event.type === "done") {
             traceId = event.traceId;
           }
@@ -202,13 +207,11 @@ export async function POST(request: Request): Promise<Response> {
       // Fase 1 event-log. Skip on client disconnect (an incomplete turn is not a product signal).
       // A turn-budget timeout still logs as error — the client was connected and got a terminal event.
       if (!request.signal.aborted) {
-        const outcome: InteractionOutcome = sawError
-          ? "error"
-          : needsClarification
-            ? "clarified"
-            : found
-              ? "answered"
-              : "refused";
+        const resolvedOutcome: WritableTurnOutcome = sawError
+          ? turnDeadline.aborted
+            ? errored("timeout")
+            : errored("provider_error")
+          : (turnOutcome ?? errored("provider_error"));
         try {
           await recordInteractionEvent({
             tenantId,
@@ -218,8 +221,10 @@ export async function POST(request: Request): Promise<Response> {
             channel,
             ...(userId === undefined ? {} : { userId }),
             ...(traceId === null ? {} : { traceId }),
-            outcome,
+            turnOutcome: resolvedOutcome,
             citationCount,
+            retrievedCount,
+            topScore,
             question,
           });
         } catch (error) {

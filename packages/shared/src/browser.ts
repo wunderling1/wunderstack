@@ -27,18 +27,23 @@ export {
 } from "./contracts/chat.js";
 
 export {
-  interactionOutcomes,
-  interactionOutcomeSchema,
-  settledRunOutcomes,
-  settledRunOutcomeSchema,
-  streamErrorOutcomes,
-  streamErrorOutcomeSchema,
-  classifySettledRunOutcome,
-  classifyThrownRunOutcome,
+  answeredGrounded,
+  answeredReasons,
+  clarifiedOutcome,
+  clarifiedReasons,
+  errored,
+  errorReasons,
   isQualityOutcome,
-  type InteractionOutcome,
-  type SettledRunOutcome,
-  type StreamErrorOutcome,
+  refused,
+  refusedReasons,
+  turnOutcomeSchema,
+  turnOutcomes,
+  writableTurnOutcomeSchema,
+  type ErrorReason,
+  type RefusedReason,
+  type TurnOutcome,
+  type TurnOutcomeValue,
+  type WritableTurnOutcome,
 } from "./contracts/interaction-outcome.js";
 
 export {

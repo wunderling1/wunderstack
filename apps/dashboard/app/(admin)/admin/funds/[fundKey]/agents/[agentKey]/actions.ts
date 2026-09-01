@@ -1,14 +1,17 @@
 "use server";
 
+import { getCorpusOverview } from "@wunderstack/analytics";
 import {
   ConfirmationMismatchError,
   getInstance,
+  pinInstanceReleaseTag,
   rotateTenantKey,
   updateTenantConfig,
 } from "@wunderstack/db";
-import { agentKeySchema, tenantTextsSchema } from "@wunderstack/shared";
+import { agentKeySchema, isGroundedAgentKey, tenantTextsSchema } from "@wunderstack/shared";
 import { revalidatePath } from "next/cache";
 import { assertAdmin } from "@/lib/assert-admin";
+import { buildCorpusDecision } from "@/lib/agent-profile";
 import { updateFundConfigCache } from "@/lib/config-cache";
 import { parseFundKey } from "@/lib/route-params";
 
@@ -26,9 +29,14 @@ function optionalStr(value: FormDataEntryValue | null): string | undefined {
 function revalidateAgent(fundKey: string, agentKey: string): void {
   updateFundConfigCache(fundKey, agentKey);
   revalidatePath(`/admin/funds/${fundKey}/agents/${agentKey}`);
+  revalidatePath(`/admin/funds/${fundKey}/agents/${agentKey}/publication`);
+  revalidatePath(`/admin/funds/${fundKey}/agents/${agentKey}/corpus`);
   revalidatePath(`/admin/funds/${fundKey}/agents/${agentKey}/distribution`);
   revalidatePath(`/admin/funds/${fundKey}/agents/${agentKey}/texts`);
   revalidatePath(`/admin/funds/${fundKey}/agents/${agentKey}/scenarios`);
+  revalidatePath(`/agents/${agentKey}`);
+  revalidatePath(`/agents/${agentKey}/publication`);
+  revalidatePath(`/agents/${agentKey}/corpus`);
   revalidatePath(`/admin/funds/${fundKey}/agents`);
 }
 
@@ -129,3 +137,39 @@ export async function updateTextsAction(
     return { ok: false, error: "Opslaan mislukt. Zie de serverlog." };
   }
 }
+
+export async function pinCorpusAction(
+  _prev: FormErrorState,
+  formData: FormData,
+): Promise<FormErrorState> {
+  await assertAdmin();
+  const fundKey = parseFundKey(str(formData.get("fundKey")));
+  const parsed = agentKeySchema.safeParse(str(formData.get("agentKey")).toLowerCase());
+  if (!fundKey) return { ok: false, error: "Ongeldige fondssleutel." };
+  if (!parsed.success) return { ok: false, error: "Ongeldige agent." };
+  const agentKey = parsed.data;
+  if (!isGroundedAgentKey(agentKey)) {
+    return { ok: false, error: "Alleen een gegronde agent heeft een corpusversie." };
+  }
+  try {
+    const docs = await getCorpusOverview(fundKey, agentKey);
+    const decision = buildCorpusDecision({
+      documentVersions: docs.map((doc) => doc.version),
+      pinnedReleaseTag: null,
+      gateResult: null,
+      gateEvaluatedAt: null,
+      artefactUrl: null,
+    });
+    const submitted = str(formData.get("corpusVersion"));
+    if (!decision.corpusVersion || submitted !== decision.corpusVersion) {
+      return { ok: false, error: "Corpusversie is veranderd. Herlaad de pagina." };
+    }
+    await pinInstanceReleaseTag(fundKey, agentKey, decision.corpusVersion);
+    revalidateAgent(fundKey, agentKey);
+    return { ok: true };
+  } catch (error) {
+    console.error("[pinCorpusAction]", error instanceof Error ? error.name : "unknown");
+    return { ok: false, error: "Goedkeuren mislukt. Zie de serverlog." };
+  }
+}
+

@@ -1,4 +1,4 @@
-import { index, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { index, integer, pgTable, real, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 /**
  * One row per user interaction with an agent (Fase 1 event-log). This is the analytics fact table
@@ -28,9 +28,15 @@ export const interactionEvents = pgTable(
     // feedback endpoint attach a signal after the fact. Null when tracing is unconfigured.
     traceId: text("trace_id"),
     occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
-    // "answered" | "refused" | "clarified" | "error" — the outcome of the turn.
+    // "answered" | "refused" | "clarified" | "error" | "unknown" — classified at the pipeline decision point.
     outcome: text("outcome").notNull(),
+    /** Reason for the outcome; null only on pre-metric rows (`outcome = unknown`). */
+    outcomeReason: text("outcome_reason"),
     citationCount: integer("citation_count").notNull().default(0),
+    /** Raw retrieval hit count for this turn (strength label derived in analytics). */
+    retrievedCount: integer("retrieved_count").notNull().default(0),
+    /** Highest similarity among retrieved hits; null when retrievedCount is 0. */
+    topScore: real("top_score"),
     // Potentially-sensitive free text; logged for the corpus-roadmap signal, 90-day retention.
     question: text("question"),
     // Coarse theme metadata (roadmap signal). Null until a classifier exists (deferred, regel van drie).

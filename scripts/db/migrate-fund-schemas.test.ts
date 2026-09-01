@@ -21,4 +21,9 @@ describe("migrate-fund-schemas.ts", () => {
     assert.doesNotMatch(code, /\bhnsw\b/i);
     assert.doesNotMatch(code, /PARTITION BY/);
   });
+
+  it("applies fund migration 0003_turn_outcome for turn-outcome columns", () => {
+    assert.match(source, /FUND_MIGRATION_TURN_OUTCOME/);
+    assert.match(source, /turnOutcomeAlterSql/);
+  });
 });

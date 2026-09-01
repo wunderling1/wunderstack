@@ -1,33 +1,42 @@
-import { getFundOverview } from "@wunderstack/analytics";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
-import { FundActivityPanels } from "@/components/fund/activity-panels";
-import { FundKpiTiles } from "@/components/fund/kpi-tiles";
+import { FundOverviewView } from "@/components/fund/overview";
+import { loadOverviewModel } from "@/lib/overview-load";
+import { parsePeriod } from "@/lib/period";
 import { parseFundKey } from "@/lib/route-params";
-import { sinceDaysAgo } from "@/lib/window";
 
 /** KPI surface — always fetch. Config tabs are cached separately. */
 export const dynamic = "force-dynamic";
 
-const WINDOW_DAYS = 30;
-
 export default async function FundOverviewPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ fundKey: string }>;
+  searchParams: Promise<{ period?: string }>;
 }) {
-  const { fundKey: raw } = await params;
+  const [{ fundKey: raw }, { period: rawPeriod }, headerList] = await Promise.all([
+    params,
+    searchParams,
+    headers(),
+  ]);
   const fundKey = parseFundKey(raw);
   if (!fundKey) notFound();
 
-  const { summary, unanswered, themes, log } = await getFundOverview({
-    fundKey,
-    since: sinceDaysAgo(WINDOW_DAYS),
-  });
+  const period = parsePeriod(rawPeriod);
+  const pathname = headerList.get("x-pathname") ?? `/admin/funds/${fundKey}`;
+  const model = await loadOverviewModel(fundKey, period);
 
   return (
-    <div className="flex flex-col gap-10">
-      <FundKpiTiles summary={summary} windowDays={WINDOW_DAYS} />
-      <FundActivityPanels themes={themes} unanswered={unanswered} log={log} />
-    </div>
+    <FundOverviewView
+      model={model}
+      hrefs={{
+        pathname,
+        gesprekken: `/admin/funds/${fundKey}/gesprekken`,
+        signalen: `/admin/funds/${fundKey}/signalen`,
+        agents: `/admin/funds/${fundKey}/agents`,
+        agent: (agentKey) => `/admin/funds/${fundKey}/agents/${agentKey}`,
+      }}
+    />
   );
 }

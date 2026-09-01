@@ -1,6 +1,12 @@
 import { Mastra } from "@mastra/core";
 import { Agent } from "@mastra/core/agent";
 import { EMBEDDING_CONFIG, GENERATION_CONFIG, env } from "@wunderstack/shared";
+import {
+  answeredGrounded,
+  clarifiedOutcome,
+  refused,
+  type WritableTurnOutcome,
+} from "@wunderstack/shared";
 import { createSovereignModel } from "../model/sovereign-model.js";
 import { buildLangfuseObservability } from "../observability/langfuse.js";
 import { recordNumericTraceScore } from "../observability/feedback.js";
@@ -23,6 +29,25 @@ import { parseGenerationOutput } from "./parse-generation.js";
 import type { AgentRuntimeProfile, RetrievalOutput } from "./profile.js";
 import { addUsage, FOLLOW_UP_MODEL, suggestFollowUps } from "./suggest-follow-ups.js";
 import { stripFailedMarkers, stripUnverifiedMarkers, verifyCitations } from "./verify-citations.js";
+
+/** Raw retrieval signals for the event-log (strength label derived in analytics). */
+export function retrievalSignalsFromHits(hits: { score: number }[]): {
+  retrievedCount: number;
+  topScore: number | null;
+} {
+  if (hits.length === 0) {
+    return { retrievedCount: 0, topScore: null };
+  }
+  let topScore = hits[0]!.score;
+  for (const hit of hits) {
+    if (hit.score > topScore) {
+      topScore = hit.score;
+    }
+  }
+  return { retrievedCount: hits.length, topScore };
+}
+
+const ZERO_RETRIEVAL = { retrievedCount: 0, topScore: null } as const;
 
 /**
  * Shared grounded-agent pipeline. Specialise via {@link AgentRuntimeProfile} — no BaseAgent class.
@@ -146,6 +171,7 @@ export function verifyAndBuild(
   answer: string;
   citations: AgentCitation[];
   found: boolean;
+  turnOutcome: WritableTurnOutcome;
   verificationFailed: boolean;
   hardFactGuardTriggered: boolean;
   unverifiable: boolean;
@@ -168,6 +194,7 @@ export function verifyAndBuild(
       answer: profile.notFoundMessage,
       citations: [],
       found: false,
+      turnOutcome: refused("guard_hard_fact"),
       verificationFailed: true,
       hardFactGuardTriggered: true,
       unverifiable: false,
@@ -182,20 +209,47 @@ export function verifyAndBuild(
       answer: profile.unverifiableMessage,
       citations: [],
       found: false,
+      turnOutcome: refused("guard_citation_coupling"),
       verificationFailed: true,
       hardFactGuardTriggered: false,
       unverifiable: true,
     };
   }
 
-  return { answer, citations, found: true, verificationFailed, hardFactGuardTriggered: false, unverifiable: false };
+  if (citations.length > 0) {
+    return {
+      answer,
+      citations,
+      found: true,
+      turnOutcome: answeredGrounded(),
+      verificationFailed,
+      hardFactGuardTriggered: false,
+      unverifiable: false,
+    };
+  }
+
+  return {
+    answer,
+    citations,
+    found: true,
+    turnOutcome: refused("no_coverage"),
+    verificationFailed,
+    hardFactGuardTriggered: false,
+    unverifiable: false,
+  };
 }
 
 type SettledAnswer = {
   answer: string;
   citations: AgentCitation[];
-  /** Settled by verifyAndBuild: false on any refusal (hard-fact guard, no verified citation). */
+  /**
+   * Serve-time flag: whether the model text was served as-is (true) or replaced by a guard /
+   * empty-retrieval message (false). Analytics classification uses `turnOutcome`, not this flag.
+   */
   found: boolean;
+  turnOutcome: WritableTurnOutcome;
+  retrievedCount: number;
+  topScore: number | null;
   verificationFailed: boolean;
   hardFactGuardTriggered: boolean;
   /** True when the answer was refused solely because no citation survived verification (G4 coupling). */
@@ -222,6 +276,9 @@ export function* settledAnswerBody(result: SettledAnswer): Generator<AgentStream
     type: "citations",
     found,
     needsClarification: false,
+    turnOutcome: result.turnOutcome,
+    retrievedCount: result.retrievedCount,
+    topScore: result.topScore,
     citations: result.citations,
     citationVerificationFailed: result.verificationFailed,
     answer: result.answer,
@@ -355,6 +412,9 @@ export function createGroundedAgent(profile: AgentRuntimeProfile): GroundedAgent
     answer: string;
     citations: AgentCitation[];
     found: boolean;
+    turnOutcome: WritableTurnOutcome;
+    retrievedCount: number;
+    topScore: number | null;
     verificationFailed: boolean;
     hardFactGuardTriggered: boolean;
     unverifiable: boolean;
@@ -397,7 +457,8 @@ export function createGroundedAgent(profile: AgentRuntimeProfile): GroundedAgent
       },
     });
     const built = verifyAndBuild(profile, generated.text, args.retrieval, args.userSupplied);
-    return { ...built, usage: generated.usage };
+    const signals = retrievalSignalsFromHits(args.retrieval.hits);
+    return { ...built, ...signals, usage: generated.usage };
   }
 
   return {
@@ -432,6 +493,8 @@ export function createGroundedAgent(profile: AgentRuntimeProfile): GroundedAgent
             answer: clarification,
             found: false,
             needsClarification: true,
+            turnOutcome: clarifiedOutcome(),
+            ...ZERO_RETRIEVAL,
             citations: [],
             traceId,
             usage: ZERO_USAGE,
@@ -447,6 +510,8 @@ export function createGroundedAgent(profile: AgentRuntimeProfile): GroundedAgent
             answer: profile.notFoundMessage,
             found: false,
             needsClarification: false,
+            turnOutcome: refused("no_coverage"),
+            ...ZERO_RETRIEVAL,
             citations: [],
             traceId,
             usage: ZERO_USAGE,
@@ -469,8 +534,18 @@ export function createGroundedAgent(profile: AgentRuntimeProfile): GroundedAgent
         // One citation-contract repair retry (generate-answer.ts): the same seam the eval uses to
         // collapse Gate C's generator variance. A first attempt that leaves an unverifiable quote, an
         // ungrounded number, or a dropped citation block is re-asked once; the cleaner attempt is kept.
-        const { answer, citations, found, verificationFailed, hardFactGuardTriggered, unverifiable, usage } =
-          await generateVerifiedAnswer({
+        const {
+          answer,
+          citations,
+          found,
+          turnOutcome,
+          retrievedCount,
+          topScore,
+          verificationFailed,
+          hardFactGuardTriggered,
+          unverifiable,
+          usage,
+        } = await generateVerifiedAnswer({
             retrieval,
             answerQuestion: query.answerQuestion,
             userSupplied,
@@ -481,7 +556,18 @@ export function createGroundedAgent(profile: AgentRuntimeProfile): GroundedAgent
 
         const followUps = await maybeSuggestFollowUps({
           profile,
-          result: { answer, citations, found, verificationFailed, hardFactGuardTriggered, unverifiable, usage },
+          result: {
+            answer,
+            citations,
+            found,
+            turnOutcome,
+            retrievedCount,
+            topScore,
+            verificationFailed,
+            hardFactGuardTriggered,
+            unverifiable,
+            usage,
+          },
           question,
           context: retrieval.context,
           trace,
@@ -498,6 +584,9 @@ export function createGroundedAgent(profile: AgentRuntimeProfile): GroundedAgent
           answer,
           found,
           needsClarification: false,
+          turnOutcome,
+          retrievedCount,
+          topScore,
           citations,
           traceId,
           usage: addUsage(usage, followUps.usage),
@@ -543,6 +632,9 @@ export function createGroundedAgent(profile: AgentRuntimeProfile): GroundedAgent
             type: "citations",
             found: false,
             needsClarification: true,
+            turnOutcome: clarifiedOutcome(),
+            retrievedCount: 0,
+            topScore: null,
             citations: [],
             citationVerificationFailed: false,
             answer: clarification,
@@ -564,6 +656,9 @@ export function createGroundedAgent(profile: AgentRuntimeProfile): GroundedAgent
             type: "citations",
             found: false,
             needsClarification: false,
+            turnOutcome: refused("no_coverage"),
+            retrievedCount: 0,
+            topScore: null,
             citations: [],
             citationVerificationFailed: false,
             answer: profile.notFoundMessage,
@@ -573,7 +668,13 @@ export function createGroundedAgent(profile: AgentRuntimeProfile): GroundedAgent
           return;
         }
 
-        yield { type: "status", phase: "retrieved", count: retrieval.hits.length };
+        const retrievalSignals = retrievalSignalsFromHits(retrieval.hits);
+        yield {
+          type: "status",
+          phase: "retrieved",
+          count: retrieval.hits.length,
+          topScore: retrievalSignals.topScore,
+        };
         yield { type: "status", phase: "generating" };
 
         const tracingOptions = {

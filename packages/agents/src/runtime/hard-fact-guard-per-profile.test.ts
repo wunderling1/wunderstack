@@ -32,6 +32,7 @@ describe("hard-fact-guard per registered profile", () => {
       assert.equal(result.hardFactGuardTriggered, true);
       assert.equal(result.found, false);
       assert.equal(result.answer, profile.notFoundMessage);
+      assert.deepEqual(result.turnOutcome, { outcome: "refused", outcomeReason: "guard_hard_fact" });
     });
 
     it(`${profile.agentKey}: does not refuse when the hard fact is grounded`, () => {

@@ -18,9 +18,13 @@ import {
   ensureFundTables,
   FUND_MIGRATION_PROVISION,
   FUND_MIGRATION_ROLEPLAY,
+  FUND_MIGRATION_TURN_OUTCOME,
+  getDb,
   listActiveFunds,
   listAppliedFundMigrations,
   recordFundMigration,
+  sql,
+  turnOutcomeAlterSql,
 } from "@wunderstack/db";
 
 interface MigrateResult {
@@ -45,6 +49,15 @@ async function migrateOne(fundKey: string): Promise<MigrateResult> {
   if (!already.includes(FUND_MIGRATION_ROLEPLAY)) {
     await recordFundMigration(fund.schemaName, FUND_MIGRATION_ROLEPLAY);
     result.applied.push(FUND_MIGRATION_ROLEPLAY);
+  }
+
+  if (!already.includes(FUND_MIGRATION_TURN_OUTCOME)) {
+    const db = getDb();
+    for (const statement of turnOutcomeAlterSql(fund.schemaName)) {
+      await db.execute(sql.raw(statement));
+    }
+    await recordFundMigration(fund.schemaName, FUND_MIGRATION_TURN_OUTCOME);
+    result.applied.push(FUND_MIGRATION_TURN_OUTCOME);
   }
 
   return result;

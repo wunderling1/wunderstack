@@ -15,5 +15,11 @@ export default async function AgentOverviewPage({
   const agentKey = parseAgentKey(rawAgent);
   if (!fundKey || !agentKey) notFound();
 
-  return <AgentOverviewPanel fundKey={fundKey} agentKey={agentKey} />;
+  return (
+    <AgentOverviewPanel
+      fundKey={fundKey}
+      agentKey={agentKey}
+      gesprekkenHref={`/admin/funds/${fundKey}/gesprekken?agent=${agentKey}`}
+    />
+  );
 }

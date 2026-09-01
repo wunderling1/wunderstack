@@ -1,13 +1,13 @@
 import { Card } from "@wunderstack/ui";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
-import { getFundCached, listActiveFundOptionsCached } from "@/lib/fund-lookups";
+import { getFundCached } from "@/lib/fund-lookups";
 import { parseFundKey } from "@/lib/route-params";
 import { FundLevelChrome } from "../fund-chrome";
 
 /**
- * Fund tabs (overview, agents list, branding, accounts, manage). Agent-detail routes live
- * outside this group so the switcher query and fund chrome do not run there.
+ * Fund console heading + inactive banner. App chrome lives in the admin layout
+ * so agent-detail routes share the same sidebar.
  */
 export default async function FundConsoleLayout({
   children,
@@ -27,13 +27,7 @@ export default async function FundConsoleLayout({
     notFound();
   }
 
-  const activeFunds = await listActiveFundOptionsCached();
-
   const displayName = fund.name ?? fund.key;
-  const switcherFunds = [...activeFunds];
-  if (!switcherFunds.some((row) => row.key === fund.key)) {
-    switcherFunds.unshift({ key: fund.key, name: displayName });
-  }
 
   const inactiveBanner =
     fund.status !== "active" ? (
@@ -50,7 +44,6 @@ export default async function FundConsoleLayout({
     <FundLevelChrome
       fundKey={fund.key}
       displayName={displayName}
-      funds={switcherFunds}
       inactiveBanner={inactiveBanner}
     >
       {children}
