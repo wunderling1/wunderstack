@@ -15,7 +15,7 @@ platform- en fondszorgen. Dit document legt de indeling vast die daarvoor in de 
 S1–S8 blijven gelden. `/admin/embed` verdwijnt (S2). KPI-scope blijft het fondsschema, niet
 `tenant_id`.
 
-## Besluiten S9–S21
+## Besluiten S9–S22
 
 **S9 — Vijf sidebar-items.** Overzicht, Gesprekken, Signalen, Agents, Instellingen. Meer of
 minder is een wijziging van dit besluit. Navigatie loopt via route-segmenten; geen client-side
@@ -65,6 +65,22 @@ de repo of in het implementatietranscript aangetroffen. Niet invullen uit afleid
 
 **S21 — De werkvoorraad is fondsbreed** en staat niet per agent verspreid.
 
+**S22 — De begrippenladder (1 september 2026).** Drie woorden, strikt gescheiden:
+
+- **vraag** — één beurt: vraag plus antwoord. Eén rij in `interaction_events`. Hieraan hangen de
+  uitkomst, de citaten en het bewijsspoor.
+- **gesprek** — één sessie: één bezoeker, één agent, één of meer vragen achter elkaar.
+- **sessie** — het rollenspel-equivalent, en dezelfde vorm: een container met beurten.
+
+Daaruit volgt de regel die alles consistent maakt: **KPI's tellen vragen, de lijst toont
+gesprekken.** Een uitkomst is een eigenschap van een vraag, nooit van een gesprek. Een gesprek
+waarin twee vragen beantwoord worden en één geweigerd heeft geen uitkomst — het heeft een verloop.
+
+Gevolgen per scherm: de navigatie blijft **Gesprekken** (S9 ongewijzigd); Activiteit is tweeledig
+("N vragen in M gesprekken"), want vragen per gesprek is de beste adoptiematen die we hebben;
+Actualiteit toont **vragen**; de lijst toont gesprekken met hun vragen eronder, met de
+uitkomstchip bij de vraag en niet bij de kop; elke KPI-noemer heet "vragen".
+
 ## Uitvoeringsbesluiten D1–D9
 
 Deze tabel stuurde PR-1 t/m PR-7. D1 en D2 zijn na de audit geamendeerd (A1, A2).
@@ -80,6 +96,7 @@ Deze tabel stuurde PR-1 t/m PR-7. D1 en D2 zijn na de audit geamendeerd (A1, A2)
 | **D7** | `error` valt buiten de noemer | Van beantwoordings- en weigergraad. Wel zichtbaar als eigen getal. |
 | **D8** | `clarified` telt niet als weigering | Eigen categorie in elke verdeling. |
 | **D9** | Geen nieuwe DB-kolommen in deze reeks | Alles komt uit PR-A2. Een scherm dat een kolom nodig heeft, is een aparte PR. |
+| **D10** | Gespreksgrens is afgeleid, niet toegekend | 30 minuten stilte, gegroepeerd op `(session_id, agent_id)`. Eén definitie in de analyticslaag, nul DDL — zie amendement A6. |
 
 ## Open eindjes die dit document laat staan
 
@@ -151,6 +168,56 @@ geladen versie.
 `pinned_release_tag`, dus er verloopt geen enkele bestaande goedkeuring. Was er wel een gepind
 geweest — een waarde als `1` of `arbo-oomt-2` — dan had die na de bouw als niet goedgekeurd
 gelezen, en terecht: hij was goedgekeurd op een willekeurige waarde.
+
+**A6 — S22/D10: waar een gesprek begint en eindigt.** De inconsistentie die S22 oplost was geen
+labelfout. Er bestond alleen een *vraag*; "gesprek" werd op elk scherm verzonnen. De tegel heette
+Gesprekken en telde turns.
+
+*Wat er al lag.* `interaction_events.session_id` bestaat, is `NOT NULL`, wordt op elk schrijfpad
+gevuld en heeft een eigen index. Dit is dus géén nieuwe kolom en geen D9-geval: het is een
+groepering die de leeslaag nooit gemaakt heeft.
+
+*Waarom die kolom alleen niet volstaat.* `session_id` is geen gesprek maar een **browsertabblad**:
+de playground bewaart hem in `sessionStorage` zonder vervaltijd. Gemeten op 1 september 2026 over
+`fund_oomt` en `fund_elektronische-detailhandel`:
+
+| grondslag | vragen | containers | vragen per container |
+|---|---|---|---|
+| ruwe `session_id` | 224 | 38 | 5,90 |
+| 30 minuten stilte | 224 | 89 | **2,52** |
+
+De grootste ruwe sessie was 63 vragen over 34 uur met een gat van 12u17 erin; een andere 12 vragen
+over 2 dagen en 19 uur. Van de 189 intervallen tussen opeenvolgende vragen waren er 50 langer dan
+30 minuten. Zonder tijdgrens zou de adoptiematen met een factor 2,3 opgeblazen zijn door open
+blijven staande devtabs — precies op het getal dat we als adoptiesignaal willen publiceren.
+
+*Groeperingssleutel is `(session_id, agent_id)`.* Niet `session_id` alleen: de playground deelt één
+`sessionStorage`-key over agents heen, en twee gemeten sessies in `fund_oomt` bevatten zowel `cao`
+als `arbo`. S22 zegt "één bezoeker, één agent", dus de agent hoort in de sleutel.
+
+*Afgeleid, niet toegekend.* De grens leeft als één functie in `packages/analytics`
+(`groupIntoConversations`), niet als kolom. Dat geeft één definitie voor álle rijen — inclusief de
+227 die er al stonden — en het houdt de reeks op nul DDL. Een toegekend id zou een sterker
+bewijsanker zijn, maar dan bestaan er twee definities zolang oude rijen afgeleid en nieuwe
+toegekend worden; dat is de ziekte die deze audit vijf keer vond (F-68). Promotie naar een kolom
+blijft open zodra het bewijsanker of het volume het afdwingt.
+
+*Permalink blijft een vraag.* Een afgeleid gespreks-id is vensterafhankelijk: bij een periode van
+7 dagen valt een ander eerste event in het venster dan bij 30 dagen. Daarom is de permalink
+ongewijzigd een **event-id**, en resolvet de detailpagina die naar het hele gesprek waar hij in
+zit — venstervrij — met een anker op die vraag. Elke bestaande permalink blijft dus werken.
+
+*Twee kanalen kunnen niet gebundeld worden.* `/api/mcp` is bewust stateless (`createMcpHandler`,
+M2 in `PLAN-mcp-server.md`): een tool-call draagt geen gespreks-id, dus de host heeft wél een
+gesprek maar geeft ons niets om beurten te rijgen. Gemeten: 10 MCP-vragen, 10 "gesprekken", exact
+1,00. Voor MCP en losse API-calls is één vraag per gesprek de waarheid van het kanaal, geen
+meetfout. Ze worden daarom als **losse vragen** benoemd en buiten de vragen-per-gesprek-verhouding
+gehouden in plaats van als adoptiesignaal te tellen.
+
+*Eén schrijfpad was wél stuk.* De embed maakte een nieuw id per component-mount
+(`useMemo(randomUUID)`), zonder enige persistentie: elke paginanavigatie op de site van het fonds
+startte een nieuw gesprek (gemeten 1,00–1,14 vragen per gesprek). Dat is rechtgezet naar hetzelfde
+`sessionStorage`-patroon als de playground, in een eigen commit.
 
 ## Bewust niet in deze reeks
 
