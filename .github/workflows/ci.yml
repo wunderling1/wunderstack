@@ -53,7 +53,8 @@ jobs:
 
       - name: Resolve GATE_DB
         # Nightly / dispatch always. On PRs: only when the diff touches packages that can break
-        # corpus isolation (db / rag / tenant) — starts pgvector, not the 25-min LLM answer gate.
+        # corpus isolation (db / rag / tenant) or the read layer (analytics — its only tests against
+        # a real schema live behind this gate) — starts pgvector, not the 25-min LLM answer gate.
         id: gate_db
         run: |
           if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.run_db_gates }}" = "true" ]; then
@@ -64,10 +65,10 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE="${{ github.event.pull_request.base.sha }}"
             HEAD="${{ github.event.pull_request.head.sha }}"
-            if git diff --name-only "$BASE...$HEAD" | grep -E '^packages/(db|rag|tenant)/' >/dev/null; then
+            if git diff --name-only "$BASE...$HEAD" | grep -E '^packages/(db|rag|tenant|analytics)/' >/dev/null; then
               echo "GATE_DB=true" >> "$GITHUB_ENV"
               echo "enabled=true" >> "$GITHUB_OUTPUT"
-              echo "PR touches packages/db|rag|tenant — enabling gate database for G3-isolation"
+              echo "PR touches packages/db|rag|tenant|analytics — enabling gate database"
               exit 0
             fi
           fi

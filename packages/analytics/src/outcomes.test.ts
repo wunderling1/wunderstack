@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { readFileSync } from "node:fs";
 import {
   answerRate,
   clarificationRate,
@@ -53,13 +52,9 @@ test("rateFromParts returns no_measurable_turns for zero denominator", () => {
   assert.deepEqual(rateFromParts(2, 5), { numerator: 2, denominator: 5 });
 });
 
-test("measurementStartedAt query uses min(occurred_at) where outcome_reason is not null", () => {
-  const source = readFileSync(new URL("./outcomes.ts", import.meta.url), "utf8");
-  const fn = source.slice(source.indexOf("export async function measurementStartedAt"));
-  const body = fn.slice(0, fn.indexOf("export function deriveAgentStatus"));
-  assert.match(body, /min\(\$\{interactionEvents\.occurredAt\}\)/);
-  assert.match(body, /isNotNull\(interactionEvents\.outcomeReason\)/);
-});
+// What measurementStartedAt returns is asserted against a real schema in
+// fund-environment.integration.test.ts: null before the first classified row, a usable Date after.
+// A regex over this file's own source proved the query was written, never that it answers.
 
 test("deriveAgentStatus matches dashboard thresholds", () => {
   assert.equal(deriveAgentStatus(0, 0), "offline");

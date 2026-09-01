@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { after, describe, it } from "node:test";
+import { after, describe, it, test } from "node:test";
 
 import {
   closeDb,
@@ -21,9 +21,11 @@ import {
   getExerciseActivity,
   getKpiSummary,
   getOutcomeBreakdown,
+  listConversations,
   listOutcomeActivity,
   listSignals,
   measurementStartedAt,
+  SIGNAL_MIN_OCCURRENCES,
 } from "./index.js";
 import { recordInteractionEvent } from "./record.js";
 
@@ -32,6 +34,19 @@ import { recordInteractionEvent } from "./record.js";
  * GATE_DB / local: set both to the same Postgres URL.
  */
 const ready = Boolean(process.env.PROVISIONER_DATABASE_URL && process.env.DATABASE_URL);
+
+/**
+ * Skipped ≠ passed (700-evals). This file holds the only tests that run the read layer against a
+ * real schema, so on the paths that claim the database gate ran it must be red when it cannot run —
+ * otherwise the whole suite is green while nothing was measured.
+ */
+test("GATE_DB=true requires a reachable database, it may not silently skip", () => {
+  if (process.env.GATE_DB !== "true") return;
+  assert.ok(
+    ready,
+    "GATE_DB=true but DATABASE_URL/PROVISIONER_DATABASE_URL are unset: the read-layer gate would skip and report green",
+  );
+});
 
 describe("fund environment ↔ analytics seam", { skip: !ready }, () => {
   const fundKey = `gate-proef-${Date.now().toString(36)}`;
@@ -121,8 +136,13 @@ describe("fund environment ↔ analytics seam", { skip: !ready }, () => {
     const summary = await getKpiSummary({ fundKey, since });
     assert.equal(summary.total, 2);
 
+    // A Date, not the timestamptz string the driver hands back for a raw min() — the dashboard
+    // formats this value, and a string reaches Intl as NaN instead of a date (F-75).
     const started = await measurementStartedAt(fundKey);
     assert.ok(started instanceof Date);
+    assert.ok(Number.isFinite(started.getTime()));
+    assert.ok(started.getTime() > since.getTime() && started.getTime() <= Date.now());
+    assert.doesNotThrow(() => new Intl.DateTimeFormat("nl-NL").format(started));
 
     const activity = await getAgentActivity(since);
     const forThisFund = activity.filter((row) => row.fundKey === fundKey);
@@ -212,6 +232,48 @@ describe("fund environment ↔ analytics seam", { skip: !ready }, () => {
     const signals = await listSignals({ fundKey, since });
     assert.equal(signals.knowledgeGaps.length, gaps);
     assert.equal(signals.knowledgeGaps[0]?.occurrenceCount, 3);
+    assert.equal(signals.knowledgeGaps[0]?.question, refusals[0]);
+  });
+
+  it("S18: narrowing below the threshold empties the list, it never ungroups (real query)", async () => {
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    // The three copies were recorded on cao. Narrowed to arbo, the same window holds none of them:
+    // the group must vanish, not fall apart into three loose rows.
+    const narrowed = await listSignals({ fundKey, since, agentId: "arbo" });
+    assert.deepEqual(narrowed.knowledgeGaps, []);
+    assert.equal(await countKnowledgeGaps({ fundKey, since, agentId: "arbo" }), 0);
+
+    // And a question below the threshold stays out even unnarrowed.
+    const wide = await listSignals({ fundKey, since });
+    assert.ok(wide.knowledgeGaps.every((row) => row.occurrenceCount >= SIGNAL_MIN_OCCURRENCES));
+    assert.ok(
+      wide.knowledgeGaps.every((row) => row.question !== "hoe lang duurt de proeftijd"),
+      "a single refusal is not a knowledge gap",
+    );
+  });
+
+  it("a filter on the list counts the same as the breakdown it came from (real query)", async () => {
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const breakdown = await getOutcomeBreakdown({ fundKey, since });
+
+    const refusedList = await listConversations({ fundKey, since, outcome: "refused" });
+    assert.equal(refusedList.groundedTotal, breakdown.byOutcome.refused);
+
+    const byReason = await listConversations({ fundKey, since, outcomeReason: "no_coverage" });
+    assert.equal(byReason.groundedTotal, breakdown.refusedByReason.no_coverage);
+
+    // An outcome filter is a question about turns, so exercise sessions drop out of the list.
+    assert.equal(byReason.exerciseTotal, 0);
+    assert.ok(byReason.items.every((item) => item.kind === "grounded"));
+
+    // Unfiltered, the sessions are back and are never rendered as question-answer pairs.
+    const all = await listConversations({ fundKey, since });
+    assert.equal(all.exerciseTotal, 2);
+    assert.ok(all.items.some((item) => item.kind === "exercise"));
+    assert.ok(
+      all.items.every((item) => item.kind === "grounded" || !("outcome" in item)),
+      "an exercise session carries no outcome",
+    );
   });
 
   it("getAgentActivity throws when control.funds has a row without a schema (why createFundEnvironment is atomic)", async () => {

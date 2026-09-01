@@ -12,14 +12,10 @@ import {
 
 const SOURCE = readFileSync(new URL("./signals.ts", import.meta.url), "utf8");
 
-test("S18: occurrence threshold is a HAVING in the query, not a UI filter", () => {
-  const havingIndex = SOURCE.indexOf(".having(sql`count(*) >= ${SIGNAL_MIN_OCCURRENCES}`)");
-  assert.notEqual(havingIndex, -1);
-  const line = SOURCE.slice(0, havingIndex).split("\n").length;
-  assert.equal(SOURCE.includes("SIGNAL_MIN_OCCURRENCES"), true);
+// S18 (the threshold sits in the query, and narrowing cannot ungroup) is asserted against a real
+// schema in fund-environment.integration.test.ts. What follows tests the pure grouping helpers.
+test("S18: the threshold value the query and the UI copy share", () => {
   assert.equal(SIGNAL_MIN_OCCURRENCES, 3);
-  // Documented location for the DoD: packages/analytics/src/signals.ts
-  assert.ok(line > 1, `HAVING must live in signals.ts (line ${line})`);
 });
 
 test("S18: narrowing below the threshold yields empty groups, not loose event rows", () => {
@@ -55,8 +51,8 @@ test("mapped rows keep the literal question — no generated theme or summary", 
   });
   assert.equal(row?.question, "Hoeveel vakantiedagen heb ik?");
   assert.equal(row?.latestEventId, "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+  // Not a behaviour claim but a guard on this file: no summariser may be introduced here later.
   assert.doesNotMatch(SOURCE, /openai|summariz|cluster|generateTheme|themeLabel/i);
-  assert.match(SOURCE, /eq\(interactionEvents\.theme, query\.theme\)/);
 });
 
 test("frequency × recency ranks a recent group above a stale larger group", () => {
@@ -93,13 +89,8 @@ test("exercise adoption is outside the knowledge-gap query and drops on a ground
     includeExerciseAdoption({ fundKey: "demo", since: new Date(), agentId: "cao" }),
     false,
   );
-  assert.match(SOURCE, /roleplaySessions/);
-  assert.match(SOURCE, /loadQuestionSignals/);
-  assert.notEqual(SOURCE.indexOf("loadExerciseAdoption"), SOURCE.indexOf("loadQuestionSignals"));
 });
 
-test("strength none is retrieved_count = 0; strong is retrieved_count > 0 and top_score >= floor", () => {
-  assert.match(SOURCE, /eq\(interactionEvents\.retrievedCount, 0\)/);
-  assert.match(SOURCE, /gt\(interactionEvents\.retrievedCount, 0\)/);
-  assert.match(SOURCE, /gte\(interactionEvents\.topScore, RETRIEVAL_STRONG_MIN_SCORE\)/);
-});
+// The strength split (none = nothing retrieved, strong = a hit at or above the floor) is asserted
+// through deriveRetrievalStrength in retrieval-strength.test.ts and through the refused turns
+// recorded in fund-environment.integration.test.ts — not by matching the WHERE clause as text.

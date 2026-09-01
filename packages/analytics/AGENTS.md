@@ -22,3 +22,12 @@ fondsschema’s ([ADR-multitenant-database.md](../../docs/architecture/ADR-multi
   sessieverloop en leeft in `roleplay_sessions`; zijn volume lees je met `getExerciseActivity`.
   Twee tabellen, twee begrippen — zo hoeft geen enkele query de ander eruit te filteren
   (`DECISION-dashboard-indeling.md`, open eind 1).
+- **Een query test je door hem te draaien.** Een `readFileSync` + regex op deze bronbestanden
+  bewijst dat de query geschreven is, niet dat hij antwoordt — en blijft groen als het gedrag
+  verandert. Gedragsclaims over `getOutcomeBreakdown`, `listConversations`, `listSignals`,
+  `countKnowledgeGaps` en `measurementStartedAt` horen in
+  `src/fund-environment.integration.test.ts` (echt schema). Broncodeguards mogen blijven voor
+  claims *over de bron* (bv. "hier komt geen samenvatter binnen"), met dat verschil erbij genoteerd.
+  Die integratietests draaien alleen met `DATABASE_URL` + `PROVISIONER_DATABASE_URL`; met
+  `GATE_DB=true` en ontbrekende URL wordt de suite rood in plaats van overgeslagen (700-evals:
+  skipped ≠ passed).

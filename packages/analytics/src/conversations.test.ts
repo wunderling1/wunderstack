@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   breakdownCountForFilter,
@@ -98,9 +97,6 @@ test("grounded row keeps the turn fields the card needs", () => {
   assert.equal(item.outcome, "answered");
 });
 
-test("listConversations filters outcome_reason the same way getOutcomeBreakdown counts it", () => {
-  const source = readFileSync(new URL("./conversations.ts", import.meta.url), "utf8");
-  assert.match(source, /eq\(interactionEvents\.outcomeReason, query\.outcomeReason\)/);
-  const outcomes = readFileSync(new URL("./outcomes.ts", import.meta.url), "utf8");
-  assert.match(outcomes, /interactionEvents\.outcomeReason\} = 'no_coverage'/);
-});
+// That a reason filter on listConversations counts the same as getOutcomeBreakdown.refusedByReason
+// is asserted against a real schema in fund-environment.integration.test.ts. Matching both WHERE
+// clauses as text showed they were written alike, not that they answer alike.
