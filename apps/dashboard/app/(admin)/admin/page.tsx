@@ -1,4 +1,8 @@
-import { getAgentActivity, type AgentActivityRow } from "@wunderstack/analytics";
+import {
+  answerRate,
+  listOutcomeActivity,
+  type OutcomeActivityRow,
+} from "@wunderstack/analytics";
 import {
   AgentStatusBadge,
   Chip,
@@ -8,9 +12,10 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  type AgentStatus,
 } from "@wunderstack/ui";
 import Link from "next/link";
+import { answerRateDisplay, statusFromCounts } from "@/lib/admin-overview";
+import { formatCount, totalTurns } from "@/lib/overview";
 import { agentLabel, KNOWN_AGENTS } from "@/lib/release-manifest";
 import { sinceDaysAgo } from "@/lib/window";
 
@@ -19,43 +24,39 @@ export const dynamic = "force-dynamic";
 
 const WINDOW_DAYS = 30;
 const dateTime = new Intl.DateTimeFormat("nl-NL", { dateStyle: "short", timeStyle: "short" });
-const num = (value: number) => value.toLocaleString("nl-NL");
-const pct = (ratio: number) => `${Math.round(ratio * 100)}%`;
 
-/** Honest operational status derived from real activity — never a dressed-up green (§1). */
-function deriveStatus(total: number, errors: number): AgentStatus {
-  if (total === 0) return "offline";
-  return errors / total > 0.2 ? "degraded" : "operational";
+interface AdminRow {
+  fundKey: string;
+  agentId: string;
+  total: number;
+  answered: ReturnType<typeof answerRate>;
+  status: ReturnType<typeof statusFromCounts>;
+  lastOccurredAt: Date | null;
 }
 
-interface AdminRow extends AgentActivityRow {
-  status: AgentStatus;
-  rate: number;
+function rowFromActivity(row: OutcomeActivityRow): AdminRow {
+  return {
+    fundKey: row.fundKey,
+    agentId: row.agentId,
+    total: totalTurns(row.byOutcome),
+    answered: answerRate(row.byOutcome),
+    status: statusFromCounts(row.byOutcome),
+    lastOccurredAt: row.lastOccurredAt,
+  };
 }
 
 export default async function AdminOverview() {
-  const activity = await getAgentActivity(sinceDaysAgo(WINDOW_DAYS));
+  const activity = await listOutcomeActivity(sinceDaysAgo(WINDOW_DAYS));
+  const rows = activity.map(rowFromActivity);
 
-  const rows: AdminRow[] = activity.map((row) => ({
-    ...row,
-    status: deriveStatus(row.total, row.errors),
-    rate: row.total === 0 ? 0 : row.answeredWithCitations / row.total,
-  }));
-
-  // Show known agents that logged nothing this window as "offline", so the catalog is always visible.
   const seen = new Set(activity.map((row) => row.agentId));
   const missing: AdminRow[] = KNOWN_AGENTS.filter((agent) => !seen.has(agent.id)).map((agent) => ({
     fundKey: "—",
-    tenantId: "—",
     agentId: agent.id,
-    fund: "—",
     total: 0,
-    answeredWithCitations: 0,
-    refused: 0,
-    errors: 0,
-    lastOccurredAt: new Date(0),
+    answered: { kind: "no_measurable_turns" },
     status: "offline",
-    rate: 0,
+    lastOccurredAt: null,
   }));
 
   const allRows = [...rows, ...missing];
@@ -66,7 +67,7 @@ export default async function AdminOverview() {
         <div>
           <h2 className="text-sm font-semibold text-text">Agent-overzicht</h2>
           <p className="mt-1 text-sm text-text-muted">
-            Activiteit per agent per instance, laatste {WINDOW_DAYS} dagen. Release- en gate-velden
+            Activiteit per agent per fonds, laatste {WINDOW_DAYS} dagen. Release- en gate-velden
             komen uit het release-manifest (nog niet beschikbaar — zie het gate-restructure-spoor).
           </p>
         </div>
@@ -99,16 +100,11 @@ export default async function AdminOverview() {
         </TableHeader>
         <TableBody>
           {allRows.map((row, index) => (
-            <TableRow key={`${row.agentId}-${row.tenantId}-${index}`}>
+            <TableRow key={`${row.agentId}-${row.fundKey}-${index}`}>
               <TableCell className="font-medium">{agentLabel(row.agentId)}</TableCell>
-              <TableCell className="text-text-muted">
-                <div>{row.fundKey === "—" ? "—" : row.fundKey}</div>
-                {row.tenantId !== "—" && row.tenantId !== row.fundKey ? (
-                  <div className="text-xs text-text-subtle">runtime {row.tenantId}</div>
-                ) : null}
-              </TableCell>
-              <TableCell>{num(row.total)}</TableCell>
-              <TableCell>{row.total === 0 ? "—" : pct(row.rate)}</TableCell>
+              <TableCell className="text-text-muted">{row.fundKey}</TableCell>
+              <TableCell>{formatCount(row.total)}</TableCell>
+              <TableCell>{answerRateDisplay(row.answered, row.total)}</TableCell>
               <TableCell>
                 <AgentStatusBadge status={row.status} />
               </TableCell>
@@ -116,7 +112,7 @@ export default async function AdminOverview() {
                 <Chip variant="refusal">n.n.b.</Chip>
               </TableCell>
               <TableCell className="whitespace-nowrap text-text-muted">
-                {row.total === 0 ? "—" : dateTime.format(row.lastOccurredAt)}
+                {row.lastOccurredAt ? dateTime.format(row.lastOccurredAt) : "—"}
               </TableCell>
               <TableCell>
                 <Link
@@ -132,8 +128,9 @@ export default async function AdminOverview() {
       </Table>
 
       <p className="text-xs text-text-subtle">
-        * Beantwoord met geverifieerde citaties (v1-maat). Geen latency/token/modelscores — die blijven
-        in Langfuse.
+        * Beantwoordingsgraad = beantwoord / (beantwoord + geweigerd + verduidelijkt). Fouten en
+        rijen van vóór de meting zitten niet in de noemer. Geen latency/token/modelscores — die
+        blijven in Langfuse.
       </p>
     </div>
   );

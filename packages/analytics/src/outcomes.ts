@@ -74,6 +74,33 @@ function toNumber(value: unknown): number {
   return typeof value === "number" ? value : Number(value ?? 0);
 }
 
+/** Shared outcome buckets — the only SQL definition of answered/refused/clarified/error/unknown. */
+export function outcomeCountSelect() {
+  return {
+    answered: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'answered')`,
+    refused: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'refused')`,
+    clarified: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'clarified')`,
+    error: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'error')`,
+    unknown: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'unknown')`,
+  };
+}
+
+export function countsFromRow(row: {
+  answered?: unknown;
+  refused?: unknown;
+  clarified?: unknown;
+  error?: unknown;
+  unknown?: unknown;
+} | undefined): OutcomeCounts {
+  return {
+    answered: toNumber(row?.answered),
+    refused: toNumber(row?.refused),
+    clarified: toNumber(row?.clarified),
+    error: toNumber(row?.error),
+    unknown: toNumber(row?.unknown),
+  };
+}
+
 /** Measurable quality turns: answered + refused + clarified (excludes error and unknown). */
 export function qualityDenominator(counts: OutcomeCounts): number {
   return counts.answered + counts.refused + counts.clarified;
@@ -138,11 +165,7 @@ async function loadOutcomeBreakdown(db: Database, window: OutcomeWindow): Promis
 
   const [row] = await db
     .select({
-      answered: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'answered')`,
-      refused: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'refused')`,
-      clarified: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'clarified')`,
-      error: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'error')`,
-      unknown: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'unknown')`,
+      ...outcomeCountSelect(),
       refusedNoCoverage: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'refused' and ${interactionEvents.outcomeReason} = 'no_coverage')`,
       refusedGuardHardFact: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'refused' and ${interactionEvents.outcomeReason} = 'guard_hard_fact')`,
       refusedGuardCitationCoupling: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'refused' and ${interactionEvents.outcomeReason} = 'guard_citation_coupling')`,
@@ -154,13 +177,7 @@ async function loadOutcomeBreakdown(db: Database, window: OutcomeWindow): Promis
     .from(interactionEvents)
     .where(scope);
 
-  const byOutcome: OutcomeCounts = {
-    answered: toNumber(row?.answered),
-    refused: toNumber(row?.refused),
-    clarified: toNumber(row?.clarified),
-    error: toNumber(row?.error),
-    unknown: toNumber(row?.unknown),
-  };
+  const byOutcome = countsFromRow(row);
 
   const refusedByReason: RefusedReasonCount = {
     no_coverage: toNumber(row?.refusedNoCoverage),
