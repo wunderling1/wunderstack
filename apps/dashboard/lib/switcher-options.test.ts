@@ -31,3 +31,16 @@ test("fund user switcher helper returns no keys", () => {
   const session = { user: { role: "fund" as const, tenantId: "demo" } };
   assert.deepEqual(buildSwitcherOptions(session, activeFunds), []);
 });
+
+test("the switcher follows decideAccess, not a second role check", () => {
+  // An admin who must first change their password may not enter the admin area, so there is
+  // nothing to switch between either. A local `role === "admin"` test would still offer the list.
+  const session = { user: { role: "admin" as const, tenantId: null, mustChangePassword: true } };
+  assert.equal(decideAccess(session, "admin").allow, false);
+  assert.deepEqual(buildSwitcherOptions(session, activeFunds), []);
+});
+
+test("no session means no switcher", () => {
+  assert.deepEqual(buildSwitcherOptions({}, activeFunds), []);
+  assert.deepEqual(buildSwitcherOptions({ user: null }, activeFunds), []);
+});

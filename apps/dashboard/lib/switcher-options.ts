@@ -1,4 +1,4 @@
-import type { SessionShape } from "./authz.js";
+import { decideAccess, type SessionShape } from "./authz.js";
 
 /** Sentinel value for the admin "Alle fondsen" platform overview. */
 export const ALL_FUNDS_KEY = "__all__";
@@ -14,16 +14,15 @@ export interface FundOption {
 }
 
 /**
- * Fund switcher options derived from session role — not from the URL.
- * Fund users get none (tenant is the session; no switcher). Admins see all
- * active funds plus "Alle fondsen".
+ * Fund switcher options derived from the authorisation layer — not from the URL and not from a
+ * second role comparison here. "May switch funds" is the same question as "may enter the admin
+ * area", so it is asked once, in `decideAccess`. A fund user gets none: the tenant is the session.
  */
 export function buildSwitcherOptions(
   session: SessionShape,
   activeFunds: FundOption[],
 ): SwitcherOption[] {
-  const user = session?.user;
-  if (!user || user.role !== "admin") return [];
+  if (!decideAccess(session, "admin").allow) return [];
 
   return [
     { key: ALL_FUNDS_KEY, name: "Alle fondsen" },
