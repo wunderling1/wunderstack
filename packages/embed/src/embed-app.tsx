@@ -6,7 +6,7 @@ import {
   IconButton,
   RefusalNotice,
 } from "@wunderstack/ui";
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Starters, resolveStarterCategories } from "./starters";
 import {
   chatEventSchema,
@@ -37,6 +37,41 @@ interface Props {
 
 const DEFAULT_ARTICLE_50 =
   "Je praat met een AI-assistent. Antwoorden kunnen onjuist zijn; controleer belangrijke informatie bij de bron.";
+
+/** Same key as the playground: one identity model across surfaces (DECISION-analytics-retention). */
+const SESSION_STORAGE_KEY = "wunderstack-session-id";
+
+function newId(): string {
+  return typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : String(Date.now());
+}
+
+/**
+ * A stable id for this browser session, shared with the Langfuse trace + interaction event-log.
+ *
+ * Persisted in sessionStorage, which survives navigation within the tab. A fresh id per component
+ * mount made every page view on the fund's site a new conversation: measured 1 September 2026, embed
+ * traffic came out at 1.00–1.14 questions per conversation while playground traffic sat at 2.7
+ * (DECISION-dashboard-indeling.md A6). Storage access is guarded — privacy mode throws.
+ */
+function readOrCreateSessionId(): string {
+  try {
+    const existing = globalThis.sessionStorage?.getItem(SESSION_STORAGE_KEY);
+    if (existing) {
+      return existing;
+    }
+  } catch {
+    /* storage unavailable — fall through to a fresh id */
+  }
+  const id = newId();
+  try {
+    globalThis.sessionStorage?.setItem(SESSION_STORAGE_KEY, id);
+  } catch {
+    /* best-effort */
+  }
+  return id;
+}
 
 /** Align a new turn to the top of the thread so the answer is readable from the start. */
 function scrollChildToStart(container: HTMLElement, child: HTMLElement): void {
@@ -77,10 +112,7 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const sessionId = useMemo(
-    () => (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now())),
-    [],
-  );
+  const [sessionId] = useState(readOrCreateSessionId);
 
   useEffect(() => {
     let cancelled = false;
