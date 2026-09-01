@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@wunderstack/ui";
+import { Button, cn } from "@wunderstack/ui";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { FundSwitcher } from "@/components/fund/fund-switcher";
@@ -118,11 +118,14 @@ function SidebarBody({
               prefetch={item.href !== "/" && item.href !== "/admin"}
               aria-current={item.selected ? "page" : undefined}
               onClick={onNavigate}
-              className={
+              className={cn(
+                "rounded-[var(--radius-control)] px-2.5 py-2 text-sm font-medium",
+                // Keyboard users get the same visible position that aria-current gives a screenreader.
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
                 item.selected
-                  ? "rounded-[var(--radius-control)] bg-surface-sunk px-2.5 py-2 text-sm font-medium text-text"
-                  : "rounded-[var(--radius-control)] px-2.5 py-2 text-sm font-medium text-text-muted hover:bg-surface-sunk hover:text-text"
-              }
+                  ? "bg-surface-sunk text-text"
+                  : "text-text-muted hover:bg-surface-sunk hover:text-text",
+              )}
             >
               {item.label}
             </Link>
