@@ -41,7 +41,12 @@ export {
   type AgentActivityRow,
 } from "./kpi.js";
 
-export { getCorpusOverview, type CorpusDocRow } from "./corpus.js";
+export {
+  getCorpusOverview,
+  corpusFingerprint,
+  CORPUS_FINGERPRINT_LENGTH,
+  type CorpusDocRow,
+} from "./corpus.js";
 
 export {
   getOutcomeBreakdown,

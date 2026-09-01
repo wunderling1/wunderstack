@@ -1,4 +1,4 @@
-import { getCorpusOverview, type CorpusDocRow } from "@wunderstack/analytics";
+import { corpusFingerprint, getCorpusOverview, type CorpusDocRow } from "@wunderstack/analytics";
 import { Card, Chip, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@wunderstack/ui";
 import { ApproveCorpusForm } from "@/components/fund/approve-corpus-form";
 import { buildCorpusDecision, type CorpusDecision } from "@/lib/agent-profile";
@@ -22,6 +22,7 @@ export async function AgentCorpusPanel({
   const docs = await getCorpusOverview(fundKey, agentKey);
   const manifest = getReleaseManifest(agentKey);
   const decision = buildCorpusDecision({
+    fingerprint: corpusFingerprint(docs),
     documentVersions: docs.map((doc) => doc.version),
     pinnedReleaseTag,
     gateResult: manifest.stub || manifest.gateStatus === "unknown" ? null : manifest.gateStatus,
@@ -91,20 +92,25 @@ function GateAndApprovalCard({
   agentKey: string;
   canWrite: boolean;
 }) {
-  const version = decision.corpusVersion;
+  const fingerprint = decision.fingerprint;
   return (
     <Card className="flex flex-col gap-4 p-5">
       <div>
         <h3 className="text-sm font-semibold">Gate-uitslag en goedkeuring</h3>
         <p className="mt-1 text-sm text-text-muted">
-          Wat de gate zei over deze corpusversie. Drempels en checks staan bij het agenttype op
+          Wat de gate zei over dit corpus. Drempels en checks staan bij het agenttype op
           platformniveau — niet hier.
         </p>
       </div>
       <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
         <div>
-          <dt className="text-text-muted">Corpusversie</dt>
-          <dd className="font-mono">{nnb(version)}</dd>
+          <dt className="text-text-muted">Corpus</dt>
+          <dd className="font-mono">{nnb(fingerprint)}</dd>
+          <dd className="text-xs text-text-muted">
+            {decision.documentCount === 0
+              ? "geen bronnen"
+              : `${formatCount(decision.documentCount)} bronnen · laatst geladen ${nnb(decision.latestVersion)}`}
+          </dd>
         </div>
         <div>
           <dt className="text-text-muted">Uitslag</dt>
@@ -132,25 +138,29 @@ function GateAndApprovalCard({
         </div>
       </dl>
       <p className="text-xs text-text-subtle">
-        Goedkeuring en uitslag verwijzen naar dezelfde versie
-        {version ? ` (${version})` : " (n.n.b.)"}.
+        {decision.gate.result === null
+          ? "De poort heeft dit corpus nog niet beoordeeld; goedkeuring staat hier los van."
+          : `Goedkeuring en uitslag wijzen naar hetzelfde corpus (${nnb(fingerprint)}).`}
       </p>
-      {version && canWrite ? (
+      {fingerprint && canWrite ? (
         <ApproveCorpusForm
           fundKey={fundKey}
           agentKey={agentKey}
-          corpusVersion={version}
+          fingerprint={fingerprint}
           approved={decision.approval.approved}
+          expired={decision.approval.expired}
         />
-      ) : version && decision.approval.approved ? (
+      ) : fingerprint && decision.approval.approved ? (
         <p className="text-sm text-state-verified-fg">
-          Goedgekeurd voor corpusversie <code className="font-mono">{version}</code>.
+          Goedgekeurd voor corpus <code className="font-mono">{fingerprint}</code>.
         </p>
       ) : (
         <p className="text-sm text-text-muted">
-          {version
-            ? "Nog niet goedgekeurd."
-            : "Geen corpusversie om goed te keuren."}
+          {fingerprint === null
+            ? "Geen corpus om goed te keuren."
+            : decision.approval.expired
+              ? "Het corpus is gewijzigd sinds de vorige goedkeuring."
+              : "Nog niet goedgekeurd."}
         </p>
       )}
     </Card>

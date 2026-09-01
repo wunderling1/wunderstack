@@ -1,6 +1,6 @@
 "use server";
 
-import { getCorpusOverview } from "@wunderstack/analytics";
+import { corpusFingerprint, getCorpusOverview } from "@wunderstack/analytics";
 import {
   ConfirmationMismatchError,
   getInstance,
@@ -11,7 +11,6 @@ import {
 import { agentKeySchema, isGroundedAgentKey, tenantTextsSchema } from "@wunderstack/shared";
 import { revalidatePath } from "next/cache";
 import { assertAdmin } from "@/lib/assert-admin";
-import { buildCorpusDecision } from "@/lib/agent-profile";
 import { updateFundConfigCache } from "@/lib/config-cache";
 import { parseFundKey } from "@/lib/route-params";
 
@@ -149,22 +148,17 @@ export async function pinCorpusAction(
   if (!parsed.success) return { ok: false, error: "Ongeldige agent." };
   const agentKey = parsed.data;
   if (!isGroundedAgentKey(agentKey)) {
-    return { ok: false, error: "Alleen een gegronde agent heeft een corpusversie." };
+    return { ok: false, error: "Alleen een gegronde agent heeft een corpus." };
   }
   try {
+    // Derived again here, server-side: the form may show a corpus that has since been re-ingested.
     const docs = await getCorpusOverview(fundKey, agentKey);
-    const decision = buildCorpusDecision({
-      documentVersions: docs.map((doc) => doc.version),
-      pinnedReleaseTag: null,
-      gateResult: null,
-      gateEvaluatedAt: null,
-      artefactUrl: null,
-    });
-    const submitted = str(formData.get("corpusVersion"));
-    if (!decision.corpusVersion || submitted !== decision.corpusVersion) {
-      return { ok: false, error: "Corpusversie is veranderd. Herlaad de pagina." };
+    const fingerprint = corpusFingerprint(docs);
+    const submitted = str(formData.get("fingerprint"));
+    if (!fingerprint || submitted !== fingerprint) {
+      return { ok: false, error: "Het corpus is veranderd. Herlaad de pagina." };
     }
-    await pinInstanceReleaseTag(fundKey, agentKey, decision.corpusVersion);
+    await pinInstanceReleaseTag(fundKey, agentKey, fingerprint);
     revalidateAgent(fundKey, agentKey);
     return { ok: true };
   } catch (error) {
