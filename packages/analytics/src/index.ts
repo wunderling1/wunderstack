@@ -95,6 +95,7 @@ export {
 
 export {
   listSignals,
+  countKnowledgeGaps,
   groupsAtOccurrenceThreshold,
   frequencyRecencyScore,
   sortByFrequencyRecency,

@@ -1,4 +1,5 @@
 import {
+  countKnowledgeGaps,
   deriveAgentStatus,
   getCorpusOverview,
   getExerciseActivity,
@@ -56,6 +57,8 @@ export interface OverviewModel {
   previousTotal: number;
   onboarding: boolean;
   fundStatus: AgentOperationalStatus;
+  /** Groups the Signalen list holds for this window — what "N kennisgaten" counts (S11a). */
+  knowledgeGaps: number;
   agents: OverviewAgentRow[];
   recent: InteractionLogRow[];
 }
@@ -79,6 +82,7 @@ export async function loadOverviewModel(
     recent,
     exercise,
     previousExercise,
+    knowledgeGaps,
   ] = await Promise.all([
     getOutcomeBreakdown({ fundKey, ...window }),
     getOutcomeBreakdown({ fundKey, ...prevWindow }),
@@ -90,6 +94,8 @@ export async function loadOverviewModel(
     // instance on a fund it would need one, and this read has to narrow.
     getExerciseActivity({ fundKey, ...window }),
     getExerciseActivity({ fundKey, ...prevWindow }),
+    // Counted here, not derived from the refusal rate: Acties must print what Signalen lists.
+    countKnowledgeGaps({ fundKey, ...window, now }),
   ]);
 
   const agents: OverviewAgentRow[] = await Promise.all(
@@ -141,6 +147,7 @@ export async function loadOverviewModel(
     previousTotal,
     onboarding: isOnboarding(currentTotal, previousTotal),
     fundStatus: fundStatusFromAgents(agents),
+    knowledgeGaps,
     agents,
     recent,
   };

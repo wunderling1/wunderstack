@@ -179,7 +179,8 @@ export function includeExerciseAdoption(query: SignalsQuery): boolean {
   return query.agentId === undefined || !isGroundedAgentKey(query.agentId);
 }
 
-function finishQuestionSignals(
+/** Groups that survive mapping and the threshold, ranked. Uncapped: the caller lists or counts. */
+function questionSignalsFrom(
   rows: Array<{
     question: string | null;
     occurrenceCount: unknown;
@@ -191,19 +192,15 @@ function finishQuestionSignals(
   const mapped = rows
     .map(mapQuestionSignal)
     .filter((row): row is QuestionSignal => row !== null);
-  return sortByFrequencyRecency(groupsAtOccurrenceThreshold(mapped), now).slice(
-    0,
-    SIGNAL_LIST_LIMIT,
-  );
+  return sortByFrequencyRecency(groupsAtOccurrenceThreshold(mapped), now);
 }
 
-async function loadQuestionSignals(
+function selectQuestionGroups(
   db: Database,
   query: SignalsQuery,
   strength: RefusalStrengthFilter,
-): Promise<QuestionSignal[]> {
-  const now = query.now ?? new Date();
-  const rows = await db
+) {
+  return db
     .select({
       question: interactionEvents.question,
       occurrenceCount: sql<number>`count(*)`,
@@ -216,8 +213,27 @@ async function loadQuestionSignals(
     // S18: threshold lives in the query, not the UI. Narrowing cannot drop this HAVING.
     .having(sql`count(*) >= ${SIGNAL_MIN_OCCURRENCES}`)
     .orderBy(desc(sql`max(${interactionEvents.occurredAt})`));
+}
 
-  return finishQuestionSignals(rows, now);
+async function loadQuestionSignals(
+  db: Database,
+  query: SignalsQuery,
+  strength: RefusalStrengthFilter,
+): Promise<QuestionSignal[]> {
+  const rows = await selectQuestionGroups(db, query, strength);
+  return questionSignalsFrom(rows, query.now ?? new Date()).slice(0, SIGNAL_LIST_LIMIT);
+}
+
+/**
+ * How many knowledge gaps exist in this window — the same grouping, the same threshold and the same
+ * drop rules as the list itself, so a screen that prints this number links to exactly these groups
+ * (S11a). Deliberately not a turn count: three copies of one question are one gap, not three.
+ */
+export async function countKnowledgeGaps(query: SignalsQuery): Promise<number> {
+  return withFundSchema(query.fundKey, async (db) => {
+    const rows = await selectQuestionGroups(db, query, "none");
+    return questionSignalsFrom(rows, query.now ?? new Date()).length;
+  });
 }
 
 async function loadExerciseAdoption(
