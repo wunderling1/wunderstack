@@ -19,12 +19,14 @@ import {
   FUND_MIGRATION_PROVISION,
   FUND_MIGRATION_ROLEPLAY,
   FUND_MIGRATION_TURN_OUTCOME,
+  FUND_MIGRATION_OUTCOME_CHECK,
   getDb,
   listActiveFunds,
   listAppliedFundMigrations,
   recordFundMigration,
   sql,
   turnOutcomeAlterSql,
+  outcomeCheckConstraintSql,
 } from "@wunderstack/db";
 
 interface MigrateResult {
@@ -58,6 +60,15 @@ async function migrateOne(fundKey: string): Promise<MigrateResult> {
     }
     await recordFundMigration(fund.schemaName, FUND_MIGRATION_TURN_OUTCOME);
     result.applied.push(FUND_MIGRATION_TURN_OUTCOME);
+  }
+
+  if (!already.includes(FUND_MIGRATION_OUTCOME_CHECK)) {
+    const db = getDb();
+    for (const statement of outcomeCheckConstraintSql(fund.schemaName)) {
+      await db.execute(sql.raw(statement));
+    }
+    await recordFundMigration(fund.schemaName, FUND_MIGRATION_OUTCOME_CHECK);
+    result.applied.push(FUND_MIGRATION_OUTCOME_CHECK);
   }
 
   return result;

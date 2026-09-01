@@ -98,4 +98,32 @@ describe("createFundEnvironment (integration)", { skip: !provisionerSet || !hasD
     )) as unknown as Array<{ ok: number }>;
     assert.equal(orphanSchema.length, 0);
   });
+
+  it("rejects invalid outcome at the DB CHECK after provision", async () => {
+    const checkKey = `proef-check-${Date.now().toString(36)}`;
+    await createFundEnvironment({
+      fundKey: checkKey,
+      name: "CHECK test",
+      agentKeys: ["cao"],
+    });
+
+    const schema = `fund_${checkKey}`;
+    await assert.rejects(
+      () =>
+        getDb().execute(
+          sql.raw(`
+            INSERT INTO "${schema}".interaction_events (
+              tenant_id, agent_id, fund, session_id, outcome
+            ) VALUES ('t', 'cao', '${checkKey}', 's', 'bogus')
+          `),
+        ),
+      (error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        return message.includes("interaction_events_outcome_check") || message.includes("check constraint");
+      },
+    );
+
+    await getDb().execute(sql.raw(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`));
+    await getDb().delete(funds).where(eq(funds.key, checkKey));
+  });
 });

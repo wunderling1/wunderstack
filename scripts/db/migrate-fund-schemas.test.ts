@@ -26,4 +26,9 @@ describe("migrate-fund-schemas.ts", () => {
     assert.match(source, /FUND_MIGRATION_TURN_OUTCOME/);
     assert.match(source, /turnOutcomeAlterSql/);
   });
+
+  it("applies fund migration 0004_outcome_check for missing outcome CHECK", () => {
+    assert.match(source, /FUND_MIGRATION_OUTCOME_CHECK/);
+    assert.match(source, /outcomeCheckConstraintSql/);
+  });
 });
