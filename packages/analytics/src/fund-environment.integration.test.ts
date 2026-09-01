@@ -13,14 +13,16 @@ import {
   users,
   withFundSchema,
 } from "@wunderstack/db";
-import { answeredGrounded } from "@wunderstack/shared";
+import { answeredGrounded, refused } from "@wunderstack/shared";
 import {
+  countKnowledgeGaps,
   getAgentActivity,
   getCorpusOverview,
   getExerciseActivity,
   getKpiSummary,
   getOutcomeBreakdown,
   listOutcomeActivity,
+  listSignals,
   measurementStartedAt,
 } from "./index.js";
 import { recordInteractionEvent } from "./record.js";
@@ -171,6 +173,45 @@ describe("fund environment ↔ analytics seam", { skip: !ready }, () => {
     assert.equal(summary.total, 2);
     const breakdown = await getOutcomeBreakdown({ fundKey, since });
     assert.equal(breakdown.byOutcome.answered, 2);
+  });
+
+  it("a knowledge gap is a repeated question, not a refused turn (S11a)", async () => {
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const refusals = [
+      "wat staat er over de reiskostenregeling",
+      "wat staat er over de reiskostenregeling",
+      "wat staat er over de reiskostenregeling",
+      "geldt de toeslag ook op zaterdag",
+      "hoe lang duurt de proeftijd",
+    ];
+    for (const [index, question] of refusals.entries()) {
+      const recorded = await recordInteractionEvent({
+        tenantId: fundKey,
+        agentId: "cao",
+        fund: fundKey,
+        sessionId: `sess-gap-${index}-${fundKey}`,
+        turnOutcome: refused("no_coverage"),
+        citationCount: 0,
+        retrievedCount: 0,
+        topScore: null,
+        question,
+      });
+      assert.equal(recorded.recorded, true);
+    }
+
+    // Five refused turns without retrieval, but only one question came back three times.
+    const breakdown = await getOutcomeBreakdown({ fundKey, since });
+    const justified = breakdown.rates.refusedJustified;
+    assert.ok(!("kind" in justified));
+    assert.equal(justified.numerator, 5);
+
+    const gaps = await countKnowledgeGaps({ fundKey, since });
+    assert.equal(gaps, 1);
+
+    // And the count is the length of the list it links to — the same groups, not a parallel rule.
+    const signals = await listSignals({ fundKey, since });
+    assert.equal(signals.knowledgeGaps.length, gaps);
+    assert.equal(signals.knowledgeGaps[0]?.occurrenceCount, 3);
   });
 
   it("getAgentActivity throws when control.funds has a row without a schema (why createFundEnvironment is atomic)", async () => {

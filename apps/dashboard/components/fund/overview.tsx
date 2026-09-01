@@ -11,7 +11,7 @@ import {
   TableRow,
 } from "@wunderstack/ui";
 import Link from "next/link";
-import type { OutcomeCounts, Rate } from "@wunderstack/analytics";
+import { SIGNAL_MIN_OCCURRENCES, type OutcomeCounts, type Rate } from "@wunderstack/analytics";
 import { MeasurementNote } from "@/components/fund/measurement-note";
 import { PeriodPicker } from "@/components/fund/period-picker";
 import { formatCount, formatRate } from "@/lib/overview";
@@ -230,20 +230,30 @@ function RecentBlock({ model, hrefs }: { model: OverviewModel; hrefs: OverviewHr
 
 function ActionsBlock({ model, hrefs }: { model: OverviewModel; hrefs: OverviewHrefs }) {
   const justified = model.current.rates.refusedJustified;
-  const count = "kind" in justified ? 0 : justified.numerator;
+  // The refused turns underneath the gaps — context for the count, never the count itself. A gap is
+  // a repeated question; a single refusal is not yet one.
+  const refusedTurns = "kind" in justified ? 0 : justified.numerator;
+  const gaps = model.knowledgeGaps;
 
   return (
     <section className="flex flex-col gap-3">
       <h2 className="text-sm font-semibold text-text">Acties</h2>
       <MeasurementNote startedAt={model.measurementStartedAt} />
-      {count === 0 ? (
-        <p className="text-sm text-text-subtle">Geen openstaande kennisgaten in deze periode.</p>
+      {gaps === 0 ? (
+        <p className="text-sm text-text-subtle">
+          {refusedTurns === 0
+            ? "Geen openstaande kennisgaten in deze periode."
+            : `Geen kennisgaten in deze periode: geen vraag kwam ${SIGNAL_MIN_OCCURRENCES}× terug (${formatRate(justified)} turns geweigerd zonder retrieval).`}
+        </p>
       ) : (
         <p className="text-sm text-text">
           <Link href={hrefs.signalen} className="text-primary hover:underline">
-            {formatCount(count)} kennisgaten
+            {formatCount(gaps)} kennisgaten
           </Link>
-          <span className="text-text-muted"> ({formatRate(justified)} geweigerd zonder retrieval)</span>
+          <span className="text-text-muted">
+            {" "}
+            (uit {formatRate(justified)} turns geweigerd zonder retrieval)
+          </span>
         </p>
       )}
     </section>
