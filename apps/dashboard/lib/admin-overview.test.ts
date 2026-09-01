@@ -14,13 +14,13 @@ const empty = { answered: 0, refused: 0, clarified: 0, error: 0, unknown: 0 };
 test("error and unknown stay out of the answer-rate denominator (D7)", () => {
   const counts = { answered: 3, refused: 1, clarified: 1, error: 5, unknown: 10 };
   assert.deepEqual(answerRate(counts), { numerator: 3, denominator: 5 });
-  assert.equal(answerRateDisplay(answerRate(counts), 20), "3 / 5");
+  assert.equal(answerRateDisplay(answerRate(counts), 20), "3 van 5");
   assert.notEqual(answerRateDisplay(answerRate(counts), 20), "15%");
 });
 
 test("zero volume is an em dash, not 0%", () => {
   assert.equal(answerRateDisplay(answerRate(empty), 0), "—");
-  assert.equal(answerRateDisplay({ kind: "no_measurable_turns" }, 4), "geen meetbare turns");
+  assert.equal(answerRateDisplay({ kind: "no_measurable_turns" }, 4), "geen meetbare vragen");
 });
 
 test("one degraded agent makes the fund degraded (S12)", () => {

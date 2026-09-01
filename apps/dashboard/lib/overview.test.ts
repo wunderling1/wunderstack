@@ -5,13 +5,13 @@ import {
   formatRate,
   fundStatusFromAgents,
   isOnboarding,
-  totalTurns,
+  totalQuestions,
 } from "./overview.js";
 
 test("zero events is onboarding, not a 0% rate", () => {
   assert.equal(isOnboarding(0, 0), true);
   assert.equal(isOnboarding(4, 0), false);
-  assert.equal(formatRate({ kind: "no_measurable_turns" }), "geen meetbare turns");
+  assert.equal(formatRate({ kind: "no_measurable_turns" }), "geen meetbare vragen");
   assert.notEqual(formatRate({ kind: "no_measurable_turns" }), "0%");
 });
 
@@ -23,13 +23,14 @@ test("one degraded agent makes the fund not operational", () => {
   assert.equal(fundStatusFromAgents([]), "offline");
 });
 
-test("formatRate prints numerator and denominator", () => {
-  assert.equal(formatRate({ numerator: 3, denominator: 10 }), "3 / 10");
+test("formatRate reads as a count of questions, the KPI unit (S22)", () => {
+  assert.equal(formatRate({ numerator: 3, denominator: 10 }), "3 van 10");
+  assert.equal(formatRate({ numerator: 1061, denominator: 1271 }), "1.061 van 1.271");
 });
 
-test("totalTurns includes unknown so pre-metric rows still count as volume", () => {
+test("totalQuestions includes unknown so pre-metric rows still count as volume", () => {
   assert.equal(
-    totalTurns({ answered: 0, refused: 0, clarified: 0, error: 0, unknown: 5 }),
+    totalQuestions({ answered: 0, refused: 0, clarified: 0, error: 0, unknown: 5 }),
     5,
   );
 });

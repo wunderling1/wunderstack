@@ -22,6 +22,16 @@ export default async function GesprekPermalinkPage({
   const item = await getConversation(tenantId, id);
   if (!item) notFound();
 
-  const permalink = conversationPermalink("/gesprekken", item.id);
-  return <ConversationDetailView item={item} permalink={permalink} backHref="/gesprekken" />;
+  // The requested id, not the conversation's first question: the shared link must keep addressing
+  // the question it was shared for (A6).
+  const permalink = conversationPermalink("/gesprekken", id);
+  return (
+    <ConversationDetailView
+      item={item}
+      permalink={permalink}
+      permalinkFor={(questionId) => conversationPermalink("/gesprekken", questionId)}
+      backHref="/gesprekken"
+      highlightId={id}
+    />
+  );
 }

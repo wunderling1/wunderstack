@@ -1,4 +1,4 @@
-import { CONVERSATION_LIST_LIMIT, type ConversationItem } from "@wunderstack/analytics";
+import type { ConversationItem } from "@wunderstack/analytics";
 import { ConversationCard } from "@/components/fund/conversation-cards";
 import { ConversationFiltersForm } from "@/components/fund/conversation-filters";
 import { conversationPermalink, type ConversationFilters } from "@/lib/conversations";
@@ -10,8 +10,8 @@ export function ConversationsView({
   filters,
   agents,
   items,
-  groundedTotal,
-  exerciseTotal,
+  questionTotal,
+  conversationTotal,
   breakdownCount,
 }: {
   pathname: string;
@@ -19,11 +19,11 @@ export function ConversationsView({
   filters: ConversationFilters;
   agents: readonly string[];
   items: ConversationItem[];
-  groundedTotal: number;
-  exerciseTotal: number;
+  questionTotal: number;
+  conversationTotal: number;
   breakdownCount: number | null;
 }) {
-  const total = groundedTotal + exerciseTotal;
+  const permalinkFor = (id: string) => conversationPermalink(listPath, id);
 
   return (
     <div className="flex flex-col gap-6">
@@ -37,18 +37,22 @@ export function ConversationsView({
       <ConversationFiltersForm pathname={pathname} filters={filters} agents={agents} />
 
       <div className="flex flex-col gap-1 text-sm">
+        {/* Two units, both true (S22): the filter selects questions, the list shows the
+            conversations that hold them. */}
         <p className="text-text">
-          {formatCount(total)} {total === 1 ? "gesprek" : "gesprekken"}
-          {items.length < total
-            ? ` · toont de laatste ${formatCount(Math.min(items.length, CONVERSATION_LIST_LIMIT))}`
+          {formatCount(questionTotal)} {questionTotal === 1 ? "vraag" : "vragen"} in{" "}
+          {formatCount(conversationTotal)}{" "}
+          {conversationTotal === 1 ? "gesprek" : "gesprekken"}
+          {items.length < conversationTotal
+            ? ` · toont de laatste ${formatCount(items.length)}`
             : null}
         </p>
         {breakdownCount !== null ? (
           <p className="text-text-muted">
-            Overzicht telt {formatCount(breakdownCount)} voor dit filter
-            {breakdownCount === groundedTotal
+            Overzicht telt {formatCount(breakdownCount)} vragen voor dit filter
+            {breakdownCount === questionTotal
               ? " — zelfde telling."
-              : ` — lijst telt ${formatCount(groundedTotal)}.`}
+              : ` — lijst telt ${formatCount(questionTotal)}.`}
           </p>
         ) : null}
       </div>
@@ -59,7 +63,7 @@ export function ConversationsView({
         <ul className="flex flex-col gap-3">
           {items.map((item) => (
             <li key={`${item.kind}-${item.id}`}>
-              <ConversationCard item={item} permalink={conversationPermalink(listPath, item.id)} />
+              <ConversationCard item={item} permalinkFor={permalinkFor} />
             </li>
           ))}
         </ul>

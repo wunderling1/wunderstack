@@ -33,8 +33,8 @@ export default async function AdminGesprekkenPage({
       filters={model.filters}
       agents={model.agents}
       items={model.items}
-      groundedTotal={model.groundedTotal}
-      exerciseTotal={model.exerciseTotal}
+      questionTotal={model.questionTotal}
+      conversationTotal={model.conversationTotal}
       breakdownCount={model.breakdownCount}
     />
   );

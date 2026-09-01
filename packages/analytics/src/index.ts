@@ -76,18 +76,34 @@ export {
 export { listOutcomeActivity, type OutcomeActivityRow } from "./outcome-activity.js";
 
 export {
+  CONVERSATION_GAP_MINUTES,
+  UNTHREADED_CHANNELS,
+  groupIntoConversations,
+  isThreadedChannel,
+  type ConversationBoundaryRow,
+  type ConversationGroup,
+} from "./conversation-boundary.js";
+
+export {
   listConversations,
   getConversation,
+  getConversationVolume,
   getExerciseActivity,
   breakdownCountForFilter,
+  hasOutcomeFilter,
   includeExerciseSessions,
   includeGroundedTurns,
+  matchesOutcomeFilter,
   mapExerciseRow,
-  mapGroundedRow,
+  mapQuestionRow,
+  toGroundedConversation,
   CONVERSATION_LIST_LIMIT,
+  CONVERSATION_TURN_SCAN_CAP,
   type ConversationQuery,
   type ConversationItem,
   type ConversationList,
+  type ConversationQuestion,
+  type ConversationVolume,
   type GroundedConversation,
   type ExerciseConversation,
   type ExerciseActivity,

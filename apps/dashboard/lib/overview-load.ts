@@ -1,6 +1,7 @@
 import {
   countKnowledgeGaps,
   deriveAgentStatus,
+  getConversationVolume,
   getCorpusOverview,
   getExerciseActivity,
   getOutcomeBreakdown,
@@ -16,7 +17,7 @@ import {
   corpusVersionLabel,
   fundStatusFromAgents,
   isOnboarding,
-  totalTurns,
+  totalQuestions,
 } from "@/lib/overview";
 import { currentWindow, previousWindow, type PeriodId } from "@/lib/period";
 
@@ -53,8 +54,14 @@ export interface OverviewModel {
   measurementStartedAt: Date | null;
   current: OutcomeBreakdown;
   previous: OutcomeBreakdown;
-  currentTotal: number;
-  previousTotal: number;
+  /** Questions in the window — the KPI unit (S22). */
+  currentQuestions: number;
+  previousQuestions: number;
+  /** Conversations those questions fall into, plus exercise sessions: both are containers (S22). */
+  currentConversations: number;
+  previousConversations: number;
+  /** Questions on a channel that carries no thread id (mcp, api) — named, never bundled (A6). */
+  unthreadedQuestions: number;
   onboarding: boolean;
   fundStatus: AgentOperationalStatus;
   /** Groups the Signalen list holds for this window — what "N kennisgaten" counts (S11a). */
@@ -83,6 +90,8 @@ export async function loadOverviewModel(
     exercise,
     previousExercise,
     knowledgeGaps,
+    volume,
+    previousVolume,
   ] = await Promise.all([
     getOutcomeBreakdown({ fundKey, ...window }),
     getOutcomeBreakdown({ fundKey, ...prevWindow }),
@@ -96,6 +105,8 @@ export async function loadOverviewModel(
     getExerciseActivity({ fundKey, ...prevWindow }),
     // Counted here, not derived from the refusal rate: Acties must print what Signalen lists.
     countKnowledgeGaps({ fundKey, ...window, now }),
+    getConversationVolume({ fundKey, ...window }),
+    getConversationVolume({ fundKey, ...prevWindow }),
   ]);
 
   const agents: OverviewAgentRow[] = await Promise.all(
@@ -114,7 +125,7 @@ export async function loadOverviewModel(
         getOutcomeBreakdown({ fundKey, agentId: instance.agentKey, ...window }),
         getRecentInteractions({ fundKey, agentId: instance.agentKey, since: current.since }, 1),
       ]);
-      const total = totalTurns(breakdown.byOutcome);
+      const total = totalQuestions(breakdown.byOutcome);
       return {
         kind: "grounded",
         agentKey: instance.agentKey,
@@ -129,10 +140,13 @@ export async function loadOverviewModel(
     }),
   );
 
-  // Volume is what Gesprekken lists: grounded turns plus exercise sessions. Added here rather than
-  // read from one table, so the tile and the list it links to cannot drift apart.
-  const currentTotal = totalTurns(currentBreakdown.byOutcome) + exercise.sessionCount;
-  const previousTotal = totalTurns(previousBreakdown.byOutcome) + previousExercise.sessionCount;
+  // Two numbers, two units (S22): questions come from the outcome breakdown, conversations from the
+  // boundary grouper. An exercise session is a container too, so it counts as a conversation and
+  // contributes no questions — that is why the tile reads "N vragen in M gesprekken" and not a sum.
+  const currentQuestions = totalQuestions(currentBreakdown.byOutcome);
+  const previousQuestions = totalQuestions(previousBreakdown.byOutcome);
+  const currentConversations = volume.conversations + exercise.sessionCount;
+  const previousConversations = previousVolume.conversations + previousExercise.sessionCount;
 
   return {
     period,
@@ -143,9 +157,12 @@ export async function loadOverviewModel(
     measurementStartedAt: startedAt,
     current: currentBreakdown,
     previous: previousBreakdown,
-    currentTotal,
-    previousTotal,
-    onboarding: isOnboarding(currentTotal, previousTotal),
+    currentQuestions,
+    previousQuestions,
+    currentConversations,
+    previousConversations,
+    unthreadedQuestions: volume.unthreadedQuestions,
+    onboarding: isOnboarding(currentConversations, previousConversations),
     fundStatus: fundStatusFromAgents(agents),
     knowledgeGaps,
     agents,

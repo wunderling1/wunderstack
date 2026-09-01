@@ -4,10 +4,10 @@ import {
   type OutcomeCounts,
   type Rate,
 } from "@wunderstack/analytics";
-import { formatRate, fundStatusFromAgents, totalTurns } from "@/lib/overview";
+import { formatRate, fundStatusFromAgents, totalQuestions } from "@/lib/overview";
 
 export function statusFromCounts(counts: OutcomeCounts): AgentOperationalStatus {
-  return deriveAgentStatus(totalTurns(counts), counts.error);
+  return deriveAgentStatus(totalQuestions(counts), counts.error);
 }
 
 export function answerRateDisplay(rate: Rate, total: number): string {

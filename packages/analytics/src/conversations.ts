@@ -19,9 +19,26 @@ import {
   type TurnOutcomeValue,
 } from "@wunderstack/shared";
 
+import {
+  groupIntoConversations,
+  isThreadedChannel,
+  type ConversationGroup,
+} from "./conversation-boundary.js";
 import type { OutcomeBreakdown } from "./outcomes.js";
 
+/** Conversations (containers) listed on one page. */
 export const CONVERSATION_LIST_LIMIT = 50;
+
+/**
+ * Ceiling on questions read per window before grouping. The outcome filter cannot be pushed into
+ * SQL: a conversation matches when *one* of its questions does, and the card then shows the
+ * questions around that one. So the window is read once and grouped in one place — the same place
+ * the volume count uses, which is what keeps the list and the tile from drifting apart.
+ *
+ * Measured 1 September 2026: the busiest fund holds 224 rows in total, so this is headroom rather
+ * than a limit anyone reaches. Paging is still undecided (audit O-5); when it lands, this goes.
+ */
+export const CONVERSATION_TURN_SCAN_CAP = 5000;
 
 export interface ConversationQuery {
   /** Fund whose schema to open (`withFundSchema`). Not a column filter. */
@@ -33,15 +50,35 @@ export interface ConversationQuery {
   outcomeReason?: string;
 }
 
-export type GroundedConversation = {
-  kind: "grounded";
+/** One turn: the unit an outcome, its reason and its citations belong to (S22). */
+export interface ConversationQuestion {
+  /** Event id — this is what a permalink addresses and anchors on. */
   id: string;
-  agentId: string;
   occurredAt: Date;
   question: string | null;
   outcome: string;
   outcomeReason: string | null;
   citationCount: number;
+  channel: string | null;
+  /** True when this question is the one the active outcome/reason filter selected. */
+  matchesFilter: boolean;
+}
+
+/**
+ * A conversation: one visitor, one agent, one or more questions in a row (S22). It has a course,
+ * not an outcome — the outcome lives on each question.
+ */
+export type GroundedConversation = {
+  kind: "grounded";
+  /** First question's event id. Window-dependent; see ConversationGroup.id. */
+  id: string;
+  agentId: string;
+  startedAt: Date;
+  /** Last question — the list sorts on this. */
+  occurredAt: Date;
+  /** False when no question came in over a channel that carries a thread id (mcp, api). */
+  threaded: boolean;
+  questions: ConversationQuestion[];
 };
 
 export type ExerciseConversation = {
@@ -59,25 +96,56 @@ export type ConversationItem = GroundedConversation | ExerciseConversation;
 
 export interface ConversationList {
   items: ConversationItem[];
-  /** Matching grounded turns (same predicate as the page, before the item cap). */
-  groundedTotal: number;
+  /** Questions matching the filter — the KPI unit (S22). */
+  questionTotal: number;
+  /** Conversations holding at least one matching question. */
+  conversationTotal: number;
   /** Matching exercise sessions (0 when an outcome/reason filter is set). */
   exerciseTotal: number;
 }
 
-function windowParts(query: ConversationQuery) {
+/** What the Activity block needs beyond the question count it already has (S22). */
+export interface ConversationVolume {
+  /** Conversations the window's questions fall into (S22/D10). */
+  conversations: number;
+  /** Questions on a channel that carries no thread id: each is its own conversation. */
+  unthreadedQuestions: number;
+  /** True when the scan cap was hit — `conversations` is then a floor, not an exact count. */
+  truncated: boolean;
+}
+
+const questionColumns = {
+  id: interactionEvents.id,
+  sessionId: interactionEvents.sessionId,
+  agentId: interactionEvents.agentId,
+  occurredAt: interactionEvents.occurredAt,
+  question: interactionEvents.question,
+  outcome: interactionEvents.outcome,
+  outcomeReason: interactionEvents.outcomeReason,
+  citationCount: interactionEvents.citationCount,
+  channel: interactionEvents.channel,
+};
+
+type TurnRow = {
+  id: string;
+  sessionId: string;
+  agentId: string;
+  occurredAt: Date;
+  question: string | null;
+  outcome: string;
+  outcomeReason: string | null;
+  citationCount: number;
+  channel: string | null;
+};
+
+/** Window + agent scope only. The outcome filter is applied after grouping, never here. */
+function scopeParts(query: { since: Date; until?: Date; agentId?: string }) {
   const parts = [gte(interactionEvents.occurredAt, query.since)];
   if (query.until !== undefined) {
     parts.push(lt(interactionEvents.occurredAt, query.until));
   }
   if (query.agentId !== undefined) {
     parts.push(eq(interactionEvents.agentId, query.agentId));
-  }
-  if (query.outcome !== undefined) {
-    parts.push(eq(interactionEvents.outcome, query.outcome));
-  }
-  if (query.outcomeReason !== undefined) {
-    parts.push(eq(interactionEvents.outcomeReason, query.outcomeReason));
   }
   return and(...parts);
 }
@@ -118,24 +186,46 @@ export function includeExerciseSessions(query: ConversationQuery): boolean {
   return query.agentId === undefined || !isGroundedAgentKey(query.agentId);
 }
 
-export function mapGroundedRow(row: {
-  id: string;
-  agentId: string;
-  occurredAt: Date;
-  question: string | null;
-  outcome: string;
-  outcomeReason: string | null;
-  citationCount: number;
-}): GroundedConversation {
+export function hasOutcomeFilter(query: {
+  outcome?: string;
+  outcomeReason?: string;
+}): boolean {
+  return query.outcome !== undefined || query.outcomeReason !== undefined;
+}
+
+/** Does this question satisfy the active outcome/reason filter? No filter means every question. */
+export function matchesOutcomeFilter(
+  row: { outcome: string; outcomeReason: string | null },
+  filter: { outcome?: string; outcomeReason?: string },
+): boolean {
+  if (filter.outcome !== undefined && row.outcome !== filter.outcome) return false;
+  if (filter.outcomeReason !== undefined && row.outcomeReason !== filter.outcomeReason) {
+    return false;
+  }
+  return true;
+}
+
+export function mapQuestionRow(
+  row: {
+    id: string;
+    occurredAt: Date;
+    question: string | null;
+    outcome: string;
+    outcomeReason: string | null;
+    citationCount: number;
+    channel?: string | null;
+  },
+  matchesFilter = false,
+): ConversationQuestion {
   return {
-    kind: "grounded",
     id: row.id,
-    agentId: row.agentId,
     occurredAt: row.occurredAt,
     question: row.question,
     outcome: row.outcome,
     outcomeReason: row.outcomeReason,
     citationCount: toNumber(row.citationCount),
+    channel: row.channel ?? null,
+    matchesFilter,
   };
 }
 
@@ -158,6 +248,31 @@ export function mapExerciseRow(row: {
     maxTurns: toNumber(row.maxTurns),
     status: asSessionStatus(row.status),
     endReason: asEndReason(row.endReason),
+  };
+}
+
+/** Group → conversation. `questions` is non-empty by construction, so the first row is the start. */
+export function toGroundedConversation(
+  group: ConversationGroup<TurnRow>,
+  filter: { outcome?: string; outcomeReason?: string } = {},
+): GroundedConversation {
+  const filterActive = hasOutcomeFilter(filter);
+  const first = group.questions[0];
+  const occurredAt = group.questions.reduce(
+    (latest, row) => (row.occurredAt > latest ? row.occurredAt : latest),
+    first.occurredAt,
+  );
+  return {
+    kind: "grounded",
+    id: group.id,
+    agentId: group.agentId,
+    startedAt: first.occurredAt,
+    occurredAt,
+    // Some, not every: one measured session mixes a pre-channel null with playground.
+    threaded: group.questions.some((row) => isThreadedChannel(row.channel)),
+    questions: group.questions.map((row) =>
+      mapQuestionRow(row, filterActive && matchesOutcomeFilter(row, filter)),
+    ),
   };
 }
 
@@ -184,35 +299,41 @@ export function breakdownCountForFilter(
   return null;
 }
 
-async function loadGrounded(
+function scanWindow(db: Database, query: { since: Date; until?: Date; agentId?: string }) {
+  return db
+    .select(questionColumns)
+    .from(interactionEvents)
+    .where(scopeParts(query))
+    .orderBy(desc(interactionEvents.occurredAt))
+    .limit(CONVERSATION_TURN_SCAN_CAP);
+}
+
+async function loadGroundedConversations(
   db: Database,
   query: ConversationQuery,
-): Promise<{ items: GroundedConversation[]; total: number }> {
-  const scope = windowParts(query);
-  const [rows, countRows] = await Promise.all([
-    db
-      .select({
-        id: interactionEvents.id,
-        agentId: interactionEvents.agentId,
-        occurredAt: interactionEvents.occurredAt,
-        question: interactionEvents.question,
-        outcome: interactionEvents.outcome,
-        outcomeReason: interactionEvents.outcomeReason,
-        citationCount: interactionEvents.citationCount,
-      })
-      .from(interactionEvents)
-      .where(scope)
-      .orderBy(desc(interactionEvents.occurredAt))
-      .limit(CONVERSATION_LIST_LIMIT),
-    db
-      .select({ n: sql<number>`count(*)` })
-      .from(interactionEvents)
-      .where(scope),
-  ]);
-  return {
-    items: rows.map(mapGroundedRow),
-    total: toNumber(countRows[0]?.n),
-  };
+): Promise<{
+  items: GroundedConversation[];
+  questionTotal: number;
+  conversationTotal: number;
+}> {
+  const rows = await scanWindow(db, query);
+
+  let questionTotal = 0;
+  const selected: Array<ConversationGroup<TurnRow>> = [];
+
+  for (const group of groupIntoConversations(rows)) {
+    const matched = group.questions.filter((row) => matchesOutcomeFilter(row, query)).length;
+    if (matched === 0) continue;
+    questionTotal += matched;
+    selected.push(group);
+  }
+
+  const items = selected
+    .map((group) => toGroundedConversation(group, query))
+    .sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())
+    .slice(0, CONVERSATION_LIST_LIMIT);
+
+  return { items, questionTotal, conversationTotal: selected.length };
 }
 
 async function loadExercises(
@@ -252,26 +373,47 @@ async function loadConversationList(
   query: ConversationQuery,
 ): Promise<ConversationList> {
   const grounded = includeGroundedTurns(query)
-    ? await loadGrounded(db, query)
-    : { items: [] as GroundedConversation[], total: 0 };
+    ? await loadGroundedConversations(db, query)
+    : { items: [] as GroundedConversation[], questionTotal: 0, conversationTotal: 0 };
   const exercise = includeExerciseSessions(query)
     ? await loadExercises(db, query)
     : { items: [] as ExerciseConversation[], total: 0 };
 
-  const items = [...grounded.items, ...exercise.items]
+  const items: ConversationItem[] = [...grounded.items, ...exercise.items]
     .sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())
     .slice(0, CONVERSATION_LIST_LIMIT);
 
   return {
     items,
-    groundedTotal: grounded.total,
+    questionTotal: grounded.questionTotal,
+    conversationTotal: grounded.conversationTotal,
     exerciseTotal: exercise.total,
   };
 }
 
-/** Fund-wide conversation list: grounded turns + exercise sessions, one window. */
+/** Fund-wide list: conversations with their questions, plus exercise sessions. One window. */
 export async function listConversations(query: ConversationQuery): Promise<ConversationList> {
   return withFundSchema(query.fundKey, (db) => loadConversationList(db, query));
+}
+
+/**
+ * How many conversations the window's questions fall into. Reads the same rows through the same
+ * grouper as the list, so the Activity tile and the page it links to cannot disagree.
+ */
+export async function getConversationVolume(window: {
+  fundKey: string;
+  since: Date;
+  until?: Date;
+  agentId?: string;
+}): Promise<ConversationVolume> {
+  return withFundSchema(window.fundKey, async (db) => {
+    const rows = await scanWindow(db, window);
+    return {
+      conversations: groupIntoConversations(rows).length,
+      unthreadedQuestions: rows.filter((row) => !isThreadedChannel(row.channel)).length,
+      truncated: rows.length >= CONVERSATION_TURN_SCAN_CAP,
+    };
+  });
 }
 
 export interface ExerciseActivity {
@@ -307,24 +449,47 @@ export async function getExerciseActivity(query: {
   });
 }
 
-async function loadConversation(
+/**
+ * The conversation one question belongs to, resolved without a window so a shared link never
+ * depends on the period the sharer had selected (S16). The whole session+agent history is grouped
+ * and the group holding this event is returned — which is why a 7-day list and a 30-day list can
+ * link to the same conversation.
+ */
+async function loadConversationByQuestionId(
   db: Database,
   id: string,
-): Promise<ConversationItem | null> {
-  const [event] = await db
+): Promise<GroundedConversation | null> {
+  const [anchor] = await db
     .select({
-      id: interactionEvents.id,
+      sessionId: interactionEvents.sessionId,
       agentId: interactionEvents.agentId,
-      occurredAt: interactionEvents.occurredAt,
-      question: interactionEvents.question,
-      outcome: interactionEvents.outcome,
-      outcomeReason: interactionEvents.outcomeReason,
-      citationCount: interactionEvents.citationCount,
     })
     .from(interactionEvents)
     .where(eq(interactionEvents.id, id))
     .limit(1);
-  if (event) return mapGroundedRow(event);
+  if (!anchor) return null;
+
+  const rows = await db
+    .select(questionColumns)
+    .from(interactionEvents)
+    .where(
+      and(
+        eq(interactionEvents.sessionId, anchor.sessionId),
+        eq(interactionEvents.agentId, anchor.agentId),
+      ),
+    )
+    .orderBy(desc(interactionEvents.occurredAt))
+    .limit(CONVERSATION_TURN_SCAN_CAP);
+
+  const group = groupIntoConversations(rows).find((candidate) =>
+    candidate.questions.some((row) => row.id === id),
+  );
+  return group === undefined ? null : toGroundedConversation(group);
+}
+
+async function loadConversation(db: Database, id: string): Promise<ConversationItem | null> {
+  const conversation = await loadConversationByQuestionId(db, id);
+  if (conversation) return conversation;
 
   const [session] = await db
     .select({
@@ -344,7 +509,7 @@ async function loadConversation(
   return null;
 }
 
-/** Permalink lookup: event id or exercise-session id, independent of the list window. */
+/** Permalink lookup: a question id or an exercise-session id, independent of the list window. */
 export async function getConversation(
   fundKey: string,
   id: string,

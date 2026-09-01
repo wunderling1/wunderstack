@@ -1,5 +1,6 @@
 import {
   deriveAgentStatus,
+  getExerciseActivity,
   getOutcomeBreakdown,
   getRecentInteractions,
   type OutcomeBreakdown,
@@ -8,7 +9,7 @@ import { AgentStatusBadge, Chip, KpiTile, Table, TableBody, TableCell, TableRow 
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { agentShowsQualityColumns } from "@/lib/agent-profile";
-import { formatCount, formatRate, totalTurns } from "@/lib/overview";
+import { formatCount, formatRate, totalQuestions } from "@/lib/overview";
 import { getReleaseManifest } from "@/lib/release-manifest";
 import { sinceDaysAgo } from "@/lib/window";
 
@@ -28,15 +29,18 @@ export async function AgentOverviewPanel({
 }) {
   const since = sinceDaysAgo(WINDOW_DAYS);
   const window = { fundKey, agentId: agentKey, since };
-  const [breakdown, recent] = await Promise.all([
+  const quality = agentShowsQualityColumns(agentKey);
+  // An exercise agent writes no interaction event (A4), so reading its volume from the event log
+  // would print 0 next to real sessions. Each profile is measured in its own table (S15/S22).
+  const [breakdown, recent, exercise] = await Promise.all([
     getOutcomeBreakdown(window),
     getRecentInteractions(window, 1),
+    quality ? Promise.resolve(null) : getExerciseActivity({ fundKey, since }),
   ]);
   const manifest = getReleaseManifest(agentKey);
-  const total = totalTurns(breakdown.byOutcome);
-  const status = deriveAgentStatus(total, breakdown.byOutcome.error);
-  const lastAt = recent[0]?.occurredAt ?? null;
-  const quality = agentShowsQualityColumns(agentKey);
+  const total = quality ? totalQuestions(breakdown.byOutcome) : (exercise?.sessionCount ?? 0);
+  const status = deriveAgentStatus(total, quality ? breakdown.byOutcome.error : 0);
+  const lastAt = quality ? (recent[0]?.occurredAt ?? null) : (exercise?.lastStartedAt ?? null);
 
   return (
     <div className="flex flex-col gap-10">
@@ -48,7 +52,7 @@ export async function AgentOverviewPanel({
             label={status === "offline" ? "Nog niet live" : undefined}
           />
         </div>
-        <OutcomeTiles breakdown={breakdown} quality={quality} />
+        <OutcomeTiles breakdown={breakdown} quality={quality} sessionCount={total} />
       </section>
 
       <section>
@@ -91,16 +95,17 @@ export async function AgentOverviewPanel({
 function OutcomeTiles({
   breakdown,
   quality,
+  sessionCount,
 }: {
   breakdown: OutcomeBreakdown;
   quality: boolean;
+  sessionCount: number;
 }) {
-  const total = totalTurns(breakdown.byOutcome);
   if (!quality) {
     return (
       <div className="flex flex-col gap-3">
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-          <KpiTile label="Sessies / turns" value={formatCount(total)} />
+          <KpiTile label="Sessies" value={formatCount(sessionCount)} />
         </div>
         <p className="text-sm text-text-muted">
           Deze agent oefent; er is geen citatie- of weigermetriek.
@@ -111,7 +116,7 @@ function OutcomeTiles({
 
   return (
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-      <KpiTile label="Turns" value={formatCount(total)} />
+      <KpiTile label="Vragen" value={formatCount(totalQuestions(breakdown.byOutcome))} />
       <KpiTile label="Beantwoord" value={formatRate(breakdown.rates.answered)} />
       <KpiTile label="Geweigerd" value={formatRate(breakdown.rates.refused)} />
       <KpiTile label="Verduidelijkt" value={formatRate(breakdown.rates.clarified)} />

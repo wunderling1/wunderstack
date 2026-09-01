@@ -16,8 +16,10 @@ export interface ConversationsModel {
   filters: ConversationFilters;
   agents: string[];
   items: ConversationItem[];
-  groundedTotal: number;
-  exerciseTotal: number;
+  /** Questions matching the filter — the KPI unit (S22). */
+  questionTotal: number;
+  /** Conversations holding at least one matching question, plus exercise sessions. */
+  conversationTotal: number;
   breakdownCount: number | null;
 }
 
@@ -53,8 +55,10 @@ export async function loadConversationsModel(
     filters,
     agents,
     items: list.items,
-    groundedTotal: list.groundedTotal,
-    exerciseTotal: list.exerciseTotal,
+    questionTotal: list.questionTotal,
+    // An exercise session is a container with turns, the same shape as a conversation (S22), so it
+    // counts here. It carries no questions, which is why the two totals are not a sum of each other.
+    conversationTotal: list.conversationTotal + list.exerciseTotal,
     breakdownCount: breakdownCountForFilter(breakdown, {
       outcome: filters.outcome,
       outcomeReason: filters.reason,

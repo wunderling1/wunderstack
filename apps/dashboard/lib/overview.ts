@@ -5,13 +5,18 @@ import {
   type Rate,
 } from "@wunderstack/analytics";
 
-export function totalTurns(counts: OutcomeCounts): number {
+/**
+ * Questions in a window — the KPI unit (S22). One row in `interaction_events` is one question, so
+ * this is the volume total; conversations are counted by the grouper in `@wunderstack/analytics`.
+ */
+export function totalQuestions(counts: OutcomeCounts): number {
   return counts.answered + counts.refused + counts.clarified + counts.error + counts.unknown;
 }
 
+/** Every KPI denominator is questions (S22), so the rate reads as "1.061 van 1.271". */
 export function formatRate(rate: Rate): string {
-  if ("kind" in rate) return "geen meetbare turns";
-  return `${rate.numerator.toLocaleString("nl-NL")} / ${rate.denominator.toLocaleString("nl-NL")}`;
+  if ("kind" in rate) return "geen meetbare vragen";
+  return `${rate.numerator.toLocaleString("nl-NL")} van ${rate.denominator.toLocaleString("nl-NL")}`;
 }
 
 export function formatCount(value: number): string {
@@ -24,8 +29,8 @@ export function isOnboarding(currentTotal: number, previousTotal: number): boole
 
 /**
  * The fund stands at the lowest of its agents (S12). Each row derived its own status in the
- * vocabulary it is measured in — turns for a grounded agent, sessions for an exercise agent — so
- * this aggregates those verdicts instead of re-deriving from turn counts an exercise agent lacks.
+ * vocabulary it is measured in — questions for a grounded agent, sessions for an exercise agent —
+ * so this aggregates those verdicts instead of re-deriving from counts an exercise agent lacks.
  */
 export function fundStatusFromAgents(
   agents: Array<{ status: AgentOperationalStatus }>,
