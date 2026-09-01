@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { answeredGrounded } from "@wunderstack/shared";
 import type { ChatEvent } from "../app/api/chat/contract";
 import {
   CHAT_GENERIC_ERROR_MESSAGE,
@@ -79,6 +80,9 @@ describe("pipeChatNdjsonStream", () => {
         type: "citations",
         found: true,
         needsClarification: false,
+        turnOutcome: answeredGrounded(),
+        retrievedCount: 2,
+        topScore: 0.62,
         citations: [],
         citationVerificationFailed: false,
         answer: "Antwoord.",
@@ -225,6 +229,9 @@ describe("pipeChatNdjsonStream", () => {
         type: "citations",
         found: true,
         needsClarification: false,
+        turnOutcome: answeredGrounded(),
+        retrievedCount: 1,
+        topScore: 0.5,
         citations: [],
         citationVerificationFailed: false,
         answer: "ok",
@@ -260,6 +267,9 @@ describe("pipeChatNdjsonStream", () => {
         type: "citations",
         found: true,
         needsClarification: false,
+        turnOutcome: answeredGrounded(),
+        retrievedCount: 2,
+        topScore: 0.62,
         citations: [],
         citationVerificationFailed: false,
         answer: "Antwoord.",

@@ -1,68 +1,80 @@
 import { z } from "zod";
 
 /**
- * Outcome of one grounded-agent turn. Shared by the event-log, Langfuse root metadata, and the
- * chat stream so a timeout or an unverifiable answer cannot be counted as a corpus refusal.
- *
- * `timeout` is not an answer and not a refusal: generation was aborted or the turn budget fired.
- * `unverifiable` is not a corpus-miss: retrieval found context, but the citation/hard-fact guard
- * refused to serve the claim (G4 coupling / ungrounded figure).
+ * Outcome of one grounded-agent turn. Produced at the decision point in the agent pipeline and
+ * written to `interaction_events` — never reconstructed from answer text or the `found` flag.
  */
-export const interactionOutcomes = [
-  "answered",
-  "refused",
-  "clarified",
-  "unverifiable",
-  "timeout",
-  "error",
+
+export const turnOutcomes = ["answered", "refused", "clarified", "error", "unknown"] as const;
+
+export type TurnOutcomeValue = (typeof turnOutcomes)[number];
+
+export const answeredReasons = ["grounded"] as const;
+
+export const refusedReasons = [
+  "no_coverage",
+  "guard_hard_fact",
+  "guard_citation_coupling",
+  "out_of_scope",
 ] as const;
 
-export type InteractionOutcome = (typeof interactionOutcomes)[number];
+export const clarifiedReasons = ["ambiguous_query"] as const;
 
-export const interactionOutcomeSchema = z.enum(interactionOutcomes);
+export const errorReasons = ["timeout", "provider_error", "aborted"] as const;
 
-/** Settled path only — never timeout/error (those are thrown, not served). */
-export const settledRunOutcomes = ["answered", "refused", "clarified", "unverifiable"] as const;
+export type RefusedReason = (typeof refusedReasons)[number];
 
-export type SettledRunOutcome = (typeof settledRunOutcomes)[number];
+export type ErrorReason = (typeof errorReasons)[number];
 
-export const settledRunOutcomeSchema = z.enum(settledRunOutcomes);
+export const turnOutcomeSchema = z.discriminatedUnion("outcome", [
+  z.object({ outcome: z.literal("answered"), outcomeReason: z.literal("grounded") }),
+  z.object({
+    outcome: z.literal("refused"),
+    outcomeReason: z.enum(refusedReasons),
+  }),
+  z.object({ outcome: z.literal("clarified"), outcomeReason: z.literal("ambiguous_query") }),
+  z.object({
+    outcome: z.literal("error"),
+    outcomeReason: z.enum(errorReasons),
+  }),
+  z.object({ outcome: z.literal("unknown"), outcomeReason: z.null() }),
+]);
 
-/** Fail-path outcomes written on the chat `error` event. */
-export const streamErrorOutcomes = ["timeout", "error"] as const;
+export type TurnOutcome = z.infer<typeof turnOutcomeSchema>;
 
-export type StreamErrorOutcome = (typeof streamErrorOutcomes)[number];
+/** Writable on the event-log insert path — `unknown` is migration-only (D3). */
+export const writableTurnOutcomeSchema = z.discriminatedUnion("outcome", [
+  z.object({ outcome: z.literal("answered"), outcomeReason: z.literal("grounded") }),
+  z.object({
+    outcome: z.literal("refused"),
+    outcomeReason: z.enum(refusedReasons),
+  }),
+  z.object({ outcome: z.literal("clarified"), outcomeReason: z.literal("ambiguous_query") }),
+  z.object({
+    outcome: z.literal("error"),
+    outcomeReason: z.enum(errorReasons),
+  }),
+]);
 
-export const streamErrorOutcomeSchema = z.enum(streamErrorOutcomes);
+export type WritableTurnOutcome = z.infer<typeof writableTurnOutcomeSchema>;
 
-/**
- * Classify a served turn. Empty retrieval is `refused`. A substantive answer that failed
- * verification or the hard-fact guard is `unverifiable` — retrieval DID find context.
- */
-export function classifySettledRunOutcome(args: {
-  found: boolean;
-  needsClarification?: boolean;
-  unverifiable?: boolean;
-  hardFactGuardTriggered?: boolean;
-}): SettledRunOutcome {
-  if (args.needsClarification === true) {
-    return "clarified";
-  }
-  if (args.found) {
-    return "answered";
-  }
-  if (args.unverifiable === true || args.hardFactGuardTriggered === true) {
-    return "unverifiable";
-  }
-  return "refused";
+export function answeredGrounded(): WritableTurnOutcome {
+  return { outcome: "answered", outcomeReason: "grounded" };
 }
 
-/** Turn-budget / work-signal abort is a timeout; any other throw is an error. */
-export function classifyThrownRunOutcome(signalAborted: boolean): StreamErrorOutcome {
-  return signalAborted ? "timeout" : "error";
+export function refused(reason: RefusedReason): WritableTurnOutcome {
+  return { outcome: "refused", outcomeReason: reason };
 }
 
-/** Timeouts and faults are not a quality verdict — exclude them from the v1 answered rate. */
+export function clarifiedOutcome(): WritableTurnOutcome {
+  return { outcome: "clarified", outcomeReason: "ambiguous_query" };
+}
+
+export function errored(reason: ErrorReason): WritableTurnOutcome {
+  return { outcome: "error", outcomeReason: reason };
+}
+
+/** Timeouts, faults, and pre-metric rows are not a quality verdict — exclude from answered rate. */
 export function isQualityOutcome(outcome: string): boolean {
-  return outcome !== "timeout" && outcome !== "error";
+  return outcome !== "error" && outcome !== "unknown";
 }

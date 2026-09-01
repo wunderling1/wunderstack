@@ -11,7 +11,8 @@ import {
   sql,
   users,
 } from "@wunderstack/db";
-import { getAgentActivity, getCorpusOverview, getKpiSummary } from "./index.js";
+import { answeredGrounded } from "@wunderstack/shared";
+import { getAgentActivity, getCorpusOverview, getKpiSummary, measurementStartedAt } from "./index.js";
 import { recordInteractionEvent } from "./record.js";
 
 /**
@@ -54,6 +55,7 @@ describe("fund environment ↔ analytics seam", { skip: !ready }, () => {
       since: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
     });
     assert.equal(summary.total, 0);
+    assert.equal(await measurementStartedAt(fundKey), null);
 
     const corpus = await getCorpusOverview(fundKey);
     assert.equal(corpus.length, 0);
@@ -84,8 +86,10 @@ describe("fund environment ↔ analytics seam", { skip: !ready }, () => {
       agentId: "cao",
       fund: fundKey,
       sessionId: `sess-demo-${fundKey}`,
-      outcome: "answered",
+      turnOutcome: answeredGrounded(),
       citationCount: 1,
+      retrievedCount: 3,
+      topScore: 0.65,
       question: "multi-runtime demo tenant",
     });
     const recordedOwn = await recordInteractionEvent({
@@ -93,8 +97,10 @@ describe("fund environment ↔ analytics seam", { skip: !ready }, () => {
       agentId: "cao",
       fund: fundKey,
       sessionId: `sess-own-${fundKey}`,
-      outcome: "answered",
+      turnOutcome: answeredGrounded(),
       citationCount: 1,
+      retrievedCount: 2,
+      topScore: 0.7,
       question: "multi-runtime fund tenant",
     });
     assert.equal(recordedDemo.recorded, true);
@@ -102,6 +108,9 @@ describe("fund environment ↔ analytics seam", { skip: !ready }, () => {
 
     const summary = await getKpiSummary({ fundKey, since });
     assert.equal(summary.total, 2);
+
+    const started = await measurementStartedAt(fundKey);
+    assert.ok(started instanceof Date);
 
     const activity = await getAgentActivity(since);
     const forThisFund = activity.filter((row) => row.fundKey === fundKey);

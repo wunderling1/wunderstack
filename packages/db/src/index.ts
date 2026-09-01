@@ -21,6 +21,8 @@ export {
 export {
   FUND_MIGRATION_PROVISION,
   FUND_MIGRATION_ROLEPLAY,
+  FUND_MIGRATION_TURN_OUTCOME,
+  turnOutcomeAlterSql,
   provisionDdl,
   roleplayDdl,
   roleplayAlterSql,
@@ -120,6 +122,7 @@ export {
   updateTenantConfig,
   createAgentInstance,
   rotateTenantKey,
+  pinInstanceReleaseTag,
   type TenantConfigInput,
   type TenantConfig,
 } from "./agent-instances.js";
@@ -158,7 +161,7 @@ export {
 
 // Re-export the query operators consumers need, so the ORM stays behind this seam
 // (no package/script imports drizzle-orm directly). Extend as new operators are needed.
-export { eq, and, asc, desc, gte, gt, lte, inArray, isNotNull, count, sql } from "drizzle-orm";
+export { eq, and, asc, desc, gte, gt, lt, lte, inArray, isNotNull, count, sql } from "drizzle-orm";
 // pgvector distance helper used by retrieval (Fase 5). Kept here so the ORM stays behind
 // this seam; add l2Distance/innerProduct here too if a later phase needs them.
 export { cosineDistance } from "drizzle-orm";

@@ -48,6 +48,7 @@ describe("buildFundEnvironmentStatements", () => {
       ...grantReaderOnFundSchemaSql("reader_role", "fund_proefonds"),
       recordMigrationSql("fund_proefonds", "0001_provision"),
       recordMigrationSql("fund_proefonds", "0002_roleplay"),
+      recordMigrationSql("fund_proefonds", "0003_turn_outcome"),
     ];
     assert.deepEqual(statements, expected);
   });
@@ -62,6 +63,7 @@ describe("buildFundEnvironmentStatements", () => {
       ...revokePublicFundSchemaSql("fund_proefonds"),
       recordMigrationSql("fund_proefonds", "0001_provision"),
       recordMigrationSql("fund_proefonds", "0002_roleplay"),
+      recordMigrationSql("fund_proefonds", "0003_turn_outcome"),
     ]);
     assert.doesNotMatch(statements.join("\n"), /GRANT /);
   });

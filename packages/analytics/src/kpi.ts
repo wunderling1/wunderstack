@@ -101,9 +101,9 @@ async function loadKpiSummary(db: Database, window: KpiWindow): Promise<KpiSumma
       answeredWithCitations: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'answered' and ${interactionEvents.citationCount} > 0)`,
       refused: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'refused')`,
       clarified: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'clarified')`,
-      errors: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'error')`,
-      timeouts: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'timeout')`,
-      qualityN: sql<number>`count(*) filter (where ${interactionEvents.outcome} not in ('timeout', 'error'))`,
+      errors: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'error' and ${interactionEvents.outcomeReason} in ('provider_error', 'aborted'))`,
+      timeouts: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'error' and ${interactionEvents.outcomeReason} = 'timeout')`,
+      qualityN: sql<number>`count(*) filter (where ${interactionEvents.outcome} not in ('error', 'unknown'))`,
     })
     .from(interactionEvents)
     .where(windowScope(window));
@@ -316,8 +316,8 @@ export async function getAgentActivity(since: Date): Promise<AgentActivityRow[]>
           total: sql<number>`count(*)`,
           answeredWithCitations: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'answered' and ${interactionEvents.citationCount} > 0)`,
           refused: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'refused')`,
-          // Ops health: timeouts are not corpus refusals, but they are a degraded turn.
-          errors: sql<number>`count(*) filter (where ${interactionEvents.outcome} in ('error', 'timeout'))`,
+          // Ops health: timeouts and provider faults are not corpus refusals.
+          errors: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'error')`,
           lastOccurredAt: sql<string>`max(${interactionEvents.occurredAt})`,
         })
         .from(interactionEvents)

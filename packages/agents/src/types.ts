@@ -1,3 +1,10 @@
+import {
+  answeredGrounded,
+  clarifiedOutcome,
+  refused,
+  writableTurnOutcomeSchema,
+  type WritableTurnOutcome,
+} from "@wunderstack/shared";
 import { citationSchema } from "@wunderstack/shared";
 import { z } from "zod";
 
@@ -60,10 +67,17 @@ export const agentAnswerSchema = z.object({
   /** The Dutch answer, with `[n]` citation markers when sources were used. When
    * `needsClarification` is true this holds the clarifying question instead. */
   answer: z.string(),
-  /** False when nothing cleared the relevance threshold (the "niet gevonden" case). */
+  /**
+   * Serve-time flag: false when the pipeline replaced the model text (guard, empty retrieval,
+   * clarification). Not used for analytics classification — see `turnOutcome`.
+   */
   found: z.boolean(),
   /** True when the agent asked a clarifying question instead of answering (underspecified input). */
   needsClarification: z.boolean().default(false),
+  /** Classified at the pipeline decision point; written to the event-log as-is. */
+  turnOutcome: writableTurnOutcomeSchema,
+  retrievedCount: z.number().int().nonnegative(),
+  topScore: z.number().min(0).max(1).nullable(),
   /** Verified citations — only chunks the model cited with a verbatim quote. */
   citations: z.array(agentCitationSchema).default([]),
   /** Langfuse trace id for this answer, so user feedback can be scored onto it. Null when tracing
@@ -95,12 +109,15 @@ export type AgentStreamPhase = "searching" | "retrieved" | "generating";
  * `done`. Clarify and not-found paths emit `text` → `citations` → `done` (no followups).
  */
 export type AgentStreamEvent =
-  | { type: "status"; phase: AgentStreamPhase; count?: number }
+  | { type: "status"; phase: AgentStreamPhase; count?: number; topScore?: number | null }
   | { type: "text"; delta: string }
   | {
       type: "citations";
       found: boolean;
       needsClarification: boolean;
+      turnOutcome: WritableTurnOutcome;
+      retrievedCount: number;
+      topScore: number | null;
       citations: AgentCitation[];
       citationVerificationFailed: boolean;
       /** Final answer text (sentinel/citation block stripped, failed markers removed). The client

@@ -8,17 +8,9 @@ import {
 } from "@wunderstack/db";
 import { AGENT_KEYS, agentKeySchema } from "@wunderstack/shared";
 import { revalidatePath } from "next/cache";
-import { auth } from "@/auth";
-import { decideAccess } from "@/lib/authz";
+import { assertAdmin } from "@/lib/assert-admin";
 import { updateFundConfigCache } from "@/lib/config-cache";
 import { generatePassword, hashPassword } from "@/lib/password";
-
-async function assertAdmin(): Promise<void> {
-  const session = await auth();
-  if (!decideAccess(session, "admin").allow) {
-    throw new Error("forbidden");
-  }
-}
 
 export type CreateFundState =
   | {

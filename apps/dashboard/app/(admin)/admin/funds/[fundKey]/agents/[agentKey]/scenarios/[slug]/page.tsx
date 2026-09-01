@@ -3,6 +3,7 @@ import { roleplayScenarioSlugSchema } from "@wunderstack/shared";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { parseAgentKey, parseFundKey } from "@/lib/route-params";
+import { isExerciseAgentKey } from "@/lib/agent-profile";
 import { ScenarioForm } from "../scenario-form";
 
 export default async function EditRoleplayScenarioPage({
@@ -17,7 +18,7 @@ export default async function EditRoleplayScenarioPage({
   const fundKey = parseFundKey(rawFund);
   const agentKey = parseAgentKey(rawAgent);
   const slug = roleplayScenarioSlugSchema.safeParse(rawSlug.toLowerCase());
-  if (!fundKey || agentKey !== "roleplay" || !slug.success) notFound();
+  if (!fundKey || !agentKey || !isExerciseAgentKey(agentKey) || !slug.success) notFound();
 
   const row = await getScenario(fundKey, slug.data);
   if (!row) notFound();
@@ -29,7 +30,7 @@ export default async function EditRoleplayScenarioPage({
         <p className="mt-1 font-mono text-sm text-text-muted">{row.slug}</p>
         <p className="mt-2">
           <Link
-            href={`/admin/funds/${fundKey}/agents/roleplay/scenarios`}
+            href={`/admin/funds/${fundKey}/agents/${agentKey}/scenarios`}
             className="text-sm text-text-muted hover:text-text"
           >
             ← Scenario&apos;s

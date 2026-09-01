@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { agentChannelSchema } from "./channel.js";
 import { citationSchema } from "./citation.js";
+import { writableTurnOutcomeSchema } from "./interaction-outcome.js";
 
 /**
  * Chat API contract (request + NDJSON events). Runtime and playground import this; the embed keeps a
@@ -50,12 +51,17 @@ export const chatEventSchema = z.discriminatedUnion("type", [
     phase: z.enum(chatStatusPhases),
     /** Number of retrieved passages, present on the `retrieved` phase. */
     count: z.number().int().nonnegative().optional(),
+    /** Highest similarity among retrieved hits; present on the `retrieved` phase. */
+    topScore: z.number().min(0).max(1).nullable().optional(),
   }),
   z.object({ type: z.literal("text"), delta: z.string() }),
   z.object({
     type: z.literal("citations"),
     found: z.boolean(),
     needsClarification: z.boolean(),
+    turnOutcome: writableTurnOutcomeSchema,
+    retrievedCount: z.number().int().nonnegative(),
+    topScore: z.number().min(0).max(1).nullable(),
     citations: z.array(citationSchema),
     citationVerificationFailed: z.boolean(),
     /** Final reconciled answer text (failed markers stripped); the client replaces streamed text. */

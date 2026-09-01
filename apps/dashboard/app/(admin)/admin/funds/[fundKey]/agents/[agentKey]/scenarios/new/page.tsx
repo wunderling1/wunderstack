@@ -2,6 +2,7 @@ import { emptyRoleplayScenarioDraft } from "@wunderstack/shared";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { parseAgentKey, parseFundKey } from "@/lib/route-params";
+import { isExerciseAgentKey } from "@/lib/agent-profile";
 import { ScenarioForm } from "../scenario-form";
 
 export default async function NewRoleplayScenarioPage({
@@ -12,7 +13,7 @@ export default async function NewRoleplayScenarioPage({
   const { fundKey: rawFund, agentKey: rawAgent } = await params;
   const fundKey = parseFundKey(rawFund);
   const agentKey = parseAgentKey(rawAgent);
-  if (!fundKey || agentKey !== "roleplay") notFound();
+  if (!fundKey || !agentKey || !isExerciseAgentKey(agentKey)) notFound();
 
   return (
     <div className="flex flex-col gap-4">
@@ -24,7 +25,7 @@ export default async function NewRoleplayScenarioPage({
         </p>
         <p className="mt-2">
           <Link
-            href={`/admin/funds/${fundKey}/agents/roleplay/scenarios`}
+            href={`/admin/funds/${fundKey}/agents/${agentKey}/scenarios`}
             className="text-sm text-text-muted hover:text-text"
           >
             ← Scenario&apos;s

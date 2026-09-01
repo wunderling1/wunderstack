@@ -1436,13 +1436,35 @@ async function multiTurnServeChecks(): Promise<Check[]> {
     const served = verifyAndBuild(generated.text, retrieval, userSupplied);
     if (served.unverifiable) {
       unverifiableCount += 1;
+      checks.push({
+        name: `multi-turn serve: "${testCase.id}" classifies G4 coupling as refused/guard_citation_coupling`,
+        ok:
+          served.turnOutcome.outcome === "refused" &&
+          served.turnOutcome.outcomeReason === "guard_citation_coupling",
+        detail: `outcome=${served.turnOutcome.outcome}/${served.turnOutcome.outcomeReason}`,
+      });
+    }
+    if (served.hardFactGuardTriggered) {
+      checks.push({
+        name: `multi-turn serve: "${testCase.id}" classifies E13 hard-fact as guard_hard_fact`,
+        ok: served.turnOutcome.outcomeReason === "guard_hard_fact",
+        detail: `outcome=${served.turnOutcome.outcome}/${served.turnOutcome.outcomeReason}`,
+      });
     }
     if (served.found && served.citations.length > 0) {
       servedWithCitationCount += 1;
+      checks.push({
+        name: `multi-turn serve: "${testCase.id}" classifies cited answer as answered/grounded`,
+        ok:
+          served.turnOutcome.outcome === "answered" &&
+          served.turnOutcome.outcomeReason === "grounded",
+        detail: `outcome=${served.turnOutcome.outcome}/${served.turnOutcome.outcomeReason}`,
+      });
     }
 
     console.log(
       `  ${testCase.id}: found=${String(served.found)} citations=${String(served.citations.length)} ` +
+        `outcome=${served.turnOutcome.outcome}/${served.turnOutcome.outcomeReason} ` +
         `unverifiable=${String(served.unverifiable)} hardFact=${String(served.hardFactGuardTriggered)}`,
     );
 

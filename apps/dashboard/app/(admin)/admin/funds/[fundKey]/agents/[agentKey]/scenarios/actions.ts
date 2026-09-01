@@ -12,6 +12,7 @@ import { redirect } from "next/navigation";
 import { assertAdmin } from "@/lib/assert-admin";
 import { updateFundConfigCache } from "@/lib/config-cache";
 import { parseRoleplayForm } from "@/lib/roleplay-form";
+import { isExerciseAgentKey } from "@/lib/agent-profile";
 import { parseAgentKey, parseFundKey } from "@/lib/route-params";
 
 export type ScenarioFormState = { ok: false; error: string } | { ok: true } | null;
@@ -20,9 +21,9 @@ function str(value: FormDataEntryValue | null): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function revalidateScenarios(fundKey: string, slug?: string): void {
-  updateFundConfigCache(fundKey, "roleplay");
-  const base = `/admin/funds/${fundKey}/agents/roleplay`;
+function revalidateScenarios(fundKey: string, agentKey: string, slug?: string): void {
+  updateFundConfigCache(fundKey, agentKey);
+  const base = `/admin/funds/${fundKey}/agents/${agentKey}`;
   revalidatePath(`${base}/scenarios`);
   revalidatePath(`${base}/scenarios/new`);
   revalidatePath(base);
@@ -32,12 +33,14 @@ function revalidateScenarios(fundKey: string, slug?: string): void {
   }
 }
 
-function gate(formData: FormData): { fundKey: string } | { error: string } {
+function gate(formData: FormData): { fundKey: string; agentKey: string } | { error: string } {
   const fundKey = parseFundKey(str(formData.get("fundKey")));
   const agentKey = parseAgentKey(str(formData.get("agentKey")).toLowerCase());
   if (!fundKey) return { error: "Ongeldige fondssleutel." };
-  if (agentKey !== "roleplay") return { error: "Scenario's horen alleen bij de rollenspelagent." };
-  return { fundKey };
+  if (!agentKey || !isExerciseAgentKey(agentKey)) {
+    return { error: "Scenario's horen bij de oefenagent." };
+  }
+  return { fundKey, agentKey };
 }
 
 /**
@@ -83,10 +86,12 @@ export async function createScenarioAction(
     return { ok: false, error: "Opslaan mislukt. Zie de serverlog." };
   }
 
-  revalidateScenarios(scoped.fundKey, parsed.slug);
+  revalidateScenarios(scoped.fundKey, scoped.agentKey, parsed.slug);
   // Always leave /new after a successful insert: a retry would hit the unique slug.
   const notice = blocked ? "?notice=unpublished" : "";
-  redirect(`/admin/funds/${scoped.fundKey}/agents/roleplay/scenarios/${parsed.slug}${notice}`);
+  redirect(
+    `/admin/funds/${scoped.fundKey}/agents/${scoped.agentKey}/scenarios/${parsed.slug}${notice}`,
+  );
 }
 
 export async function updateScenarioAction(
@@ -111,7 +116,7 @@ export async function updateScenarioAction(
     return { ok: false, error: "Opslaan mislukt. Zie de serverlog." };
   }
 
-  revalidateScenarios(scoped.fundKey, parsed.slug);
+  revalidateScenarios(scoped.fundKey, scoped.agentKey, parsed.slug);
   if (blocked) {
     return { ok: false, error: blocked };
   }

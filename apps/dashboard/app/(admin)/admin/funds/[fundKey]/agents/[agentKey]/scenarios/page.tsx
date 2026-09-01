@@ -11,6 +11,7 @@ import {
 } from "@wunderstack/ui";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { isExerciseAgentKey } from "@/lib/agent-profile";
 import { listScenariosCached } from "@/lib/fund-lookups";
 import { parseAgentKey, parseFundKey } from "@/lib/route-params";
 
@@ -28,10 +29,10 @@ export default async function RoleplayScenariosPage({
   const { fundKey: rawFund, agentKey: rawAgent } = await params;
   const fundKey = parseFundKey(rawFund);
   const agentKey = parseAgentKey(rawAgent);
-  if (!fundKey || agentKey !== "roleplay") notFound();
+  if (!fundKey || !agentKey || !isExerciseAgentKey(agentKey)) notFound();
 
   const scenarios = await listScenariosCached(fundKey);
-  const base = `/admin/funds/${fundKey}/agents/roleplay/scenarios`;
+  const base = `/admin/funds/${fundKey}/agents/${agentKey}/scenarios`;
 
   return (
     <div className="flex flex-col gap-4">

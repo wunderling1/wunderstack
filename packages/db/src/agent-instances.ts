@@ -133,6 +133,22 @@ export async function createAgentInstance(input: TenantConfigInput): Promise<Age
   return row;
 }
 
+/** Pin the corpus/release tag the fund approved. Existing column — not a new field (D9). */
+export async function pinInstanceReleaseTag(
+  tenantId: string,
+  agentKey: string,
+  tag: string,
+): Promise<void> {
+  const [row] = await getWriterDb()
+    .update(agentInstances)
+    .set({ pinnedReleaseTag: tag, updatedAt: new Date() })
+    .where(and(eq(agentInstances.tenantId, tenantId), eq(agentInstances.agentKey, agentKey)))
+    .returning({ pinnedReleaseTag: agentInstances.pinnedReleaseTag });
+  if (!row) {
+    throw new Error(`No agent instance for ${tenantId}/${agentKey}.`);
+  }
+}
+
 /** Rotate an instance's public key (invalidates old snippets). Writer connection. */
 export async function rotateTenantKey(tenantId: string, agentKey = "cao"): Promise<string> {
   const key = generateTenantKey();

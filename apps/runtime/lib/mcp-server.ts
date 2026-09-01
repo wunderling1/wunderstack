@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
-import { recordInteractionEvent, type InteractionOutcome } from "@wunderstack/analytics";
+import { recordInteractionEvent } from "@wunderstack/analytics";
 import { resolveInstanceByFundAgent, retrievalScope } from "@wunderstack/db";
-import { env } from "@wunderstack/shared";
+import { env, errored } from "@wunderstack/shared";
 import { getTenantId } from "@wunderstack/tenant";
 import { z } from "zod";
 
@@ -124,11 +124,6 @@ function buildServer(): McpServer {
           );
           const output = toAskCaoOutput(result);
 
-          const outcome: InteractionOutcome = result.needsClarification
-            ? "clarified"
-            : result.found
-              ? "answered"
-              : "refused";
           try {
             await recordInteractionEvent({
               tenantId,
@@ -137,8 +132,10 @@ function buildServer(): McpServer {
               sessionId,
               channel: "mcp",
               ...(result.traceId === null ? {} : { traceId: result.traceId }),
-              outcome,
+              turnOutcome: result.turnOutcome,
               citationCount: result.citations.length,
+              retrievedCount: result.retrievedCount,
+              topScore: result.topScore,
               question: input.question,
             });
           } catch (error) {
@@ -155,8 +152,10 @@ function buildServer(): McpServer {
               fund: scope.fund,
               sessionId,
               channel: "mcp",
-              outcome: "error",
+              turnOutcome: errored("provider_error"),
               citationCount: 0,
+              retrievedCount: 0,
+              topScore: null,
               question: input.question,
             });
           } catch (recordError) {
@@ -206,11 +205,6 @@ function buildServer(): McpServer {
             },
           );
           const output = toAskArboOutput(result);
-          const outcome: InteractionOutcome = result.needsClarification
-            ? "clarified"
-            : result.found
-              ? "answered"
-              : "refused";
           try {
             await recordInteractionEvent({
               tenantId,
@@ -219,8 +213,10 @@ function buildServer(): McpServer {
               sessionId,
               channel: "mcp",
               ...(result.traceId === null ? {} : { traceId: result.traceId }),
-              outcome,
+              turnOutcome: result.turnOutcome,
               citationCount: result.citations.length,
+              retrievedCount: result.retrievedCount,
+              topScore: result.topScore,
               question: input.question,
             });
           } catch (error) {
@@ -236,8 +232,10 @@ function buildServer(): McpServer {
               fund: scope.fund,
               sessionId,
               channel: "mcp",
-              outcome: "error",
+              turnOutcome: errored("provider_error"),
               citationCount: 0,
+              retrievedCount: 0,
+              topScore: null,
               question: input.question,
             });
           } catch (recordError) {

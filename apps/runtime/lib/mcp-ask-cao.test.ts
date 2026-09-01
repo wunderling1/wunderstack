@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import type { AgentAnswer } from "@wunderstack/agents";
+import { answeredGrounded } from "@wunderstack/shared";
 
 import {
   ASK_CAO_ERROR_MESSAGE,
@@ -17,6 +18,9 @@ function sampleAnswer(overrides: Partial<AgentAnswer> = {}): AgentAnswer {
     answer: "Je hebt recht op 25 vakantiedagen per jaar [1].",
     found: true,
     needsClarification: false,
+    turnOutcome: answeredGrounded(),
+    retrievedCount: 3,
+    topScore: 0.72,
     citations: [
       {
         ref: 1,

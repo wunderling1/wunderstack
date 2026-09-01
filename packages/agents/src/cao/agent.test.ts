@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { answeredGrounded, clarifiedOutcome, refused } from "@wunderstack/shared";
 import type { RetrievedChunk } from "@wunderstack/rag";
 
 import type { AgentStreamEvent, AgentUsage } from "../types.js";
@@ -23,7 +24,7 @@ function retrievalWithGrounding(grounding: string): RetrievalOutput {
   return {
     context: "",
     citations: [],
-    hits: [],
+    hits: [{ chunkId: "c1", ordinal: 0, score: 0.55, title: "CAO" }],
     timings: { rewriteMs: 0, embedMs: 0, searchMs: 0, rerankMs: 0, totalMs: 0 },
     chunks: [],
     fullChunkContent: [["c1", grounding]],
@@ -44,7 +45,7 @@ function retrievalWithChunk(chunkId: string, content: string): RetrievalOutput {
   return {
     context: "",
     citations: [],
-    hits: [],
+    hits: [{ chunkId, ordinal: 0, score: 1, title: "CAO" }],
     timings: { rewriteMs: 0, embedMs: 0, searchMs: 0, rerankMs: 0, totalMs: 0 },
     chunks: [chunk],
     fullChunkContent: [[chunkId, content]],
@@ -54,6 +55,35 @@ function retrievalWithChunk(chunkId: string, content: string): RetrievalOutput {
 /** Build raw model output: prose (+markers) followed by the sentinel-delimited citation JSON. */
 function raw(prose: string, citations: { marker: number; chunk_id: string; quote: string }[]): string {
   return `${prose}\n${CITATIONS_SENTINEL}\n${JSON.stringify(citations)}`;
+}
+
+function settledFromVerify(
+  built: ReturnType<typeof verifyAndBuild>,
+  retrieval: RetrievalOutput,
+): {
+  answer: string;
+  citations: typeof built.citations;
+  found: boolean;
+  turnOutcome: typeof built.turnOutcome;
+  retrievedCount: number;
+  topScore: number | null;
+  verificationFailed: boolean;
+  hardFactGuardTriggered: boolean;
+  unverifiable: boolean;
+  usage: AgentUsage;
+} {
+  const topScore = retrieval.hits.reduce<number | null>((max, hit) => {
+    if (max === null || hit.score > max) {
+      return hit.score;
+    }
+    return max;
+  }, null);
+  return {
+    ...built,
+    retrievedCount: retrieval.hits.length,
+    topScore,
+    usage: ZERO_USAGE,
+  };
 }
 
 describe("verifyAndBuild — G4 hard-fact guard", () => {
@@ -66,6 +96,7 @@ describe("verifyAndBuild — G4 hard-fact guard", () => {
     const result = verifyAndBuild(output, retrieval, "");
     assert.equal(result.hardFactGuardTriggered, false);
     assert.equal(result.found, true);
+    assert.deepEqual(result.turnOutcome, answeredGrounded());
     assert.ok(result.answer.includes("190 uur"));
   });
 
@@ -74,6 +105,7 @@ describe("verifyAndBuild — G4 hard-fact guard", () => {
     const result = verifyAndBuild("Bij deeltijd is dat 120 uur.", retrieval, "");
     assert.equal(result.hardFactGuardTriggered, true);
     assert.equal(result.answer, NOT_FOUND_MESSAGE);
+    assert.deepEqual(result.turnOutcome, refused("guard_hard_fact"));
     assert.ok(!result.answer.includes("120 uur"), "the ungrounded number is gone");
   });
 
@@ -95,6 +127,7 @@ describe("verifyAndBuild — G4 hard-fact guard", () => {
     );
     assert.equal(result.hardFactGuardTriggered, true);
     assert.equal(result.answer, NOT_FOUND_MESSAGE);
+    assert.deepEqual(result.turnOutcome, refused("guard_hard_fact"));
     assert.ok(!result.answer.includes("60 uur"), "the fabricated pro-rata total is gone");
   });
 
@@ -108,7 +141,7 @@ describe("verifyAndBuild — G4 hard-fact guard", () => {
 /**
  * G4 citation-coupling guard: a substantive answer with zero verified citations is a FORBIDDEN state —
  * `found=true` + `citations=[]` no longer ships. This is the invariant the screenshot bug violated: a
- * grounded, confident number served without a single source card. The guard converts it to an honest,
+ * grounded, confident number served without a single source card. The guard converts it to an honest
  * recoverable over-refusal (UNVERIFIABLE_MESSAGE, not NOT_FOUND — retrieval DID find context).
  */
 describe("verifyAndBuild — G4 citation coupling", () => {
@@ -125,17 +158,18 @@ describe("verifyAndBuild — G4 citation coupling", () => {
     assert.equal(result.unverifiable, true);
     assert.equal(result.found, false);
     assert.equal(result.answer, UNVERIFIABLE_MESSAGE);
+    assert.deepEqual(result.turnOutcome, refused("guard_citation_coupling"));
     assert.deepEqual(result.citations, []);
     assert.ok(!result.answer.includes("15,2"), "the sourceless number is not served");
   });
 
   it("also refuses when the answer has no marker but asserts a hard fact with no verified citation", () => {
     const retrieval = retrievalWithGrounding(grounding);
-    // No [n] in prose and an empty citation block: still substantive (carries "15,2 uur"), so refused.
     const result = verifyAndBuild("Je krijgt 15,2 uur extra vakantie.", retrieval, "");
     assert.equal(result.unverifiable, true);
     assert.equal(result.found, false);
     assert.equal(result.answer, UNVERIFIABLE_MESSAGE);
+    assert.deepEqual(result.turnOutcome, refused("guard_citation_coupling"));
   });
 
   it("serves a grounded answer whose quote verifies verbatim, with the citation card", () => {
@@ -147,9 +181,20 @@ describe("verifyAndBuild — G4 citation coupling", () => {
     const result = verifyAndBuild(output, retrieval, "");
     assert.equal(result.found, true);
     assert.equal(result.unverifiable, false);
+    assert.deepEqual(result.turnOutcome, answeredGrounded());
     assert.equal(result.citations.length, 1);
     assert.ok(result.answer.includes("15,2 uur"));
     assert.ok(result.answer.includes("[1]"));
+  });
+
+  it("classifies a claimless model refusal as no_coverage, not answered", () => {
+    const retrieval = retrievalWithGrounding(grounding);
+    const result = verifyAndBuild(NOT_FOUND_MESSAGE, retrieval, "");
+    assert.equal(result.unverifiable, false);
+    assert.equal(result.answer, NOT_FOUND_MESSAGE);
+    assert.equal(result.found, true);
+    assert.deepEqual(result.turnOutcome, refused("no_coverage"));
+    assert.notEqual(result.turnOutcome.outcome, "answered");
   });
 
   it("does not serve leaked chunk_id in the running text", () => {
@@ -161,32 +206,29 @@ describe("verifyAndBuild — G4 citation coupling", () => {
     const output = raw(prose, [{ marker: 1, chunk_id: chunkId, quote: "Zet de (elektronische)parkeerrem vast" }]);
     const result = verifyAndBuild(output, retrieval, "");
     assert.equal(result.found, true);
+    assert.deepEqual(result.turnOutcome, answeredGrounded());
     assert.equal(result.answer.includes("chunk_id"), false, "protocol id must not reach the user");
     assert.equal(result.answer.includes(chunkId), false);
     assert.ok(result.answer.includes("[1]"));
     assert.equal(result.citations.length, 1);
     assert.equal(result.citations[0]?.chunkId, chunkId, "the citation card still carries the id");
   });
-
-  it("does not convert a legitimate model refusal (no fact, no marker) into UNVERIFIABLE", () => {
-    const retrieval = retrievalWithGrounding(grounding);
-    const result = verifyAndBuild(NOT_FOUND_MESSAGE, retrieval, "");
-    assert.equal(result.unverifiable, false);
-    assert.equal(result.answer, NOT_FOUND_MESSAGE);
-  });
 });
 
 describe("settledAnswerEvents — no ungrounded hard fact can be streamed", () => {
   it("emits exactly one text event, then citations, then done", () => {
-    const result = {
-      answer: "Je hebt recht op 190 uur.",
-      citations: [],
-      found: true,
-      verificationFailed: false,
-      hardFactGuardTriggered: false,
-      unverifiable: false,
-      usage: ZERO_USAGE,
-    };
+    const result = settledFromVerify(
+      {
+        answer: "Je hebt recht op 190 uur.",
+        citations: [],
+        found: true,
+        turnOutcome: answeredGrounded(),
+        verificationFailed: false,
+        hardFactGuardTriggered: false,
+        unverifiable: false,
+      },
+      retrievalWithGrounding(""),
+    );
     const events: AgentStreamEvent[] = [...settledAnswerEvents(result, "trace-1")];
     assert.deepEqual(
       events.map((event) => event.type),
@@ -196,12 +238,13 @@ describe("settledAnswerEvents — no ungrounded hard fact can be streamed", () =
     assert.ok(citations?.type === "citations");
     assert.equal(citations.answer, result.answer);
     assert.equal(citations.found, true);
+    assert.deepEqual(citations.turnOutcome, answeredGrounded());
   });
 
   it("streams only the not-found message when the guard tripped — never the ungrounded number", () => {
     const retrieval = retrievalWithGrounding("Een fulltimer heeft recht op 190 uur vakantie per jaar.");
     const built = verifyAndBuild("Bij deeltijd is dat 120 uur.", retrieval, "");
-    const events: AgentStreamEvent[] = [...settledAnswerEvents({ ...built, usage: ZERO_USAGE }, null)];
+    const events: AgentStreamEvent[] = [...settledAnswerEvents(settledFromVerify(built, retrieval), null)];
 
     assert.ok(!JSON.stringify(events).includes("120 uur"), "the ungrounded number never reaches the stream");
     const textEvents = events.filter((event) => event.type === "text");
@@ -209,6 +252,7 @@ describe("settledAnswerEvents — no ungrounded hard fact can be streamed", () =
     assert.ok(textEvents[0]?.type === "text" && textEvents[0].delta === NOT_FOUND_MESSAGE);
     const citations = events.find((event) => event.type === "citations");
     assert.ok(citations?.type === "citations" && citations.found === false);
+    assert.deepEqual(citations.turnOutcome, refused("guard_hard_fact"));
   });
 
   it("omits the text event for an empty answer", () => {
@@ -218,6 +262,9 @@ describe("settledAnswerEvents — no ungrounded hard fact can be streamed", () =
           answer: "",
           citations: [],
           found: true,
+          turnOutcome: answeredGrounded(),
+          retrievedCount: 0,
+          topScore: null,
           verificationFailed: false,
           hardFactGuardTriggered: false,
           unverifiable: false,
@@ -240,6 +287,9 @@ describe("settledAnswerBody — prefix for optional followups before done", () =
         answer: "Je hebt recht op 190 uur.",
         citations: [],
         found: true,
+        turnOutcome: answeredGrounded(),
+        retrievedCount: 1,
+        topScore: 0.6,
         verificationFailed: false,
         hardFactGuardTriggered: false,
         unverifiable: false,

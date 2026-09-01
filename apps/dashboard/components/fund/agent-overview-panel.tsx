@@ -1,60 +1,73 @@
-import { getAgentOverview } from "@wunderstack/analytics";
 import {
-  Chip,
-  KpiTile,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@wunderstack/ui";
+  deriveAgentStatus,
+  getOutcomeBreakdown,
+  getRecentInteractions,
+  type OutcomeBreakdown,
+} from "@wunderstack/analytics";
+import { AgentStatusBadge, Chip, KpiTile, Table, TableBody, TableCell, TableRow } from "@wunderstack/ui";
+import Link from "next/link";
 import type { ReactNode } from "react";
+import { agentShowsQualityColumns } from "@/lib/agent-profile";
+import { formatCount, formatRate, totalTurns } from "@/lib/overview";
 import { getReleaseManifest } from "@/lib/release-manifest";
 import { sinceDaysAgo } from "@/lib/window";
 
 const WINDOW_DAYS = 30;
 const dateTime = new Intl.DateTimeFormat("nl-NL", { dateStyle: "short", timeStyle: "short" });
-const pct = (ratio: number) => `${Math.round(ratio * 100)}%`;
-const num = (value: number) => value.toLocaleString("nl-NL");
 const nnb = (value: string | null) => value ?? "n.n.b.";
 
-/** Agent KPI + stub release overview. Shared by admin and fund faces; this surface is read-only. */
+/** Agent KPI surface from PR-2. No second conversation list (PR-4). */
 export async function AgentOverviewPanel({
   fundKey,
   agentKey,
+  gesprekkenHref,
 }: {
   fundKey: string;
   agentKey: string;
+  gesprekkenHref: string;
 }) {
-  const { summary, log } = await getAgentOverview(
-    { fundKey, agentId: agentKey, since: sinceDaysAgo(WINDOW_DAYS) },
-    25,
-  );
+  const since = sinceDaysAgo(WINDOW_DAYS);
+  const window = { fundKey, agentId: agentKey, since };
+  const [breakdown, recent] = await Promise.all([
+    getOutcomeBreakdown(window),
+    getRecentInteractions(window, 1),
+  ]);
   const manifest = getReleaseManifest(agentKey);
+  const total = totalTurns(breakdown.byOutcome);
+  const status = deriveAgentStatus(total, breakdown.byOutcome.error);
+  const lastAt = recent[0]?.occurredAt ?? null;
+  const quality = agentShowsQualityColumns(agentKey);
 
   return (
     <div className="flex flex-col gap-10">
       <section>
-        <SectionTitle>Laatste {WINDOW_DAYS} dagen</SectionTitle>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <KpiTile label="Vragen" value={num(summary.total)} />
-          <KpiTile
-            label="Beantwoord met geverifieerde citaties"
-            value={pct(summary.answeredWithCitationsRate)}
-            hint="v1-maat: alleen geverifieerde citaties"
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <SectionTitle>Laatste {WINDOW_DAYS} dagen</SectionTitle>
+          <AgentStatusBadge
+            status={status}
+            label={status === "offline" ? "Nog niet live" : undefined}
           />
-          <KpiTile label="Verduidelijking gevraagd" value={num(summary.clarified)} />
-          <KpiTile label="Onbeantwoord (geweigerd)" value={num(summary.refused)} />
         </div>
+        <OutcomeTiles breakdown={breakdown} quality={quality} />
       </section>
 
       <section>
-        <SectionTitle>Release-manifest</SectionTitle>
+        <SectionTitle>Laatste activiteit</SectionTitle>
+        <p className="text-sm text-text">
+          {lastAt ? dateTime.format(lastAt) : "Nog geen activiteit in deze periode."}
+        </p>
+        <p className="mt-2 text-sm">
+          <Link href={gesprekkenHref} className="text-primary hover:underline">
+            Alle gesprekken van deze agent
+          </Link>
+        </p>
+      </section>
+
+      <section>
+        <SectionTitle>Release</SectionTitle>
         {manifest.stub ? (
           <p className="mb-3 text-sm text-text-muted">
-            Release-tag en gate-status komen uit het release-manifest. Tot die bron beschikbaar is:
-            n.n.b.
+            Release-tag komt uit het release-manifest. Tot die bron beschikbaar is: n.n.b.
           </p>
         ) : null}
         <Table>
@@ -71,42 +84,43 @@ export async function AgentOverviewPanel({
           </TableBody>
         </Table>
       </section>
+    </div>
+  );
+}
 
-      <section>
-        <SectionTitle>Recente interacties</SectionTitle>
-        {log.length === 0 ? (
-          <p className="text-sm text-text-subtle">Nog geen interacties voor deze agent.</p>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Tijdstip</TableHead>
-                <TableHead>Vraag</TableHead>
-                <TableHead>Uitkomst</TableHead>
-                <TableHead>Citaties</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {log.map((row, index) => (
-                <TableRow key={`${row.occurredAt.toISOString()}-${index}`}>
-                  <TableCell className="whitespace-nowrap text-text-muted">
-                    {dateTime.format(row.occurredAt)}
-                  </TableCell>
-                  <TableCell>{row.question ?? "—"}</TableCell>
-                  <TableCell>{row.outcome}</TableCell>
-                  <TableCell>{num(row.citationCount)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </section>
+function OutcomeTiles({
+  breakdown,
+  quality,
+}: {
+  breakdown: OutcomeBreakdown;
+  quality: boolean;
+}) {
+  const total = totalTurns(breakdown.byOutcome);
+  if (!quality) {
+    return (
+      <div className="flex flex-col gap-3">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+          <KpiTile label="Sessies / turns" value={formatCount(total)} />
+        </div>
+        <p className="text-sm text-text-muted">
+          Deze agent oefent; er is geen citatie- of weigermetriek.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <KpiTile label="Turns" value={formatCount(total)} />
+      <KpiTile label="Beantwoord" value={formatRate(breakdown.rates.answered)} />
+      <KpiTile label="Geweigerd" value={formatRate(breakdown.rates.refused)} />
+      <KpiTile label="Verduidelijkt" value={formatRate(breakdown.rates.clarified)} />
     </div>
   );
 }
 
 function SectionTitle({ children }: { children: ReactNode }) {
-  return <h3 className="mb-3 text-sm font-semibold text-text">{children}</h3>;
+  return <h3 className="text-sm font-semibold text-text">{children}</h3>;
 }
 
 function ManifestRow({ label, value }: { label: string; value: ReactNode }) {

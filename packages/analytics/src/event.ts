@@ -1,3 +1,4 @@
+import { writableTurnOutcomeSchema } from "@wunderstack/shared";
 import { agentChannelSchema } from "@wunderstack/shared";
 import { z } from "zod";
 
@@ -6,11 +7,6 @@ import { z } from "zod";
  * read by the dashboard. Zod-validated at the boundary (300-typescript): the schema is the single
  * source of truth and the DB row shape is derived from it.
  */
-
-/** The outcome of a turn. Drives the dashboard's answered/refused/clarified KPIs. */
-export const interactionOutcomes = ["answered", "refused", "clarified", "error"] as const;
-
-export type InteractionOutcome = (typeof interactionOutcomes)[number];
 
 export const interactionEventInputSchema = z.object({
   /** Instance/deployment identity (D15 technical key). */
@@ -25,8 +21,12 @@ export const interactionEventInputSchema = z.object({
   userId: z.string().min(1).nullish(),
   /** Langfuse trace id, links the durable event to per-trace debugging + later feedback. */
   traceId: z.string().min(1).nullish(),
-  outcome: z.enum(interactionOutcomes),
+  /** Classified at the pipeline decision point — required on every write path. */
+  turnOutcome: writableTurnOutcomeSchema,
   citationCount: z.number().int().nonnegative().default(0),
+  /** Raw retrieval signals — strength label is derived in analytics, not persisted. */
+  retrievedCount: z.number().int().nonnegative(),
+  topScore: z.number().min(0).max(1).nullable(),
   /** Potentially-sensitive query text; logged for the corpus-roadmap signal (90-day retention). */
   question: z.string().min(1).max(4000).nullish(),
   /** Coarse theme metadata; null until a classifier exists (deferred). */

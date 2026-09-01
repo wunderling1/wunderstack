@@ -8,6 +8,7 @@ import { createFundUser } from "./dashboard-users.js";
 import {
   FUND_MIGRATION_PROVISION,
   FUND_MIGRATION_ROLEPLAY,
+  FUND_MIGRATION_TURN_OUTCOME,
   provisionDdl,
   recordMigrationSql,
   revokePublicFundSchemaSql,
@@ -76,6 +77,7 @@ export function buildFundEnvironmentStatements(input: {
   // rediscover work that is already done.
   statements.push(recordMigrationSql(input.schemaName, FUND_MIGRATION_PROVISION));
   statements.push(recordMigrationSql(input.schemaName, FUND_MIGRATION_ROLEPLAY));
+  statements.push(recordMigrationSql(input.schemaName, FUND_MIGRATION_TURN_OUTCOME));
   return statements;
 }
 

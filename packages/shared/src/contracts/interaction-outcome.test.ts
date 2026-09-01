@@ -2,66 +2,71 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
-  classifySettledRunOutcome,
-  classifyThrownRunOutcome,
-  interactionOutcomeSchema,
+  answeredGrounded,
+  clarifiedOutcome,
+  errored,
   isQualityOutcome,
+  refused,
+  turnOutcomeSchema,
+  writableTurnOutcomeSchema,
 } from "./interaction-outcome.js";
 
-describe("classifySettledRunOutcome", () => {
-  it("tags a served answer as answered", () => {
-    assert.equal(classifySettledRunOutcome({ found: true }), "answered");
+describe("TurnOutcome helpers", () => {
+  it("builds answered/grounded", () => {
+    assert.deepEqual(answeredGrounded(), { outcome: "answered", outcomeReason: "grounded" });
   });
 
-  it("tags empty retrieval as refused, not unverifiable", () => {
-    assert.equal(classifySettledRunOutcome({ found: false }), "refused");
+  it("builds refused with each reason", () => {
+    assert.deepEqual(refused("no_coverage"), {
+      outcome: "refused",
+      outcomeReason: "no_coverage",
+    });
+    assert.deepEqual(refused("guard_hard_fact"), {
+      outcome: "refused",
+      outcomeReason: "guard_hard_fact",
+    });
+    assert.deepEqual(refused("guard_citation_coupling"), {
+      outcome: "refused",
+      outcomeReason: "guard_citation_coupling",
+    });
   });
 
-  it("tags a clarifying question as clarified even when found is false", () => {
-    assert.equal(
-      classifySettledRunOutcome({ found: false, needsClarification: true }),
-      "clarified",
-    );
+  it("builds clarified/ambiguous_query", () => {
+    assert.deepEqual(clarifiedOutcome(), {
+      outcome: "clarified",
+      outcomeReason: "ambiguous_query",
+    });
   });
 
-  it("tags G4 coupling (unverifiable) separately from a corpus refusal", () => {
-    assert.equal(
-      classifySettledRunOutcome({ found: false, unverifiable: true }),
-      "unverifiable",
-    );
-  });
-
-  it("tags a hard-fact guard trip as unverifiable, not refused", () => {
-    assert.equal(
-      classifySettledRunOutcome({ found: false, hardFactGuardTriggered: true }),
-      "unverifiable",
-    );
+  it("builds error outcomes", () => {
+    assert.deepEqual(errored("timeout"), { outcome: "error", outcomeReason: "timeout" });
+    assert.deepEqual(errored("provider_error"), {
+      outcome: "error",
+      outcomeReason: "provider_error",
+    });
   });
 });
 
-describe("classifyThrownRunOutcome", () => {
-  it("maps an aborted work signal to timeout", () => {
-    assert.equal(classifyThrownRunOutcome(true), "timeout");
+describe("turnOutcomeSchema", () => {
+  it("accepts unknown with null reason (migration rows only)", () => {
+    assert.deepEqual(turnOutcomeSchema.parse({ outcome: "unknown", outcomeReason: null }), {
+      outcome: "unknown",
+      outcomeReason: null,
+    });
   });
 
-  it("maps a throw without abort to error (empty completion, provider fault)", () => {
-    assert.equal(classifyThrownRunOutcome(false), "error");
+  it("rejects unknown on the writable schema", () => {
+    const result = writableTurnOutcomeSchema.safeParse({ outcome: "unknown", outcomeReason: null });
+    assert.equal(result.success, false);
   });
 });
 
 describe("isQualityOutcome", () => {
-  it("excludes timeout and error from the v1 rate denominator", () => {
+  it("excludes error and unknown from the rate denominator", () => {
     assert.equal(isQualityOutcome("answered"), true);
     assert.equal(isQualityOutcome("refused"), true);
-    assert.equal(isQualityOutcome("unverifiable"), true);
-    assert.equal(isQualityOutcome("timeout"), false);
+    assert.equal(isQualityOutcome("clarified"), true);
     assert.equal(isQualityOutcome("error"), false);
-  });
-});
-
-describe("interactionOutcomeSchema", () => {
-  it("accepts timeout and unverifiable", () => {
-    assert.equal(interactionOutcomeSchema.parse("timeout"), "timeout");
-    assert.equal(interactionOutcomeSchema.parse("unverifiable"), "unverifiable");
+    assert.equal(isQualityOutcome("unknown"), false);
   });
 });

@@ -12,6 +12,7 @@ import { revalidatePath } from "next/cache";
 import { assertAdmin } from "@/lib/assert-admin";
 import { updateFundConfigCache } from "@/lib/config-cache";
 import { parseAgentKey, parseFundKey } from "@/lib/route-params";
+import { isExerciseAgentKey } from "@/lib/agent-profile";
 
 export type LtiConsumerFormState =
   | { ok: false; error: string }
@@ -22,18 +23,21 @@ function str(value: FormDataEntryValue | null): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function gate(formData: FormData): { fundKey: string } | { error: string } {
+function gate(formData: FormData): { fundKey: string; agentKey: string } | { error: string } {
   const fundKey = parseFundKey(str(formData.get("fundKey")));
   const agentKey = parseAgentKey(str(formData.get("agentKey")).toLowerCase());
   if (!fundKey) return { error: "Ongeldige fondssleutel." };
-  if (agentKey !== "roleplay") return { error: "LTI hoort alleen bij de rollenspelagent." };
-  return { fundKey };
+  if (!agentKey || !isExerciseAgentKey(agentKey)) {
+    return { error: "LTI hoort bij de oefenagent." };
+  }
+  return { fundKey, agentKey };
 }
 
-function revalidateLti(fundKey: string): void {
-  updateFundConfigCache(fundKey, "roleplay");
-  const base = `/admin/funds/${fundKey}/agents/roleplay`;
+function revalidateLti(fundKey: string, agentKey: string): void {
+  updateFundConfigCache(fundKey, agentKey);
+  const base = `/admin/funds/${fundKey}/agents/${agentKey}`;
   revalidatePath(`${base}/lti`);
+  revalidatePath(`${base}/publication`);
   revalidatePath(base);
 }
 
@@ -73,7 +77,7 @@ export async function createLtiConsumerAction(
       consumerSecret,
       gradePassbackEnabled: str(formData.get("gradePassbackEnabled")) === "on",
     });
-    revalidateLti(scoped.fundKey);
+    revalidateLti(scoped.fundKey, scoped.agentKey);
     return {
       ok: true,
       created: { consumerKey: created.consumer.consumerKey, consumerSecret: created.consumerSecret },
@@ -98,7 +102,7 @@ export async function deactivateLtiConsumerAction(
   if (!id) return { ok: false, error: "Ontbrekende koppeling." };
   try {
     await deactivateLti11Consumer(scoped.fundKey, id);
-    revalidateLti(scoped.fundKey);
+    revalidateLti(scoped.fundKey, scoped.agentKey);
     return { ok: true };
   } catch (error) {
     if (error instanceof Lti11ConsumerNotFoundError) {
@@ -120,7 +124,7 @@ export async function setLtiGradePassbackAction(
   if (!id) return { ok: false, error: "Ontbrekende koppeling." };
   try {
     await setLti11GradePassback(scoped.fundKey, id, str(formData.get("enabled")) === "true");
-    revalidateLti(scoped.fundKey);
+    revalidateLti(scoped.fundKey, scoped.agentKey);
     return { ok: true };
   } catch (error) {
     if (error instanceof Lti11ConsumerNotFoundError) {

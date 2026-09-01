@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { answeredGrounded } from "@wunderstack/shared";
+
 import { interactionEventInputSchema } from "./event.js";
 
 describe("interaction event contract (Fase 1)", () => {
@@ -10,11 +12,14 @@ describe("interaction event contract (Fase 1)", () => {
       agentId: "cao",
       fund: "demo",
       sessionId: "s-1",
-      outcome: "answered",
+      turnOutcome: answeredGrounded(),
+      retrievedCount: 2,
+      topScore: 0.72,
     });
     assert.equal(parsed.citationCount, 0);
     assert.equal(parsed.userId ?? null, null);
     assert.equal(parsed.traceId ?? null, null);
+    assert.equal(parsed.turnOutcome.outcome, "answered");
   });
 
   it("rejects an unknown outcome", () => {
@@ -23,7 +28,9 @@ describe("interaction event contract (Fase 1)", () => {
       agentId: "cao",
       fund: "demo",
       sessionId: "s-1",
-      outcome: "maybe",
+      turnOutcome: { outcome: "maybe", outcomeReason: "grounded" },
+      retrievedCount: 0,
+      topScore: null,
     });
     assert.equal(result.success, false);
   });
@@ -36,8 +43,10 @@ describe("interaction event contract (Fase 1)", () => {
       sessionId: "s-2",
       userId: "u-9",
       traceId: "trace-abc",
-      outcome: "answered",
+      turnOutcome: answeredGrounded(),
       citationCount: 3,
+      retrievedCount: 5,
+      topScore: 0.81,
       question: "Hoeveel vakantiedagen heb ik?",
     });
     assert.equal(parsed.citationCount, 3);
@@ -51,7 +60,9 @@ describe("interaction event contract (Fase 1)", () => {
       agentId: "cao",
       fund: "demo",
       sessionId: "s-3",
-      outcome: "answered",
+      turnOutcome: answeredGrounded(),
+      retrievedCount: 1,
+      topScore: 0.55,
       channel: "playground",
     });
     assert.equal(parsed.channel, "playground");
@@ -61,7 +72,9 @@ describe("interaction event contract (Fase 1)", () => {
       agentId: "cao",
       fund: "demo",
       sessionId: "s-3",
-      outcome: "answered",
+      turnOutcome: answeredGrounded(),
+      retrievedCount: 0,
+      topScore: null,
       channel: "widget",
     });
     assert.equal(rejected.success, false);
