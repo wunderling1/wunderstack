@@ -32,7 +32,10 @@ Three levels. No screen edits two levels. Routes stay English; UI stays Dutch.
 4. **S4** — Fund and agent tabs are route segments, not client `Tabs`.
 5. **S5** — One component set for admin and fund face; `canWrite` from `decideAccess`.
 6. **S6** — No webhook URL on the agent page until `/api/webhook` is per-instance.
-7. **S7** — Routes English (`/admin/funds`, `fundKey`); UI Dutch. Vocab: fonds, agent, sleutel.
+7. **S7** — Routes English (`/admin/funds`, `fundKey`); UI Dutch. Vocab: fonds, agent, sleutel,
+   gesprek, vraag. *(Amended 1 September 2026: `gesprek` and `vraag` added — the ladder is fixed in
+   `DECISION-dashboard-indeling.md` S22. A visible screen says vraag for one turn and gesprek for a
+   session; it never says turn, conversation, tenant, instance, or embed.)*
 8. **S8** — Status derived from activity. No column that says "live".
 
 ### KPI attribution
