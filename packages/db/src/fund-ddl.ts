@@ -19,6 +19,12 @@ export const FUND_MIGRATION_ROLEPLAY = "0002_roleplay";
 /** Turn outcome classification columns on `interaction_events` (PR-A2). */
 export const FUND_MIGRATION_TURN_OUTCOME = "0003_turn_outcome";
 
+/** Repair path: add outcome CHECK when a fund was provisioned before CREATE included it. */
+export const FUND_MIGRATION_OUTCOME_CHECK = "0004_outcome_check";
+
+export const INTERACTION_EVENTS_OUTCOME_CHECK =
+  "CHECK (outcome IN ('answered', 'refused', 'clarified', 'error', 'unknown'))";
+
 export function createSchemaSql(schemaName: string): string {
   return `CREATE SCHEMA IF NOT EXISTS ${quoteIdent(schemaName)}`;
 }
@@ -176,7 +182,8 @@ export function createEventsExplicitSql(schemaName: string): string {
   question text,
   theme text,
   channel text,
-  feedback text
+  feedback text,
+  CONSTRAINT interaction_events_outcome_check ${INTERACTION_EVENTS_OUTCOME_CHECK}
 )`;
 }
 
@@ -360,9 +367,20 @@ export function turnOutcomeAlterSql(schemaName: string): string[] {
     `ALTER TABLE ${q}.interaction_events ADD COLUMN IF NOT EXISTS outcome_reason text`,
     `ALTER TABLE ${q}.interaction_events ADD COLUMN IF NOT EXISTS retrieved_count integer NOT NULL DEFAULT 0`,
     `ALTER TABLE ${q}.interaction_events ADD COLUMN IF NOT EXISTS top_score double precision`,
+    // D3 cold-start: rewrite pre-metric rows once. The per-fund ledger prevents a second run — do not
+    // re-apply this UPDATE against rows that already carry classified outcomes.
     `UPDATE ${q}.interaction_events SET outcome = 'unknown' WHERE outcome IS NOT NULL`,
     `ALTER TABLE ${q}.interaction_events DROP CONSTRAINT IF EXISTS interaction_events_outcome_check`,
     `ALTER TABLE ${q}.interaction_events ADD CONSTRAINT interaction_events_outcome_check CHECK (outcome IN ('answered', 'refused', 'clarified', 'error', 'unknown'))`,
+  ];
+}
+
+/** Idempotent outcome CHECK for funds provisioned without it on CREATE (ledger 0004). */
+export function outcomeCheckConstraintSql(schemaName: string): string[] {
+  const q = quoteIdent(schemaName);
+  return [
+    `ALTER TABLE ${q}.interaction_events DROP CONSTRAINT IF EXISTS interaction_events_outcome_check`,
+    `ALTER TABLE ${q}.interaction_events ADD CONSTRAINT interaction_events_outcome_check ${INTERACTION_EVENTS_OUTCOME_CHECK}`,
   ];
 }
 
