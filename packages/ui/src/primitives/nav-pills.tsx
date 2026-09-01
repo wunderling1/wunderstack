@@ -53,10 +53,15 @@ export function NavPill({
   );
 }
 
-/** Class string for a nav pill — use on `Link` when the anchor must be the interactive element. */
+/**
+ * Class string for a nav pill — use on `Link` when the anchor must be the interactive element.
+ * Carries the focus ring, so a keyboard user sees where they are on every surface that uses pills
+ * (agent tabs, period picker). The offset is the sunk container the pills sit in.
+ */
 export function navPillClassName(active: boolean): string {
   return cn(
     "rounded-[var(--radius-input)] px-3 py-1.5 text-sm font-medium",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface-sunk",
     active
       ? "bg-surface text-text shadow-[var(--elevation-card)]"
       : "text-text-muted hover:text-text",
