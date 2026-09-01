@@ -32,6 +32,8 @@ export type OverviewAgentRow =
       total: number;
       status: AgentOperationalStatus;
       lastOccurredAt: Date | null;
+      /** This agent's own corpus. cao and arbo on one fund carry different versions. */
+      corpusVersion: string;
     }
   | {
       kind: "exercise";
@@ -54,7 +56,6 @@ export interface OverviewModel {
   previousTotal: number;
   onboarding: boolean;
   fundStatus: AgentOperationalStatus;
-  corpusVersion: string;
   agents: OverviewAgentRow[];
   recent: InteractionLogRow[];
 }
@@ -115,6 +116,9 @@ export async function loadOverviewModel(
         total,
         status: deriveAgentStatus(total, breakdown.byOutcome.error),
         lastOccurredAt: last[0]?.occurredAt ?? null,
+        corpusVersion: corpusVersionLabel(
+          corpus.filter((doc) => doc.agentKey === instance.agentKey).map((doc) => doc.version),
+        ),
       };
     }),
   );
@@ -137,7 +141,6 @@ export async function loadOverviewModel(
     previousTotal,
     onboarding: isOnboarding(currentTotal, previousTotal),
     fundStatus: fundStatusFromAgents(agents),
-    corpusVersion: corpusVersionLabel(corpus.map((doc) => doc.version)),
     agents,
     recent,
   };
