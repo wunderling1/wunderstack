@@ -1,9 +1,9 @@
-import { corpusFingerprint, getCorpusOverview, type CorpusDocRow } from "@wunderstack/analytics";
+import { corpusFingerprint, corpusFingerprintDisplay, getCorpusOverview, type CorpusDocRow } from "@wunderstack/analytics";
 import { Card, Chip, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@wunderstack/ui";
 import { ApproveCorpusForm } from "@/components/fund/approve-corpus-form";
 import { buildCorpusDecision, type CorpusDecision } from "@/lib/agent-profile";
 import { formatCount } from "@/lib/overview";
-import { getReleaseManifest } from "@/lib/release-manifest";
+import { getReleaseManifest, type GateStatus } from "@/lib/release-manifest";
 
 const dateTime = new Intl.DateTimeFormat("nl-NL", { dateStyle: "short", timeStyle: "short" });
 const nnb = (value: string | null) => value ?? "n.n.b.";
@@ -81,6 +81,13 @@ function SourcesCard({ docs }: { docs: CorpusDocRow[] }) {
   );
 }
 
+/** GateStatus, not a pass/fail string: a green gate must not read as a refusal (or as doubt). */
+function gateChipVariant(result: GateStatus | null): "verified" | "refusal" | "caution" {
+  if (result === "green") return "verified";
+  if (result === "red") return "refusal";
+  return "caution";
+}
+
 function GateAndApprovalCard({
   decision,
   fundKey,
@@ -93,6 +100,8 @@ function GateAndApprovalCard({
   canWrite: boolean;
 }) {
   const fingerprint = decision.fingerprint;
+  const fingerprintLabel =
+    fingerprint === null ? null : corpusFingerprintDisplay(fingerprint);
   return (
     <Card className="flex flex-col gap-4 p-5">
       <div>
@@ -105,7 +114,7 @@ function GateAndApprovalCard({
       <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
         <div>
           <dt className="text-text-muted">Corpus</dt>
-          <dd className="font-mono">{nnb(fingerprint)}</dd>
+          <dd className="font-mono">{nnb(fingerprintLabel)}</dd>
           <dd className="text-xs text-text-muted">
             {decision.documentCount === 0
               ? "geen bronnen"
@@ -115,7 +124,7 @@ function GateAndApprovalCard({
         <div>
           <dt className="text-text-muted">Uitslag</dt>
           <dd>
-            <Chip variant="refusal">{nnb(decision.gate.result)}</Chip>
+            <Chip variant={gateChipVariant(decision.gate.result)}>{nnb(decision.gate.result)}</Chip>
           </dd>
         </div>
         <div>
@@ -140,7 +149,7 @@ function GateAndApprovalCard({
       <p className="text-xs text-text-subtle">
         {decision.gate.result === null
           ? "De poort heeft dit corpus nog niet beoordeeld; goedkeuring staat hier los van."
-          : `Goedkeuring en uitslag wijzen naar hetzelfde corpus (${nnb(fingerprint)}).`}
+          : `Goedkeuring en uitslag wijzen naar hetzelfde corpus (${nnb(fingerprintLabel)}).`}
       </p>
       {fingerprint && canWrite ? (
         <ApproveCorpusForm
@@ -152,7 +161,7 @@ function GateAndApprovalCard({
         />
       ) : fingerprint && decision.approval.approved ? (
         <p className="text-sm text-state-verified-fg">
-          Goedgekeurd voor corpus <code className="font-mono">{fingerprint}</code>.
+          Goedgekeurd voor corpus <code className="font-mono">{fingerprintLabel}</code>.
         </p>
       ) : (
         <p className="text-sm text-text-muted">

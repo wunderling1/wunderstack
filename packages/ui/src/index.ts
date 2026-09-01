@@ -100,3 +100,15 @@ export {
   type AnswerProgressStep,
 } from "./trust-patterns/answer-progress.js";
 export { Composer, type ComposerProps } from "./trust-patterns/composer.js";
+
+export {
+  Activity,
+  Bot,
+  Building2,
+  ChartLine,
+  Menu,
+  MessageCircle,
+  Settings,
+  X,
+  type LucideIcon,
+} from "./icons.js";

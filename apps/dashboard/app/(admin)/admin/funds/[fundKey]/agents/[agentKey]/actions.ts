@@ -10,6 +10,7 @@ import {
 } from "@wunderstack/db";
 import { agentKeySchema, isGroundedAgentKey, tenantTextsSchema } from "@wunderstack/shared";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { assertAdmin } from "@/lib/assert-admin";
 import { updateFundConfigCache } from "@/lib/config-cache";
 import { parseFundKey } from "@/lib/route-params";
@@ -23,6 +24,36 @@ function str(value: FormDataEntryValue | null): string {
 function optionalStr(value: FormDataEntryValue | null): string | undefined {
   const text = str(value);
   return text.length > 0 ? text : undefined;
+}
+
+const corsOriginSchema = z
+  .string()
+  .refine((value) => {
+    try {
+      const url = new URL(value);
+      return (
+        (url.protocol === "http:" || url.protocol === "https:") &&
+        url.pathname === "/" &&
+        !url.search &&
+        !url.hash
+      );
+    } catch {
+      return false;
+    }
+  }, "Gebruik een volledige origin (https://host), zonder pad.");
+
+function parseCorsAllowlist(raw: string): string[] | { error: string } {
+  const origins = raw
+    .split(/[\n,]/)
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+  for (const origin of origins) {
+    const parsed = corsOriginSchema.safeParse(origin);
+    if (!parsed.success) {
+      return { error: `${origin}: gebruik een volledige origin (https://host), zonder pad.` };
+    }
+  }
+  return origins;
 }
 
 function revalidateAgent(fundKey: string, agentKey: string): void {
@@ -79,12 +110,11 @@ export async function updateCorsAction(
   if (!fundKey) return { ok: false, error: "Ongeldige fondssleutel." };
   if (!parsed.success) return { ok: false, error: "Ongeldige agent." };
   const agentKey = parsed.data;
-  const corsAllowlist = String(formData.get("corsAllowlist") ?? "")
-    .split(/[\n,]/)
-    .map((origin) => origin.trim())
-    .filter((origin) => origin.length > 0);
+  const corsRaw = String(formData.get("corsAllowlist") ?? "");
+  const corsParsed = parseCorsAllowlist(corsRaw);
+  if ("error" in corsParsed) return { ok: false, error: corsParsed.error };
   try {
-    await updateTenantConfig({ tenantId: fundKey, agentKey, corsAllowlist });
+    await updateTenantConfig({ tenantId: fundKey, agentKey, corsAllowlist: corsParsed });
     revalidateAgent(fundKey, agentKey);
     return { ok: true };
   } catch (error) {

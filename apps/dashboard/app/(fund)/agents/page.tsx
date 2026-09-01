@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { Chip, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@wunderstack/ui";
 import Link from "next/link";
 import { auth } from "@/auth";
@@ -7,10 +8,8 @@ import { agentLabel } from "@/lib/release-manifest";
 export default async function FundAgentsListPage() {
   const session = await auth();
   const tenantId = session?.user?.tenantId;
-  if (!tenantId) return null;
-
+  if (!tenantId) redirect("/login");
   const instances = await listInstancesCached(tenantId);
-
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-text-muted">

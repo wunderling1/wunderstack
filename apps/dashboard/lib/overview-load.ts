@@ -66,6 +66,8 @@ export interface OverviewModel {
   fundStatus: AgentOperationalStatus;
   /** Groups the Signalen list holds for this window — what "N kennisgaten" counts (S11a). */
   knowledgeGaps: number;
+  /** Conversation volume hit the scan cap — Activity tile counts are a floor. */
+  conversationVolumeTruncated: boolean;
   agents: OverviewAgentRow[];
   recent: InteractionLogRow[];
 }
@@ -165,6 +167,7 @@ export async function loadOverviewModel(
     onboarding: isOnboarding(currentConversations, previousConversations),
     fundStatus: fundStatusFromAgents(agents),
     knowledgeGaps,
+    conversationVolumeTruncated: volume.truncated,
     agents,
     recent,
   };

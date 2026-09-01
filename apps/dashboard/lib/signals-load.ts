@@ -1,4 +1,5 @@
 import {
+  countKnowledgeGaps,
   listSignals,
   measurementStartedAt,
   type ExerciseAdoptionRow,
@@ -13,6 +14,7 @@ export interface SignalsModel {
   agents: string[];
   measurementStartedAt: Date | null;
   knowledgeGaps: QuestionSignal[];
+  knowledgeGapsTotal: number;
   suspiciousRefusals: QuestionSignal[];
   exerciseAdoption: ExerciseAdoptionRow[];
 }
@@ -28,7 +30,7 @@ export async function loadSignalsModel(
   const filters = parseSignalsFilters(search, agents);
   const window = currentWindow(filters.period, now);
 
-  const [signals, startedAt] = await Promise.all([
+  const [signals, startedAt, knowledgeGapsTotal] = await Promise.all([
     listSignals({
       fundKey,
       since: window.since,
@@ -38,6 +40,13 @@ export async function loadSignalsModel(
       now,
     }),
     measurementStartedAt(fundKey),
+    countKnowledgeGaps({
+      fundKey,
+      since: window.since,
+      until: window.until,
+      agentId: filters.agentId,
+      now,
+    }),
   ]);
 
   return {
@@ -45,6 +54,7 @@ export async function loadSignalsModel(
     agents,
     measurementStartedAt: startedAt,
     knowledgeGaps: signals.knowledgeGaps,
+    knowledgeGapsTotal,
     suspiciousRefusals: options.includeSuspicious ? signals.suspiciousRefusals : [],
     exerciseAdoption: signals.exerciseAdoption,
   };

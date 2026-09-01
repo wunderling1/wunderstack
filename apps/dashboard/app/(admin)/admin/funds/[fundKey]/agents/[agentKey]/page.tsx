@@ -19,7 +19,7 @@ export default async function AgentOverviewPage({
     <AgentOverviewPanel
       fundKey={fundKey}
       agentKey={agentKey}
-      gesprekkenHref={`/admin/funds/${fundKey}/gesprekken?agent=${agentKey}`}
+      conversationsHref={`/admin/funds/${fundKey}/conversations?agent=${agentKey}`}
     />
   );
 }

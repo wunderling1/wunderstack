@@ -1,12 +1,12 @@
 import { ALL_FUNDS_KEY } from "./switcher-options.js";
 
-/** Sidebar segments for the fund and admin fund-console shells (PR-1). */
+/** Sidebar segments for the fund and admin fund-console shells (PR-1). Routes English (S7); labels Dutch. */
 export const FUND_NAV_ITEMS = [
   { segment: "", label: "Overzicht" },
-  { segment: "gesprekken", label: "Gesprekken" },
-  { segment: "signalen", label: "Signalen" },
+  { segment: "conversations", label: "Gesprekken" },
+  { segment: "signals", label: "Signalen" },
   { segment: "agents", label: "Agents" },
-  { segment: "instellingen", label: "Instellingen" },
+  { segment: "settings", label: "Instellingen" },
 ] as const;
 
 /** Platform-level items when the admin switcher is on "Alle fondsen". */
@@ -57,25 +57,25 @@ export function activeFundNavSegment(
 ): FundNavSegment {
   if (view === "fund") {
     if (pathname === "/" || pathname === "") return "";
-    if (pathname === "/gesprekken" || pathname.startsWith("/gesprekken/")) return "gesprekken";
-    if (pathname === "/signalen" || pathname.startsWith("/signalen/")) return "signalen";
+    if (pathname === "/conversations" || pathname.startsWith("/conversations/")) return "conversations";
+    if (pathname === "/signals" || pathname.startsWith("/signals/")) return "signals";
     if (pathname === "/agents" || pathname.startsWith("/agents/")) return "agents";
-    if (pathname === "/instellingen" || pathname.startsWith("/instellingen/")) return "instellingen";
+    if (pathname === "/settings" || pathname.startsWith("/settings/")) return "settings";
     return "";
   }
 
   const base = `/admin/funds/${fundKey}`;
   if (pathname === base || pathname === `${base}/`) return "";
-  if (pathname.startsWith(`${base}/gesprekken`)) return "gesprekken";
-  if (pathname.startsWith(`${base}/signalen`)) return "signalen";
+  if (pathname.startsWith(`${base}/conversations`)) return "conversations";
+  if (pathname.startsWith(`${base}/signals`)) return "signals";
   if (pathname.startsWith(`${base}/agents`)) return "agents";
   if (
-    pathname.startsWith(`${base}/instellingen`) ||
+    pathname.startsWith(`${base}/settings`) ||
     pathname.startsWith(`${base}/branding`) ||
     pathname.startsWith(`${base}/accounts`) ||
     pathname.startsWith(`${base}/manage`)
   ) {
-    return "instellingen";
+    return "settings";
   }
   return "";
 }
@@ -146,7 +146,7 @@ export function switchFundNavHref(
     return fundNavHref("admin", toFundKey, "agents");
   }
   if (/^\/(branding|accounts|manage)(\/|$)/.test(rest)) {
-    return fundNavHref("admin", toFundKey, "instellingen");
+    return fundNavHref("admin", toFundKey, "settings");
   }
   return `/admin/funds/${toFundKey}${rest}`;
 }

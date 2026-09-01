@@ -10,3 +10,12 @@ export function MeasurementNote({ startedAt }: { startedAt: Date | null }) {
     </p>
   );
 }
+
+/** Shown when conversation grouping hit the turn scan cap — counts are a floor, not exact. */
+export function ScanTruncationNote() {
+  return (
+    <p className="text-xs text-text-subtle">
+      De scanlimiet is bereikt — getoonde aantallen zijn een ondergrens, geen exacte telling.
+    </p>
+  );
+}

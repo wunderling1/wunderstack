@@ -122,7 +122,7 @@ export function conversationListHref(
  */
 export function conversationPermalink(listPath: string, id: string): string {
   const base = listPath.endsWith("/") ? listPath.slice(0, -1) : listPath;
-  return `${base}/${id}`;
+  return `${base}/${id}#${questionAnchorId(id)}`;
 }
 
 /** Anchor for one question inside a conversation. */

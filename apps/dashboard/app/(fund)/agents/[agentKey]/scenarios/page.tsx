@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { ROLEPLAY_SCENARIO_STATUS_LABELS, type RoleplayScenarioStatus } from "@wunderstack/shared";
 import { Chip, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@wunderstack/ui";
 import { notFound } from "next/navigation";
@@ -11,7 +12,6 @@ function statusChip(status: string) {
   const variant = status === "published" ? "verified" : status === "archived" ? "refusal" : "caution";
   return <Chip variant={variant}>{label}</Chip>;
 }
-
 export default async function FundAgentScenariosPage({
   params,
 }: {
@@ -19,14 +19,11 @@ export default async function FundAgentScenariosPage({
 }) {
   const session = await auth();
   const tenantId = session?.user?.tenantId;
-  if (!tenantId) return null;
-
+  if (!tenantId) redirect("/login");
   const { agentKey: raw } = await params;
   const agentKey = parseAgentKey(raw);
   if (!agentKey || !isExerciseAgentKey(agentKey)) notFound();
-
   const scenarios = await listScenariosCached(tenantId);
-
   return (
     <div className="flex flex-col gap-4">
       <div>

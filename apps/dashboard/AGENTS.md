@@ -32,6 +32,10 @@ Laagindeling (welk gegeven waar): `docs/decisions/DECISION-dashboard-ia.md`.
 - **Auth = Auth.js (NextAuth v5), Credentials + eigen `users`-tabel.** Rollen `admin` | `fund`;
   fund-users zijn tenant-scoped (D15). `mustChangePassword` forceert `/password` via `decideAccess`.
   Zie `docs/decisions/DECISION-dashboard-auth.md`.
+- **Middleware zet alleen `x-pathname`** op requests (voor page-widgets zoals `PeriodPicker`).
+  Auth loopt via `decideAccess` in de `(fund)` en `(admin)` layouts — niet in middleware.
+  De actieve sidebar/tab komt uit `usePathname()` in de client-chrome: layouts blijven bij
+  client-navigatie staan, dus een `x-pathname` in de layout bevriest tot een refresh.
 - **UI uit `@wunderstack/ui`.** Trust-patterns + primitives. Alleen semantische tokens; geen
   agent-/model-scores in de fund-view. Gedeelde panelen: `components/fund/`.
 - **Eerlijke metriek.** Beantwoordingsgraad is `answered / (answered + refused + clarified)` (D7).
@@ -57,13 +61,13 @@ Bron: `docs/decisions/DECISION-dashboard-indeling.md` (S9–S21) en
 
 ## PR-4 — Gesprekken
 
-Fondsbrede lijst op `/gesprekken` en `/admin/funds/[key]/gesprekken`. Filters (agent, uitkomst, reden, periode) staan in de URL. Kaartvorm volgt het profieltype (`kind: grounded | exercise`), niet een `switch` op agentsleutel.
+Fondsbrede lijst op `/conversations` en `/admin/funds/[key]/conversations`. Filters (agent, uitkomst, reden, periode) staan in de URL. Kaartvorm volgt het profieltype (`kind: grounded | exercise`), niet een `switch` op agentsleutel.
 
-Het event-log heeft **geen antwoordtekst en geen citatiepayload** (D9: geen nieuwe kolommen). De grounded-kaart toont vraag, uitkomst, reden, citatietelling en permalink; het antwoordveld is bewust leeg i.p.v. verzonnen. Permalink: `/gesprekken/[uuid]` (event- of oefensessie-id), onafhankelijk van periodefilter en sessiecookie.
+Het event-log heeft **geen antwoordtekst en geen citatiepayload** (D9: geen nieuwe kolommen). De grounded-kaart toont vraag, uitkomst, reden, citatietelling en permalink; het antwoordveld is bewust leeg i.p.v. verzonnen. Permalink: `/conversations/[uuid]` (event- of oefensessie-id), onafhankelijk van periodefilter en sessiecookie.
 
 ## PR-6 — Signalen
 
-`/signalen` en `/admin/funds/[key]/signalen`. Drie blokken:
+`/signals` en `/admin/funds/[key]/signals`. Drie blokken:
 
 - **Kennisgaten:** `refused` + retrieval strength `none`, gegroepeerd op letterlijke vraag, gesorteerd op frequentie × recentheid.
 - **Verdachte weigeringen:** dezelfde groepering voor `refused` + strength `strong`. Alleen op het admin-gezicht (werk voor ons).
@@ -87,3 +91,11 @@ knop); de dump-POST geeft 403.
 de root `.env`. User aanmaken:
 `pnpm --filter dashboard create-user --email=... --password=... --role=admin`
 (of `--role=fund --tenant=<id>`). Dan `pnpm --filter dashboard dev` (poort 3002).
+
+## Nav prefetch en force-dynamic
+
+KPI- en console-pagina's exporteren `dynamic = "force-dynamic"`. `next.config.mjs` zet
+`experimental.staleTimes.dynamic` op `0`, dus elke prefetch triggert een server-render. Een
+`<Link prefetch={true}>` naar de **huidige** route prefetcht opnieuw na elke render en levert een
+reload-loop. Gebruik `prefetch={!selected}` op nav-pills en sidebar-links, en `prefetch={false}` op
+period-picker-links die dezelfde pagina met andere query-params openen.

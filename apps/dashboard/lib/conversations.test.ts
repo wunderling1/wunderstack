@@ -22,8 +22,8 @@ test("filters live in the URL: parse + href round-trip", () => {
     reason: "no_coverage",
   });
   assert.equal(
-    conversationListHref("/gesprekken", filters),
-    "/gesprekken?period=7d&agent=cao&outcome=refused&reason=no_coverage",
+    conversationListHref("/conversations", filters),
+    "/conversations?period=7d&agent=cao&outcome=refused&reason=no_coverage",
   );
 });
 
@@ -46,10 +46,10 @@ test("unknown agent or outcome is dropped, not stored as client state", () => {
 
 test("permalink is id-only and survives another session's filters", () => {
   const id = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
-  assert.equal(conversationPermalink("/gesprekken", id), `/gesprekken/${id}`);
+  assert.equal(conversationPermalink("/conversations", id), `/conversations/${id}#v-${id}`);
   assert.equal(
-    conversationPermalink("/admin/funds/oomt/gesprekken/", id),
-    `/admin/funds/oomt/gesprekken/${id}`,
+    conversationPermalink("/admin/funds/oomt/conversations/", id),
+    `/admin/funds/oomt/conversations/${id}#v-${id}`,
   );
   const extras = conversationFilterExtras({
     period: "7d",
@@ -58,8 +58,8 @@ test("permalink is id-only and survives another session's filters", () => {
     reason: "no_coverage",
   });
   assert.equal(extras.agent, "cao");
-  assert.equal(conversationPermalink("/gesprekken", id).includes("period"), false);
-  assert.equal(conversationPermalink("/gesprekken", id).includes("agent"), false);
+  assert.equal(conversationPermalink("/conversations", id).includes("period"), false);
+  assert.equal(conversationPermalink("/conversations", id).includes("agent"), false);
 });
 
 test("parseConversationId accepts a shareable uuid and rejects junk", () => {

@@ -17,6 +17,9 @@ S1–S8 blijven gelden. `/admin/embed` verdwijnt (S2). KPI-scope blijft het fond
 
 ## Besluiten S9–S22
 
+**S7-correctie (1 september 2026):** App Router-segmenten zijn Engels (`/conversations`, `/signals`,
+`/settings`); UI-labels blijven Nederlands. Oude Nederlandse URL's redirecten permanent (308).
+
 **S9 — Vijf sidebar-items.** Overzicht, Gesprekken, Signalen, Agents, Instellingen. Meer of
 minder is een wijziging van dit besluit. Navigatie loopt via route-segmenten; geen client-side
 `Tabs` (S4).

@@ -17,12 +17,12 @@ const dateTime = new Intl.DateTimeFormat("nl-NL", { dateStyle: "short", timeStyl
 
 export function SignalsView({
   pathname,
-  gesprekkenPath,
+  conversationsPath,
   model,
   showSuspicious,
 }: {
   pathname: string;
-  gesprekkenPath: string;
+  conversationsPath: string;
   model: SignalsModel;
   showSuspicious: boolean;
 }) {
@@ -46,7 +46,8 @@ export function SignalsView({
         description="Geweigerd zonder retrieval. De backlog van onbeantwoorde vragen."
         empty="Geen kennisgaten die de drempel halen in deze selectie."
         rows={model.knowledgeGaps}
-        gesprekkenPath={gesprekkenPath}
+        total={model.knowledgeGapsTotal}
+        conversationsPath={conversationsPath}
       />
 
       {showSuspicious ? (
@@ -55,11 +56,11 @@ export function SignalsView({
           description="Intern: geweigerd terwijl retrieval sterk was. Werk voor ons, niet voor het fonds."
           empty="Geen verdachte weigeringen die de drempel halen in deze selectie."
           rows={model.suspiciousRefusals}
-          gesprekkenPath={gesprekkenPath}
+          conversationsPath={conversationsPath}
         />
       ) : null}
 
-      <AdoptionList rows={model.exerciseAdoption} gesprekkenPath={gesprekkenPath} />
+      <AdoptionList rows={model.exerciseAdoption} conversationsPath={conversationsPath} />
     </div>
   );
 }
@@ -104,19 +105,27 @@ function QuestionList({
   description,
   empty,
   rows,
-  gesprekkenPath,
+  total,
+  conversationsPath,
 }: {
   title: string;
   description: string;
   empty: string;
   rows: QuestionSignal[];
-  gesprekkenPath: string;
+  total?: number;
+  conversationsPath: string;
 }) {
+  const listTotal = total ?? rows.length;
   return (
     <section className="flex flex-col gap-3">
       <div>
         <h3 className="text-sm font-semibold text-text">{title}</h3>
         <p className="mt-1 text-sm text-text-muted">{description}</p>
+        {listTotal > rows.length ? (
+          <p className="mt-1 text-xs text-text-subtle">
+            Toont {formatCount(rows.length)} van {formatCount(listTotal)} groepen.
+          </p>
+        ) : null}
       </div>
       {rows.length === 0 ? (
         <p className="text-sm text-text-subtle">{empty}</p>
@@ -124,7 +133,10 @@ function QuestionList({
         <ul className="flex flex-col gap-3">
           {rows.map((row) => (
             <li key={row.latestEventId}>
-              <QuestionCard row={row} permalink={conversationPermalink(gesprekkenPath, row.latestEventId)} />
+              <QuestionCard
+                row={row}
+                permalink={conversationPermalink(conversationsPath, row.latestEventId)}
+              />
             </li>
           ))}
         </ul>
@@ -148,10 +160,10 @@ function QuestionCard({ row, permalink }: { row: QuestionSignal; permalink: stri
 
 function AdoptionList({
   rows,
-  gesprekkenPath,
+  conversationsPath,
 }: {
   rows: ExerciseAdoptionRow[];
-  gesprekkenPath: string;
+  conversationsPath: string;
 }) {
   return (
     <section className="flex flex-col gap-3">
@@ -171,7 +183,7 @@ function AdoptionList({
               <li key={row.scenarioSlug}>
                 <Card variant="flush" className="flex flex-col gap-2 p-4">
                   <Link
-                    href={conversationPermalink(gesprekkenPath, id)}
+                    href={conversationPermalink(conversationsPath, id)}
                     className="text-sm font-medium text-text hover:underline"
                   >
                     {row.scenarioSlug}

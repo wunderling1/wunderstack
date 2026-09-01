@@ -48,8 +48,8 @@ function revalidateFund(fundKey: string): void {
   updateFundConfigCache(fundKey);
   revalidatePath(`/admin/funds/${fundKey}`);
   revalidatePath(`/admin/funds/${fundKey}/agents`);
-  revalidatePath(`/admin/funds/${fundKey}/instellingen`);
-  revalidatePath("/instellingen");
+  revalidatePath(`/admin/funds/${fundKey}/settings`);
+  revalidatePath("/settings");
   revalidatePath("/admin/funds");
 }
 
