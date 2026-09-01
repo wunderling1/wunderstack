@@ -191,14 +191,21 @@ export async function getOutcomeBreakdown(window: OutcomeWindow): Promise<Outcom
 /**
  * First instant with a classified outcome reason — the live measurement start (D6).
  * Returns null when no classified rows exist yet (pre-migration or empty fund).
+ *
+ * `min(occurred_at)` goes through drizzle `sql`, not the timestamp column mapper, so
+ * postgres.js yields a string. Returning that string as `Date` made every screen that
+ * splits on outcome_reason print "meting nog niet gestart" or throw in `DateTimeFormat`.
  */
 export async function measurementStartedAt(fundKey: string): Promise<Date | null> {
   return withFundSchema(fundKey, async (db) => {
     const [row] = await db
-      .select({ startedAt: sql<Date | null>`min(${interactionEvents.occurredAt})` })
+      .select({ startedAt: sql<Date | string | null>`min(${interactionEvents.occurredAt})` })
       .from(interactionEvents)
       .where(isNotNull(interactionEvents.outcomeReason));
-    return row?.startedAt ?? null;
+    const value = row?.startedAt;
+    if (value == null) return null;
+    const started = value instanceof Date ? value : new Date(value);
+    return Number.isNaN(started.getTime()) ? null : started;
   });
 }
 
