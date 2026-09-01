@@ -49,6 +49,8 @@
   --duration-400: 400ms;
   /* Loop period — not on the enter/press scale; do not map to a Tailwind duration-* utility. */
   --duration-spin: 1000ms;
+  /* Placeholder breathing. Slower than spin: a skeleton reports waiting, not progress. */
+  --duration-pulse: 2000ms;
 
   /* Motion — easing */
   --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
