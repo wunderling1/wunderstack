@@ -6,7 +6,12 @@ import {
   retrievalScope,
   type TenantConfig,
 } from "@wunderstack/db";
-import { env, parseCaoFunds } from "@wunderstack/shared";
+import {
+  env,
+  isGroundedAgentKey,
+  parseCaoFunds,
+  type GroundedAgentKey,
+} from "@wunderstack/shared";
 
 import { resolveAgentIdFromConfig } from "./agent.js";
 import { resolveFundScope } from "./fund-scope.js";
@@ -17,8 +22,21 @@ import { resolveFundScope } from "./fund-scope.js";
  */
 
 export type RequestScopeResult =
-  | { ok: true; fund: string; agentKey: string }
+  | { ok: true; fund: string; agentKey: GroundedAgentKey }
   | { ok: false; status: 400 | 403; error: string };
+
+/**
+ * The surfaces behind this resolver (`/api/chat`, `/api/passage`, `/api/config`) answer from a corpus
+ * and record a grounded interaction event. An instance key for a non-grounded agent (roleplay) has
+ * its own surface (`lib/roleplay-scope.ts`) and its own store, so it is refused here rather than
+ * served — that keeps the agent key on an interaction event grounded by construction.
+ */
+function groundedScope(fund: string, agentKey: string): RequestScopeResult {
+  if (!isGroundedAgentKey(agentKey)) {
+    return { ok: false, status: 400, error: "unknown_agent" };
+  }
+  return { ok: true, fund, agentKey };
+}
 
 /**
  * @param unconfiguredAgentOverride Test seam. `null` forces unset (400 path). `undefined` (default)
@@ -41,7 +59,7 @@ export function resolveRequestScope(
       return allowlisted;
     }
     const scope = retrievalScope(bound.instance);
-    return { ok: true, fund: scope.fund, agentKey: scope.agentKey };
+    return groundedScope(scope.fund, scope.agentKey);
   }
 
   const fund = resolveFundScope(claimedFund, allow);
@@ -60,7 +78,7 @@ export function resolveRequestScope(
       error: "no_agent_instance",
     };
   }
-  return { ok: true, fund: fund.fund, agentKey };
+  return groundedScope(fund.fund, agentKey);
 }
 
 export async function loadCorpusVersion(fund: string, agentKey: string): Promise<string | undefined> {

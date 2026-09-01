@@ -83,12 +83,17 @@ Deze tabel stuurde PR-1 t/m PR-7. D1 en D2 zijn na de audit geamendeerd (A1, A2)
 
 ## Open eindjes die dit document laat staan
 
-1. **Oefen-turns en `interaction_events` (O-1).** Besloten na audit: oefen-turns horen daar
-   niet. Ze hebben geen uitkomst in de zin van de classificatie; ze hebben een sessieverloop.
-   Twee tabellen, twee begrippen. De schrijfweg moet stoppen met oefen-turns in
-   `interaction_events` te zetten. Filteren op agentsleutel in de leeslaag is een symptoomfix
-   en laat de dubbeltelling in elke toekomstige query terugkomen. Tot die schrijfweg er is,
-   is de huidige dubbeltelling (F-36, F-42) het zichtbare gevolg van dit gat, geen aparte bug.
+1. ~~**Oefen-turns en `interaction_events` (O-1).**~~ **Gesloten op 1 september 2026.**
+   Oefen-turns horen daar niet: ze hebben geen uitkomst in de zin van de classificatie, ze
+   hebben een sessieverloop. Twee tabellen, twee begrippen. Vastgelegd waar het telt in
+   plaats van in de leeslaag: `interactionEventInputSchema.agentId` accepteert alleen een
+   grounded agentsleutel, en `resolveRequestScope` weigert een niet-grounded instancesleutel
+   met `400 unknown_agent`. Een oefenagent kan dus geen interactie-event meer produceren, en
+   geen enkele toekomstige query hoeft hem eruit te filteren. Het Overzicht leest zijn volume
+   uit `roleplay_sessions` (`getExerciseActivity`) en toont hem sessies in plaats van een
+   uitkomstregel (S15). Wat overblijft is één historische rij in
+   `fund_oomt.interaction_events` van 27 augustus, die geen huidig codepad kan hebben
+   geschreven; zolang die er staat, telt hij dubbel in Gesprekken (F-41, F-42).
 
 2. **Corpusversie die de poort beoordeelde (S13, S14).** Goedkeuring en gate-uitslag moeten
    naar dezelfde versie verwijzen. Dat begrip — de versie die de poort heeft beoordeeld, per

@@ -1,5 +1,4 @@
 import {
-  deriveAgentStatus,
   deriveFundStatus,
   type AgentOperationalStatus,
   type OutcomeCounts,
@@ -23,10 +22,15 @@ export function isOnboarding(currentTotal: number, previousTotal: number): boole
   return currentTotal === 0 && previousTotal === 0;
 }
 
+/**
+ * The fund stands at the lowest of its agents (S12). Each row derived its own status in the
+ * vocabulary it is measured in — turns for a grounded agent, sessions for an exercise agent — so
+ * this aggregates those verdicts instead of re-deriving from turn counts an exercise agent lacks.
+ */
 export function fundStatusFromAgents(
-  agents: Array<{ total: number; errors: number }>,
+  agents: Array<{ status: AgentOperationalStatus }>,
 ): AgentOperationalStatus {
-  return deriveFundStatus(agents.map((agent) => deriveAgentStatus(agent.total, agent.errors)));
+  return deriveFundStatus(agents.map((agent) => agent.status));
 }
 
 export function corpusVersionLabel(versions: string[]): string {

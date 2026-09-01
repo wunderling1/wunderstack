@@ -1,5 +1,8 @@
-import { writableTurnOutcomeSchema } from "@wunderstack/shared";
-import { agentChannelSchema } from "@wunderstack/shared";
+import {
+  agentChannelSchema,
+  groundedAgentKeySchema,
+  writableTurnOutcomeSchema,
+} from "@wunderstack/shared";
 import { z } from "zod";
 
 /**
@@ -11,8 +14,13 @@ import { z } from "zod";
 export const interactionEventInputSchema = z.object({
   /** Instance/deployment identity (D15 technical key). */
   tenantId: z.string().min(1),
-  /** Which agent answered (e.g. "cao"). */
-  agentId: z.string().min(1),
+  /**
+   * Which grounded agent answered. Grounded keys only: an interaction event is a question, an answer
+   * and an outcome. An exercise agent has no outcome in that sense — it has a session course, and it
+   * is recorded in `roleplay_sessions`. Two concepts, two tables, so no reader has to subtract one
+   * from the other.
+   */
+  agentId: groundedAgentKeySchema,
   /** The fund (customer-domain word) whose corpus answered. */
   fund: z.string().min(1),
   /** Stable per-conversation id, shared with the Langfuse trace (one identity model). */

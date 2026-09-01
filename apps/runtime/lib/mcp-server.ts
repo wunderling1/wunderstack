@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import { recordInteractionEvent } from "@wunderstack/analytics";
 import { resolveInstanceByFundAgent, retrievalScope } from "@wunderstack/db";
-import { env, errored } from "@wunderstack/shared";
+import { env, errored, type GroundedAgentKey } from "@wunderstack/shared";
 import { getTenantId } from "@wunderstack/tenant";
 import { z } from "zod";
 
@@ -37,16 +37,17 @@ import { acquireSlot, checkDailyCap, releaseSlot } from "./rate-limit.js";
  */
 
 async function mcpRequestScope(
-  agentKey: string,
-): Promise<{ ok: true; fund: string; agentKey: string } | { ok: false; error: string }> {
+  agentKey: GroundedAgentKey,
+): Promise<{ ok: true; fund: string; agentKey: GroundedAgentKey } | { ok: false; error: string }> {
   const resolved = await resolveInstanceByFundAgent(getTenantId(), agentKey).catch(() => null);
   if (resolved) {
     const allowlisted = resolveFundScope(resolved.fundKey);
     if (!allowlisted.ok) {
       return { ok: false, error: allowlisted.error };
     }
+    // The instance was looked up by this key, so `retrievalScope` echoes it; only the fund is news.
     const scope = retrievalScope(resolved);
-    return { ok: true, fund: scope.fund, agentKey: scope.agentKey };
+    return { ok: true, fund: scope.fund, agentKey };
   }
   const fund = resolveFundScope(undefined);
   if (!fund.ok) {

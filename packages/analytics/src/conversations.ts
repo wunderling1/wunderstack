@@ -82,7 +82,7 @@ function windowParts(query: ConversationQuery) {
   return and(...parts);
 }
 
-function sessionWindowParts(query: ConversationQuery) {
+function sessionWindowParts(query: { since: Date; until?: Date }) {
   const parts = [gte(roleplaySessions.startedAt, query.since)];
   if (query.until !== undefined) {
     parts.push(lt(roleplaySessions.startedAt, query.until));
@@ -272,6 +272,39 @@ async function loadConversationList(
 /** Fund-wide conversation list: grounded turns + exercise sessions, one window. */
 export async function listConversations(query: ConversationQuery): Promise<ConversationList> {
   return withFundSchema(query.fundKey, (db) => loadConversationList(db, query));
+}
+
+export interface ExerciseActivity {
+  sessionCount: number;
+  lastStartedAt: Date | null;
+}
+
+/**
+ * What an exercise agent did in one window: sessions started, most recent start. Read from the
+ * session table only — an exercise agent has no outcome to break down, so a caller that wants its
+ * volume asks here instead of narrowing `getOutcomeBreakdown` to a key that writes no events.
+ */
+export async function getExerciseActivity(query: {
+  fundKey: string;
+  since: Date;
+  until?: Date;
+}): Promise<ExerciseActivity> {
+  return withFundSchema(query.fundKey, async (db) => {
+    const scope = sessionWindowParts(query);
+    const [countRows, lastRows] = await Promise.all([
+      db.select({ n: sql<number>`count(*)` }).from(roleplaySessions).where(scope),
+      db
+        .select({ startedAt: roleplaySessions.startedAt })
+        .from(roleplaySessions)
+        .where(scope)
+        .orderBy(desc(roleplaySessions.startedAt))
+        .limit(1),
+    ]);
+    return {
+      sessionCount: toNumber(countRows[0]?.n),
+      lastStartedAt: lastRows[0]?.startedAt ?? null,
+    };
+  });
 }
 
 async function loadConversation(

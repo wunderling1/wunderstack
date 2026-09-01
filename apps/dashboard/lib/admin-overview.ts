@@ -24,17 +24,14 @@ export function fundStatusFromInstancesAndActivity(
   instanceKeys: string[],
   activity: Array<{ agentId: string; byOutcome: OutcomeCounts }>,
 ): AgentOperationalStatus {
-  const byAgent = new Map<string, { total: number; errors: number }>();
+  const byAgent = new Map<string, AgentOperationalStatus>();
   for (const key of instanceKeys) {
-    byAgent.set(key, { total: 0, errors: 0 });
+    byAgent.set(key, deriveAgentStatus(0, 0));
   }
   for (const row of activity) {
-    byAgent.set(row.agentId, {
-      total: totalTurns(row.byOutcome),
-      errors: row.byOutcome.error,
-    });
+    byAgent.set(row.agentId, statusFromCounts(row.byOutcome));
   }
-  return fundStatusFromAgents([...byAgent.values()]);
+  return fundStatusFromAgents([...byAgent.values()].map((status) => ({ status })));
 }
 
 export function fundStatusLabel(status: AgentOperationalStatus): string {

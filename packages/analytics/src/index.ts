@@ -73,6 +73,7 @@ export { listOutcomeActivity, type OutcomeActivityRow } from "./outcome-activity
 export {
   listConversations,
   getConversation,
+  getExerciseActivity,
   breakdownCountForFilter,
   includeExerciseSessions,
   includeGroundedTurns,
@@ -84,6 +85,7 @@ export {
   type ConversationList,
   type GroundedConversation,
   type ExerciseConversation,
+  type ExerciseActivity,
 } from "./conversations.js";
 
 export {

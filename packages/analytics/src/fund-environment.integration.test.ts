@@ -8,11 +8,21 @@ import {
   funds,
   getDb,
   listActiveFunds,
+  roleplaySessions,
   sql,
   users,
+  withFundSchema,
 } from "@wunderstack/db";
 import { answeredGrounded } from "@wunderstack/shared";
-import { getAgentActivity, getCorpusOverview, getKpiSummary, listOutcomeActivity, measurementStartedAt } from "./index.js";
+import {
+  getAgentActivity,
+  getCorpusOverview,
+  getExerciseActivity,
+  getKpiSummary,
+  getOutcomeBreakdown,
+  listOutcomeActivity,
+  measurementStartedAt,
+} from "./index.js";
 import { recordInteractionEvent } from "./record.js";
 
 /**
@@ -129,6 +139,38 @@ describe("fund environment ↔ analytics seam", { skip: !ready }, () => {
     const cao = await getKpiSummary({ fundKey, agentId: "cao", since });
     const arbo = await getKpiSummary({ fundKey, agentId: "arbo", since });
     assert.equal(cao.total + arbo.total, summary.total);
+  });
+
+  it("exercise sessions are volume, never turns: two tables, two counts", async () => {
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    await withFundSchema(fundKey, (tx) =>
+      tx.insert(roleplaySessions).values([
+        {
+          scenarioSlug: "gate-proef",
+          scenarioVersion: 1,
+          scenarioSnapshot: {},
+          promptVersion: "v1",
+          maxTurns: 6,
+        },
+        {
+          scenarioSlug: "gate-proef",
+          scenarioVersion: 1,
+          scenarioSnapshot: {},
+          promptVersion: "v1",
+          maxTurns: 6,
+        },
+      ]),
+    );
+
+    const exercise = await getExerciseActivity({ fundKey, since });
+    assert.equal(exercise.sessionCount, 2);
+    assert.ok(exercise.lastStartedAt instanceof Date);
+
+    // The two sessions must not surface as answered turns anywhere in the outcome layer.
+    const summary = await getKpiSummary({ fundKey, since });
+    assert.equal(summary.total, 2);
+    const breakdown = await getOutcomeBreakdown({ fundKey, since });
+    assert.equal(breakdown.byOutcome.answered, 2);
   });
 
   it("getAgentActivity throws when control.funds has a row without a schema (why createFundEnvironment is atomic)", async () => {

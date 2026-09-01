@@ -165,12 +165,16 @@ function StatusBlock({ model, hrefs }: { model: OverviewModel; hrefs: OverviewHr
                   </Link>
                 </TableCell>
                 <TableCell className="text-sm text-text-muted">
-                  {outcomeLine(agent.breakdown.byOutcome, agent.breakdown.rates.answered)}
+                  {agent.kind === "grounded"
+                    ? outcomeLine(agent.breakdown.byOutcome, agent.breakdown.rates.answered)
+                    : sessionLine(agent.total)}
                 </TableCell>
                 <TableCell className="whitespace-nowrap text-text-muted">
                   {agent.lastOccurredAt ? dateTime.format(agent.lastOccurredAt) : "—"}
                 </TableCell>
-                <TableCell className="font-mono text-xs text-text-muted">{model.corpusVersion}</TableCell>
+                <TableCell className="font-mono text-xs text-text-muted">
+                  {agent.kind === "grounded" ? model.corpusVersion : "—"}
+                </TableCell>
                 <TableCell>
                   <AgentStatusBadge
                     status={agent.status}
@@ -248,6 +252,11 @@ function ActionsBlock({ model, hrefs }: { model: OverviewModel; hrefs: OverviewH
 
 function outcomeLine(counts: OutcomeCounts, answered: Rate): string {
   return `${formatRate(answered)} beantwoord · ${formatCount(counts.refused)} geweigerd · ${formatCount(counts.clarified)} verduidelijkt`;
+}
+
+/** An exercise agent cites nothing and refuses nothing (S15): it has a session course, not an outcome. */
+function sessionLine(sessionCount: number): string {
+  return `${formatCount(sessionCount)} oefensessies`;
 }
 
 function OutcomeChip({ outcome }: { outcome: string }) {
