@@ -169,4 +169,19 @@ body {
   .motion-spin {
     animation: motion-spin var(--motion-spin);
   }
+
+  /*
+   * Placeholder loop for skeletons. Replaces Tailwind's `animate-pulse`, which hardcodes its own
+   * duration and curve and so cannot be reached by the reduced-motion block above. Reduced motion
+   * settles on the opening keyframe: full opacity, a visible static block.
+   */
+  @keyframes motion-pulse {
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+  .motion-pulse {
+    animation: motion-pulse var(--motion-pulse);
+  }
 }

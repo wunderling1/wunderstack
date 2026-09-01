@@ -40,6 +40,8 @@
   --motion-stagger: var(--duration-100);
   /* Loop: state-bound (spins until the triggering element unmounts). Not an enter/exit duration. */
   --motion-spin: var(--duration-spin) var(--ease-linear) infinite;
+  /* Loop: skeleton placeholders, held until the real content replaces them. */
+  --motion-pulse: var(--duration-pulse) var(--ease-standard) infinite;
 
   /* Elevation — components use only these names, never raw box-shadow values. */
   --elevation-card: var(--shadow-sm);
@@ -83,9 +85,11 @@
     --duration-250: 0.01ms;
     --duration-400: 0.01ms;
     --duration-spin: 0.01ms;
+    --duration-pulse: 0.01ms;
     --motion-offset-enter: 0px;
     /* Freeze loops. Zeroing duration alone + `infinite` would hyper-spin. */
     --motion-spin: var(--duration-spin) var(--ease-linear) 1;
+    --motion-pulse: var(--duration-pulse) var(--ease-standard) 1;
   }
 
   *,
