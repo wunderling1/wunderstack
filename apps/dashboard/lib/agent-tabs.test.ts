@@ -45,30 +45,49 @@ test("exercise agent has no citation or refusal columns", () => {
   assert.doesNotMatch(overview, /Citaties/);
 });
 
-test("approval and gate verdict share the same corpus version", () => {
+test("approval and gate verdict point at the same corpus fingerprint", () => {
   const decision = buildCorpusDecision({
+    fingerprint: "a1b2c3d4e5f6",
     documentVersions: ["cao-2026.08", "cao-2026.01"],
-    pinnedReleaseTag: "cao-2026.08",
+    pinnedReleaseTag: "a1b2c3d4e5f6",
     gateResult: null,
     gateEvaluatedAt: null,
     artefactUrl: null,
   });
-  assert.equal(decision.gate.corpusVersion, decision.approval.corpusVersion);
-  assert.equal(decision.corpusVersion, "cao-2026.08");
+  assert.equal(decision.gate.fingerprint, decision.approval.fingerprint);
+  assert.equal(decision.fingerprint, "a1b2c3d4e5f6");
   assert.equal(decision.approval.approved, true);
+  assert.equal(decision.approval.expired, false);
+  // The document version stays visible, but it is not what the approval is pinned to.
+  assert.equal(decision.latestVersion, "cao-2026.08");
 });
 
-test("empty corpus keeps gate and approval on the same n.n.b. version", () => {
+test("a changed corpus expires the approval instead of staying green", () => {
   const decision = buildCorpusDecision({
+    fingerprint: "999888777666",
+    documentVersions: ["cao-2026.08", "cao-2026.01"],
+    pinnedReleaseTag: "a1b2c3d4e5f6",
+    gateResult: null,
+    gateEvaluatedAt: null,
+    artefactUrl: null,
+  });
+  assert.equal(decision.approval.approved, false);
+  assert.equal(decision.approval.expired, true);
+});
+
+test("empty corpus keeps gate and approval on the same absent fingerprint", () => {
+  const decision = buildCorpusDecision({
+    fingerprint: null,
     documentVersions: [],
     pinnedReleaseTag: null,
     gateResult: null,
     gateEvaluatedAt: null,
     artefactUrl: null,
   });
-  assert.equal(decision.gate.corpusVersion, decision.approval.corpusVersion);
-  assert.equal(decision.corpusVersion, null);
+  assert.equal(decision.gate.fingerprint, decision.approval.fingerprint);
+  assert.equal(decision.fingerprint, null);
   assert.equal(decision.approval.approved, false);
+  assert.equal(decision.approval.expired, false);
 });
 
 test("agent tab rendering does not switch on the roleplay key", () => {

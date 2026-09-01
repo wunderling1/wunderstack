@@ -14,23 +14,33 @@ export interface CorpusGateVerdict {
   result: string | null;
   evaluatedAt: Date | null;
   artefactUrl: string | null;
-  corpusVersion: string | null;
+  fingerprint: string | null;
 }
 
 export interface CorpusApproval {
-  corpusVersion: string | null;
+  fingerprint: string | null;
   pinnedReleaseTag: string | null;
   approved: boolean;
+  /** Approved once, but against a corpus that has since changed (A5). */
+  expired: boolean;
 }
 
-/** Gate verdict and fund approval share one corpusVersion — never two sources (S13/S14). */
+/**
+ * Gate verdict and fund approval point at one corpus — never two sources (S13/S14). What they
+ * point at is the fingerprint over the agent's whole document set, not one document's version
+ * (DECISION-dashboard-indeling.md, A5).
+ */
 export interface CorpusDecision {
-  corpusVersion: string | null;
+  fingerprint: string | null;
+  /** Version of the most recently ingested document. Shown as context, never as the approval key. */
+  latestVersion: string | null;
+  documentCount: number;
   gate: CorpusGateVerdict;
   approval: CorpusApproval;
 }
 
 export function buildCorpusDecision(input: {
+  fingerprint: string | null;
   documentVersions: string[];
   pinnedReleaseTag: string | null;
   gateResult: string | null;
@@ -38,19 +48,23 @@ export function buildCorpusDecision(input: {
   artefactUrl: string | null;
 }): CorpusDecision {
   const label = corpusVersionLabel(input.documentVersions);
-  const corpusVersion = label === "n.n.b." ? null : label;
+  const fingerprint = input.fingerprint;
+  const approved = fingerprint !== null && input.pinnedReleaseTag === fingerprint;
   return {
-    corpusVersion,
+    fingerprint,
+    latestVersion: label === "n.n.b." ? null : label,
+    documentCount: input.documentVersions.length,
     gate: {
       result: input.gateResult,
       evaluatedAt: input.gateEvaluatedAt,
       artefactUrl: input.artefactUrl,
-      corpusVersion,
+      fingerprint,
     },
     approval: {
-      corpusVersion,
+      fingerprint,
       pinnedReleaseTag: input.pinnedReleaseTag,
-      approved: corpusVersion !== null && input.pinnedReleaseTag === corpusVersion,
+      approved,
+      expired: !approved && input.pinnedReleaseTag !== null,
     },
   };
 }

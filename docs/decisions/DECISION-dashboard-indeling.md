@@ -147,9 +147,10 @@ als de release-manifest-track (PLAN-ui-ecosystem §7) landt en dezelfde vingeraf
 claimt de fondspagina niets over de poort en heet de losse documentversie wat hij is: de laatst
 geladen versie.
 
-*Gevolg voor bestaande data.* Gepinde waarden als `1` en `arbo-oomt-2` matchen geen vingerafdruk,
-dus die agents lezen na de bouw als niet goedgekeurd. Dat is juist: ze waren goedgekeurd op een
-willekeurige waarde. Opnieuw goedkeuren is één handeling per agent.
+*Gevolg voor bestaande data.* Geen. Gemeten op 1 september: van de 25 instances heeft er nul een
+`pinned_release_tag`, dus er verloopt geen enkele bestaande goedkeuring. Was er wel een gepind
+geweest — een waarde als `1` of `arbo-oomt-2` — dan had die na de bouw als niet goedgekeurd
+gelezen, en terecht: hij was goedgekeurd op een willekeurige waarde.
 
 ## Bewust niet in deze reeks
 
