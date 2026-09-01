@@ -12,6 +12,7 @@
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
     "depcruise": "depcruise apps packages scripts",
+    "check-root": "bash scripts/check-root.sh",
     "check-ui-boundaries": "bash scripts/check-ui-boundaries.sh",
     "check-motion": "bash scripts/check-motion.sh",
     "check-grants": "bash scripts/check-grants.sh",

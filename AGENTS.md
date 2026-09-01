@@ -37,6 +37,15 @@ tenant-zero-demo-UI) · `apps/roleplay` (leerling-UI rollenspel, HTTP-only) · `
 · `packages/db` (Drizzle) · `packages/shared`.
 Pijl-regel: apps importeren uit packages, nooit andersom (CI-afgedwongen).
 
+## Repo-indeling (CI-afgedwongen)
+De root is allowlist-only: entry-docs, tooling-config en de code-/meta-mappen, verder niets.
+`scripts/check-root.sh` faalt de build op elke andere getrackte root-entry.
+- Plannen → `docs/plans/`, audits → `docs/audit/`, besluiten → `docs/decisions/`, runbooks →
+  `docs/runbooks/`. Nooit in de root.
+- Scratch- en debug-output → `tmp/` (gitignored), nooit gecommit.
+- Hoort een bestand echt in de root? Zet het in dezelfde PR op de allowlist in
+  `scripts/check-root.sh`, met de reden in de commit.
+
 ## Bewust NIET in v1
 Temporal · LangGraph · losse agent-runtime · interne gateway · gedeelde runtime over
 fondsen (D15-collapse) · Supabase Auth/RLS · Inngest. Schema-per-fonds en een gedeeld
