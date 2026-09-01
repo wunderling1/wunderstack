@@ -5,7 +5,6 @@ import {
   BreadcrumbSeparator,
   Breadcrumbs,
 } from "@wunderstack/ui";
-import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { AgentTabNav } from "@/components/fund/agent-tab-nav";
@@ -27,10 +26,9 @@ export default async function AgentInstanceLayout({
     notFound();
   }
 
-  const [fund, instance, headerList] = await Promise.all([
+  const [fund, instance] = await Promise.all([
     getFundCached(fundKey),
     getInstanceCached(fundKey, agentKey),
-    headers(),
   ]);
   if (!fund || !instance) {
     notFound();
@@ -38,7 +36,6 @@ export default async function AgentInstanceLayout({
 
   const displayName = fund.name ?? fund.key;
   const label = agentLabel(agentKey);
-  const pathname = headerList.get("x-pathname") ?? `/admin/funds/${fund.key}/agents/${agentKey}`;
 
   return (
     <div className="flex flex-col gap-6">
@@ -62,7 +59,7 @@ export default async function AgentInstanceLayout({
         </p>
       </div>
 
-      <AgentTabNav view="admin" fundKey={fund.key} agentKey={agentKey} pathname={pathname} />
+      <AgentTabNav view="admin" fundKey={fund.key} agentKey={agentKey} />
 
       {children}
     </div>

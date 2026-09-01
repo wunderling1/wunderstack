@@ -219,12 +219,16 @@ export default async function AgentDetail({
           <p className="mt-3 text-sm text-text-muted">
             Totaal {num(total)} vragen · {pct(qualityN === 0 ? 0 : answered / qualityN)} beantwoord
             met geverifieerde citaties (timeout en fout tellen niet mee). Laatste activiteit{" "}
-            {dateTime.format(
-              agentActivity.reduce(
-                (latest, row) => (row.lastOccurredAt > latest ? row.lastOccurredAt : latest),
-                agentActivity[0].lastOccurredAt,
-              ),
-            )}
+            {(() => {
+              const timestamps = agentActivity
+                .map((row) => row.lastOccurredAt)
+                .filter((value): value is Date => value !== null);
+              return timestamps.length > 0
+                ? dateTime.format(
+                    new Date(Math.max(...timestamps.map((value) => value.getTime()))),
+                  )
+                : "—";
+            })()}
             .
           </p>
         ) : null}

@@ -1,6 +1,7 @@
 import type { ConversationItem } from "@wunderstack/analytics";
 import Link from "next/link";
 import { ConversationCard } from "@/components/fund/conversation-cards";
+import { ConversationHighlightScroll } from "@/components/fund/conversation-highlight-scroll";
 
 export function ConversationDetailView({
   item,
@@ -18,6 +19,7 @@ export function ConversationDetailView({
 }) {
   return (
     <div className="flex flex-col gap-6">
+      <ConversationHighlightScroll highlightId={highlightId} />
       <div>
         <p className="text-sm">
           <Link href={backHref} className="text-primary hover:underline">

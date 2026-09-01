@@ -18,19 +18,19 @@ test("unknown agent is dropped, period defaults to 30d", () => {
 
 test("each signal row permalinks to the conversation, independent of list filters", () => {
   const id = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
-  assert.equal(conversationPermalink("/gesprekken", id), `/gesprekken/${id}`);
+  assert.equal(conversationPermalink("/conversations", id), `/conversations/${id}#v-${id}`);
   assert.equal(
-    conversationPermalink("/admin/funds/oomt/gesprekken", id),
-    `/admin/funds/oomt/gesprekken/${id}`,
+    conversationPermalink("/admin/funds/oomt/conversations", id),
+    `/admin/funds/oomt/conversations/${id}#v-${id}`,
   );
-  assert.equal(conversationPermalink("/gesprekken", id).includes("period"), false);
-  assert.equal(conversationPermalink("/gesprekken", id).includes("agent"), false);
+  assert.equal(conversationPermalink("/conversations", id).includes("period"), false);
+  assert.equal(conversationPermalink("/conversations", id).includes("agent"), false);
 });
 
 test("Signalen UI has no generated labels and every question row links through", () => {
   const view = readFileSync(new URL("../components/fund/signals.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(view, /openai|summariz|cluster|generateTheme|themeLabel/i);
-  assert.match(view, /conversationPermalink\(gesprekkenPath, row\.latestEventId\)/);
+  assert.match(view, /conversationPermalink\(conversationsPath, row\.latestEventId\)/);
   assert.match(view, /latestAbandonedId \?\? row\.latestSessionId/);
   assert.match(view, /row\.question/);
   assert.match(view, /showSuspicious/);
@@ -38,12 +38,12 @@ test("Signalen UI has no generated labels and every question row links through",
 
 test("fund Signalen does not load suspicious refusals; admin does", () => {
   const fund = readFileSync(
-    new URL("../app/(fund)/signalen/page.tsx", import.meta.url),
+    new URL("../app/(fund)/signals/page.tsx", import.meta.url),
     "utf8",
   );
   const admin = readFileSync(
     new URL(
-      "../app/(admin)/admin/funds/[fundKey]/(fund-console)/signalen/page.tsx",
+      "../app/(admin)/admin/funds/[fundKey]/(fund-console)/signals/page.tsx",
       import.meta.url,
     ),
     "utf8",

@@ -13,6 +13,7 @@ import {
 } from "@wunderstack/db";
 
 import { mapPool } from "./map-pool.js";
+import { asDate } from "./outcome-activity.js";
 
 /**
  * KPI queries the dashboard consumes (Fase 3 reads these via the read-only `analytics_reader` role).
@@ -280,7 +281,7 @@ export interface AgentActivityRow {
   answeredWithCitations: number;
   refused: number;
   errors: number;
-  lastOccurredAt: Date;
+  lastOccurredAt: Date | null;
 }
 
 /**
@@ -333,7 +334,7 @@ export async function getAgentActivity(since: Date): Promise<AgentActivityRow[]>
       answeredWithCitations: toNumber(row.answeredWithCitations),
       refused: toNumber(row.refused),
       errors: toNumber(row.errors),
-      lastOccurredAt: new Date(row.lastOccurredAt),
+      lastOccurredAt: asDate(row.lastOccurredAt),
     }));
   });
   const all = perFund.flat();

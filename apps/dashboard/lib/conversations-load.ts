@@ -21,6 +21,7 @@ export interface ConversationsModel {
   /** Conversations holding at least one matching question, plus exercise sessions. */
   conversationTotal: number;
   breakdownCount: number | null;
+  truncated: boolean;
 }
 
 export async function loadConversationsModel(
@@ -63,5 +64,6 @@ export async function loadConversationsModel(
       outcome: filters.outcome,
       outcomeReason: filters.reason,
     }),
+    truncated: list.truncated,
   };
 }

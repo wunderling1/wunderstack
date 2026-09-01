@@ -107,7 +107,7 @@ function GroundedCard({
       {/* The conversation has a course, not an outcome: every chip sits on a question (S22). */}
       <ol className="flex flex-col gap-3">
         {shown.map((question) => (
-          <li key={question.id} id={questionAnchorId(question.id)}>
+          <li key={question.id} id={questionAnchorId(question.id)} tabIndex={-1}>
             <QuestionRow
               question={question}
               permalink={permalinkFor(question.id)}

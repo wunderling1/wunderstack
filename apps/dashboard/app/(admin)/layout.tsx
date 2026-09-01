@@ -31,9 +31,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   return (
     <DashboardChrome
       view="admin"
-      nav={chrome.nav}
       fundKey={chrome.switcherKey}
-      pathname={pathname}
       switcherOptions={switcherOptions}
       brandSubtitle="Beheer"
     >

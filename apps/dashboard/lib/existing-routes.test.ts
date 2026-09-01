@@ -66,13 +66,13 @@ test("every page in the app tree has a declared unauthenticated status", () => {
 
   // The surfaces PR-1 moved or replaced must still answer, not 404.
   for (const path of [
-    "/gesprekken",
-    "/signalen",
-    "/instellingen",
+    "/conversations",
+    "/signals",
+    "/settings",
     "/agents/cao",
     "/admin",
     "/admin/funds/oomt",
-    "/admin/funds/oomt/instellingen",
+    "/admin/funds/oomt/settings",
     "/admin/embed",
     "/admin/funds/oomt/branding",
   ]) {

@@ -1,4 +1,4 @@
-import { AGENT_KEY_LABELS } from "@wunderstack/shared";
+import { AGENT_KEY_LABELS, tenantThemeSchema, type TenantTheme } from "@wunderstack/shared";
 import {
   getFundCached,
   getLatestFundDumpCached,
@@ -6,12 +6,7 @@ import {
   listInstancesCached,
 } from "@/lib/fund-lookups";
 
-export interface SettingsTheme {
-  primary?: string;
-  accent?: string;
-  radius?: string;
-  logo?: string;
-}
+export type SettingsTheme = TenantTheme;
 
 export interface SettingsAccount {
   id: string;
@@ -47,7 +42,7 @@ export async function loadSettingsModel(fundKey: string): Promise<SettingsModel 
     getLatestFundDumpCached(fundKey),
   ]);
 
-  const theme = (fund.theme ?? {}) as SettingsTheme;
+  const theme = tenantThemeSchema.parse(fund.theme ?? {});
 
   return {
     fundKey: fund.key,

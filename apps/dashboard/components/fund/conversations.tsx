@@ -1,6 +1,7 @@
 import type { ConversationItem } from "@wunderstack/analytics";
 import { ConversationCard } from "@/components/fund/conversation-cards";
 import { ConversationFiltersForm } from "@/components/fund/conversation-filters";
+import { ScanTruncationNote } from "@/components/fund/measurement-note";
 import { conversationPermalink, type ConversationFilters } from "@/lib/conversations";
 import { formatCount } from "@/lib/overview";
 
@@ -13,6 +14,7 @@ export function ConversationsView({
   questionTotal,
   conversationTotal,
   breakdownCount,
+  truncated,
 }: {
   pathname: string;
   listPath: string;
@@ -22,8 +24,11 @@ export function ConversationsView({
   questionTotal: number;
   conversationTotal: number;
   breakdownCount: number | null;
+  truncated: boolean;
 }) {
   const permalinkFor = (id: string) => conversationPermalink(listPath, id);
+  const groundedItems = items.filter((item) => item.kind === "grounded");
+  const exerciseItems = items.filter((item) => item.kind === "exercise");
 
   return (
     <div className="flex flex-col gap-6">
@@ -56,18 +61,47 @@ export function ConversationsView({
           </p>
         ) : null}
       </div>
+      {truncated ? <ScanTruncationNote /> : null}
 
       {items.length === 0 ? (
         <p className="text-sm text-text-subtle">Geen gesprekken in deze selectie.</p>
       ) : (
-        <ul className="flex flex-col gap-3">
-          {items.map((item) => (
-            <li key={`${item.kind}-${item.id}`}>
-              <ConversationCard item={item} permalinkFor={permalinkFor} />
-            </li>
-          ))}
-        </ul>
+        <>
+          {groundedItems.length > 0 ? (
+            <ConversationSection title="Gesprekken" items={groundedItems} permalinkFor={permalinkFor} />
+          ) : null}
+          {exerciseItems.length > 0 ? (
+            <ConversationSection
+              title="Oefensessies"
+              items={exerciseItems}
+              permalinkFor={permalinkFor}
+            />
+          ) : null}
+        </>
       )}
     </div>
+  );
+}
+
+function ConversationSection({
+  title,
+  items,
+  permalinkFor,
+}: {
+  title: string;
+  items: ConversationItem[];
+  permalinkFor: (id: string) => string;
+}) {
+  return (
+    <section className="flex flex-col gap-3">
+      <h3 className="text-sm font-semibold text-text">{title}</h3>
+      <ul className="flex flex-col gap-3">
+        {items.map((item) => (
+          <li key={`${item.kind}-${item.id}`}>
+            <ConversationCard item={item} permalinkFor={permalinkFor} />
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

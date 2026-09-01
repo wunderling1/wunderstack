@@ -7,7 +7,7 @@ import { parseFundKey } from "@/lib/route-params";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminSignalenPage({
+export default async function AdminSignalsPage({
   params,
   searchParams,
 }: {
@@ -22,13 +22,13 @@ export default async function AdminSignalenPage({
   const fundKey = parseFundKey(raw);
   if (!fundKey) notFound();
 
-  const pathname = headerList.get("x-pathname") ?? `/admin/funds/${fundKey}/signalen`;
+  const pathname = headerList.get("x-pathname") ?? `/admin/funds/${fundKey}/signals`;
   const model = await loadSignalsModel(fundKey, search, { includeSuspicious: true });
 
   return (
     <SignalsView
       pathname={pathname}
-      gesprekkenPath={`/admin/funds/${fundKey}/gesprekken`}
+      conversationsPath={`/admin/funds/${fundKey}/conversations`}
       model={model}
       showSuspicious
     />

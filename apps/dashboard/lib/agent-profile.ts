@@ -1,5 +1,7 @@
+import { corpusFingerprintMatchesPinned } from "@wunderstack/analytics";
 import { isAgentKey, isGroundedAgentKey } from "@wunderstack/shared";
 import { corpusVersionLabel } from "./overview";
+import type { GateStatus } from "./release-manifest";
 
 /** Grounded agents show citation/refusal metrics; exercise agents do not (S15). */
 export function agentShowsQualityColumns(agentKey: string): boolean {
@@ -11,7 +13,7 @@ export function isExerciseAgentKey(value: string): boolean {
 }
 
 export interface CorpusGateVerdict {
-  result: string | null;
+  result: GateStatus | null;
   evaluatedAt: Date | null;
   artefactUrl: string | null;
   fingerprint: string | null;
@@ -43,13 +45,13 @@ export function buildCorpusDecision(input: {
   fingerprint: string | null;
   documentVersions: string[];
   pinnedReleaseTag: string | null;
-  gateResult: string | null;
+  gateResult: GateStatus | null;
   gateEvaluatedAt: Date | null;
   artefactUrl: string | null;
 }): CorpusDecision {
   const label = corpusVersionLabel(input.documentVersions);
   const fingerprint = input.fingerprint;
-  const approved = fingerprint !== null && input.pinnedReleaseTag === fingerprint;
+  const approved = corpusFingerprintMatchesPinned(fingerprint, input.pinnedReleaseTag);
   return {
     fingerprint,
     latestVersion: label === "n.n.b." ? null : label,

@@ -7,9 +7,9 @@ import { test } from "node:test";
 const ROOT = join(import.meta.dirname, "..");
 
 test("Instellingen is one SettingsView; fund is read-only, admin can write", () => {
-  const fund = readFileSync(join(ROOT, "app/(fund)/instellingen/page.tsx"), "utf8");
+  const fund = readFileSync(join(ROOT, "app/(fund)/settings/page.tsx"), "utf8");
   const admin = readFileSync(
-    join(ROOT, "app/(admin)/admin/funds/[fundKey]/(fund-console)/instellingen/page.tsx"),
+    join(ROOT, "app/(admin)/admin/funds/[fundKey]/(fund-console)/settings/page.tsx"),
     "utf8",
   );
   assert.match(fund, /SettingsView/);
@@ -19,7 +19,7 @@ test("Instellingen is one SettingsView; fund is read-only, admin can write", () 
   assert.doesNotMatch(admin, /canWrite=\{false\}/);
 });
 
-test("legacy branding/accounts/manage pages redirect to Instellingen", () => {
+test("legacy branding/accounts/manage pages redirect to settings", () => {
   for (const segment of ["branding", "accounts", "manage"]) {
     const source = readFileSync(
       join(
@@ -29,7 +29,7 @@ test("legacy branding/accounts/manage pages redirect to Instellingen", () => {
       "utf8",
     );
     assert.match(source, /redirect\(/);
-    assert.match(source, /\/instellingen/);
+    assert.match(source, /\/settings/);
   }
 });
 

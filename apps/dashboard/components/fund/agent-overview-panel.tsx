@@ -21,11 +21,11 @@ const nnb = (value: string | null) => value ?? "n.n.b.";
 export async function AgentOverviewPanel({
   fundKey,
   agentKey,
-  gesprekkenHref,
+  conversationsHref,
 }: {
   fundKey: string;
   agentKey: string;
-  gesprekkenHref: string;
+  conversationsHref: string;
 }) {
   const since = sinceDaysAgo(WINDOW_DAYS);
   const window = { fundKey, agentId: agentKey, since };
@@ -61,7 +61,7 @@ export async function AgentOverviewPanel({
           {lastAt ? dateTime.format(lastAt) : "Nog geen activiteit in deze periode."}
         </p>
         <p className="mt-2 text-sm">
-          <Link href={gesprekkenHref} className="text-primary hover:underline">
+          <Link href={conversationsHref} className="text-primary hover:underline">
             Alle gesprekken van deze agent
           </Link>
         </p>

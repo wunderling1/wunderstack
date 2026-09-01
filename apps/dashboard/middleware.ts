@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
-/** Expose pathname to server layouts so the chrome can mark the active nav item. */
+/** Expose pathname to server pages (PeriodPicker and other page-level widgets). */
 export function middleware(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-pathname", request.nextUrl.pathname);

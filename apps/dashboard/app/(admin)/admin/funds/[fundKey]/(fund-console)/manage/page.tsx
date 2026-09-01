@@ -9,5 +9,5 @@ export default async function ManageRedirect({
 }) {
   const { fundKey: raw } = await params;
   const fundKey = parseFundKey(raw);
-  redirect(fundKey ? `/admin/funds/${fundKey}/instellingen` : "/admin");
+  redirect(fundKey ? `/admin/funds/${fundKey}/settings` : "/admin");
 }

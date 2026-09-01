@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { isGroundedAgentKey } from "@wunderstack/shared";
 import { notFound } from "next/navigation";
 import { auth } from "@/auth";
@@ -12,15 +13,12 @@ export default async function FundAgentCorpusPage({
 }) {
   const session = await auth();
   const tenantId = session?.user?.tenantId;
-  if (!tenantId) return null;
-
+  if (!tenantId) redirect("/login");
   const { agentKey: raw } = await params;
   const agentKey = parseAgentKey(raw);
   if (!agentKey || !isGroundedAgentKey(agentKey)) notFound();
-
   const instance = await getInstanceCached(tenantId, agentKey);
   if (!instance) notFound();
-
   return (
     <AgentCorpusPanel
       fundKey={tenantId}

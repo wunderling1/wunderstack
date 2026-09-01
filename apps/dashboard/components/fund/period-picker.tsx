@@ -17,6 +17,7 @@ export function PeriodPicker({
         <Link
           key={id}
           href={periodHref(pathname, id, extras)}
+          prefetch={false}
           aria-current={id === period ? "page" : undefined}
           className={navPillClassName(id === period)}
         >

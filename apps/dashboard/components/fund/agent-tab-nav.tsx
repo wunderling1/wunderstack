@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { NavPills, navPillClassName } from "@wunderstack/ui";
 import {
   agentInstanceBase,
@@ -12,13 +15,12 @@ export function AgentTabNav({
   view,
   fundKey,
   agentKey,
-  pathname,
 }: {
   view: AgentTabView;
   fundKey: string;
   agentKey: string;
-  pathname: string;
 }) {
+  const pathname = usePathname();
   const base = agentInstanceBase(view, fundKey, agentKey);
   const tabs = agentTabs(agentKey);
 
@@ -31,7 +33,7 @@ export function AgentTabNav({
           <Link
             key={tab.segment || "overview"}
             href={href}
-            prefetch={tab.segment !== ""}
+            prefetch={!selected}
             aria-current={selected ? "page" : undefined}
             className={navPillClassName(selected)}
           >

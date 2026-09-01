@@ -7,7 +7,7 @@ import { parseFundKey } from "@/lib/route-params";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminGesprekkenPage({
+export default async function AdminConversationsPage({
   params,
   searchParams,
 }: {
@@ -22,7 +22,7 @@ export default async function AdminGesprekkenPage({
   const fundKey = parseFundKey(raw);
   if (!fundKey) notFound();
 
-  const listPath = `/admin/funds/${fundKey}/gesprekken`;
+  const listPath = `/admin/funds/${fundKey}/conversations`;
   const pathname = headerList.get("x-pathname") ?? listPath;
   const model = await loadConversationsModel(fundKey, search);
 
@@ -36,6 +36,7 @@ export default async function AdminGesprekkenPage({
       questionTotal={model.questionTotal}
       conversationTotal={model.conversationTotal}
       breakdownCount={model.breakdownCount}
+      truncated={model.truncated}
     />
   );
 }

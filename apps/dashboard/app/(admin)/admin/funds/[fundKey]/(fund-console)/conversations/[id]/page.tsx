@@ -6,7 +6,7 @@ import { parseFundKey } from "@/lib/route-params";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminGesprekPermalinkPage({
+export default async function AdminConversationPermalinkPage({
   params,
 }: {
   params: Promise<{ fundKey: string; id: string }>;
@@ -19,7 +19,7 @@ export default async function AdminGesprekPermalinkPage({
   const item = await getConversation(fundKey, id);
   if (!item) notFound();
 
-  const listPath = `/admin/funds/${fundKey}/gesprekken`;
+  const listPath = `/admin/funds/${fundKey}/conversations`;
   return (
     <ConversationDetailView
       item={item}

@@ -13,18 +13,18 @@ import { ALL_FUNDS_KEY } from "./switcher-options.js";
 
 test("fundNavHref builds fund-face and admin paths", () => {
   assert.equal(fundNavHref("fund", "oomt", ""), "/");
-  assert.equal(fundNavHref("fund", "oomt", "gesprekken"), "/gesprekken");
+  assert.equal(fundNavHref("fund", "oomt", "conversations"), "/conversations");
   assert.equal(fundNavHref("admin", "oomt", ""), "/admin/funds/oomt");
-  assert.equal(fundNavHref("admin", "oomt", "signalen"), "/admin/funds/oomt/signalen");
+  assert.equal(fundNavHref("admin", "oomt", "signals"), "/admin/funds/oomt/signals");
 });
 
 test("activeFundNavSegment selects sidebar item including agent detail", () => {
   assert.equal(activeFundNavSegment("/", "fund", "oomt"), "");
-  assert.equal(activeFundNavSegment("/gesprekken", "fund", "oomt"), "gesprekken");
+  assert.equal(activeFundNavSegment("/conversations", "fund", "oomt"), "conversations");
   assert.equal(activeFundNavSegment("/agents/cao", "fund", "oomt"), "agents");
   assert.equal(activeFundNavSegment("/admin/funds/oomt", "admin", "oomt"), "");
-  assert.equal(activeFundNavSegment("/admin/funds/oomt/instellingen", "admin", "oomt"), "instellingen");
-  assert.equal(activeFundNavSegment("/admin/funds/oomt/branding", "admin", "oomt"), "instellingen");
+  assert.equal(activeFundNavSegment("/admin/funds/oomt/settings", "admin", "oomt"), "settings");
+  assert.equal(activeFundNavSegment("/admin/funds/oomt/branding", "admin", "oomt"), "settings");
   assert.equal(activeFundNavSegment("/admin/funds/oomt/agents/cao", "admin", "oomt"), "agents");
 });
 
@@ -44,7 +44,7 @@ test("parseAdminChromePath treats /admin and /admin/funds as Alle fondsen", () =
     fundKey: null,
     switcherKey: ALL_FUNDS_KEY,
   });
-  assert.deepEqual(parseAdminChromePath("/admin/funds/oomt/gesprekken"), {
+  assert.deepEqual(parseAdminChromePath("/admin/funds/oomt/conversations"), {
     nav: "fund",
     fundKey: "oomt",
     switcherKey: "oomt",
@@ -70,7 +70,7 @@ test("chromeNavLinks on a fund uses the five fund items", () => {
     view: "admin",
     nav: "fund",
     fundKey: "oomt",
-    pathname: "/admin/funds/oomt/signalen",
+    pathname: "/admin/funds/oomt/signals",
   });
   assert.equal(links.length, 5);
   assert.equal(links.find((row) => row.label === "Signalen")?.selected, true);
@@ -78,8 +78,8 @@ test("chromeNavLinks on a fund uses the five fund items", () => {
 
 test("switchFundNavHref preserves section and drops agent detail to agents list", () => {
   assert.equal(
-    switchFundNavHref("/admin/funds/oomt/gesprekken", "oomt", "demo"),
-    "/admin/funds/demo/gesprekken",
+    switchFundNavHref("/admin/funds/oomt/conversations", "oomt", "demo"),
+    "/admin/funds/demo/conversations",
   );
   assert.equal(
     switchFundNavHref("/admin/funds/oomt/agents/cao", "oomt", "demo"),
@@ -87,11 +87,11 @@ test("switchFundNavHref preserves section and drops agent detail to agents list"
   );
   assert.equal(
     switchFundNavHref("/admin/funds/oomt/branding", "oomt", "demo"),
-    "/admin/funds/demo/instellingen",
+    "/admin/funds/demo/settings",
   );
   assert.equal(
     switchFundNavHref("/admin/funds/oomt/accounts", "oomt", "demo"),
-    "/admin/funds/demo/instellingen",
+    "/admin/funds/demo/settings",
   );
 });
 
@@ -105,7 +105,7 @@ test("switchFundNavHref maps Alle fondsen to and from a fund", () => {
     "/admin/funds/oomt/agents",
   );
   assert.equal(
-    switchFundNavHref("/admin/funds/oomt/gesprekken", "oomt", ALL_FUNDS_KEY),
+    switchFundNavHref("/admin/funds/oomt/conversations", "oomt", ALL_FUNDS_KEY),
     "/admin",
   );
   assert.equal(
@@ -119,4 +119,19 @@ test("fund and admin layouts are server components (no use client)", () => {
     const source = readFileSync(join(import.meta.dirname, relative), "utf8");
     assert.equal(source.includes('"use client"'), false, relative);
   }
+});
+
+test("sidebar and agent tabs mark active from the client pathname", () => {
+  const sidebar = readFileSync(
+    join(import.meta.dirname, "../components/chrome/dashboard-sidebar.tsx"),
+    "utf8",
+  );
+  assert.match(sidebar, /usePathname/);
+  assert.match(sidebar, /chromeNavLinks/);
+  const tabs = readFileSync(
+    join(import.meta.dirname, "../components/fund/agent-tab-nav.tsx"),
+    "utf8",
+  );
+  assert.match(tabs, /"use client"/);
+  assert.match(tabs, /usePathname/);
 });

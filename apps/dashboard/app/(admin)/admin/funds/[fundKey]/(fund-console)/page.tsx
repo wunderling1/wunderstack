@@ -32,8 +32,8 @@ export default async function FundOverviewPage({
       model={model}
       hrefs={{
         pathname,
-        gesprekken: `/admin/funds/${fundKey}/gesprekken`,
-        signalen: `/admin/funds/${fundKey}/signalen`,
+        conversations: `/admin/funds/${fundKey}/conversations`,
+        signals: `/admin/funds/${fundKey}/signals`,
         agents: `/admin/funds/${fundKey}/agents`,
         agent: (agentKey) => `/admin/funds/${fundKey}/agents/${agentKey}`,
       }}

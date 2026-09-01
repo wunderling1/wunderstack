@@ -12,9 +12,10 @@ import {
 } from "@wunderstack/ui";
 import Link from "next/link";
 import { SIGNAL_MIN_OCCURRENCES, type OutcomeCounts, type Rate } from "@wunderstack/analytics";
-import { MeasurementNote } from "@/components/fund/measurement-note";
+import { MeasurementNote, ScanTruncationNote } from "@/components/fund/measurement-note";
 import { PeriodPicker } from "@/components/fund/period-picker";
 import { formatCount, formatRate } from "@/lib/overview";
+import { outcomeChipVariant, outcomeLabel } from "@/lib/conversations";
 import { PERIOD_LABELS, type PeriodId } from "@/lib/period";
 import type { OverviewModel } from "@/lib/overview-load";
 import { agentLabel } from "@/lib/release-manifest";
@@ -23,8 +24,8 @@ const dateTime = new Intl.DateTimeFormat("nl-NL", { dateStyle: "short", timeStyl
 
 export interface OverviewHrefs {
   pathname: string;
-  gesprekken: string;
-  signalen: string;
+  conversations: string;
+  signals: string;
   agents: string;
   agent: (agentKey: string) => string;
 }
@@ -92,7 +93,7 @@ function ActivityBlock({ model, hrefs }: { model: OverviewModel; hrefs: Overview
       <KpiTile
         label="Vragen en gesprekken"
         value={
-          <Link href={hrefs.gesprekken} className="hover:underline">
+          <Link href={hrefs.conversations} className="hover:underline">
             {formatCount(model.currentQuestions)} vragen{" "}
             <span className="text-base font-normal text-text-muted">
               in {formatCount(model.currentConversations)} gesprekken
@@ -113,6 +114,7 @@ function ActivityBlock({ model, hrefs }: { model: OverviewModel; hrefs: Overview
           </>
         }
       />
+      {model.conversationVolumeTruncated ? <ScanTruncationNote /> : null}
       <div>
         <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-text-subtle">
           Mix per agent
@@ -241,7 +243,7 @@ function RecentBlock({ model, hrefs }: { model: OverviewModel; hrefs: OverviewHr
                   {dateTime.format(row.occurredAt)}
                 </TableCell>
                 <TableCell>
-                  <Link href={hrefs.gesprekken} className="hover:underline">
+                  <Link href={hrefs.conversations} className="hover:underline">
                     {row.question ?? "—"}
                   </Link>
                 </TableCell>
@@ -276,7 +278,7 @@ function ActionsBlock({ model, hrefs }: { model: OverviewModel; hrefs: OverviewH
         </p>
       ) : (
         <p className="text-sm text-text">
-          <Link href={hrefs.signalen} className="text-primary hover:underline">
+          <Link href={hrefs.signals} className="text-primary hover:underline">
             {formatCount(gaps)} kennisgaten
           </Link>
           <span className="text-text-muted">
@@ -300,25 +302,7 @@ function sessionLine(sessionCount: number): string {
 }
 
 function OutcomeChip({ outcome }: { outcome: string }) {
-  const variant =
-    outcome === "answered"
-      ? "verified"
-      : outcome === "clarified"
-        ? "caution"
-        : outcome === "error"
-          ? "danger"
-          : outcome === "unknown"
-            ? "caution"
-            : "refusal";
-  const label =
-    outcome === "answered"
-      ? "Beantwoord"
-      : outcome === "clarified"
-        ? "Verduidelijkt"
-        : outcome === "error"
-          ? "Fout"
-          : outcome === "unknown"
-            ? "Onbekend"
-            : "Geweigerd";
-  return <Chip variant={variant}>{label}</Chip>;
+  return (
+    <Chip variant={outcomeChipVariant(outcome)}>{outcomeLabel(outcome)}</Chip>
+  );
 }

@@ -34,7 +34,7 @@ test("periodHref keeps the page path so every block uses the same searchparam", 
   assert.equal(periodHref("/admin/funds/oomt", "7d"), "/admin/funds/oomt?period=7d");
   assert.equal(periodHref("/", "90d"), "/?period=90d");
   assert.equal(
-    periodHref("/gesprekken", "7d", { agent: "cao", reason: "no_coverage" }),
-    "/gesprekken?period=7d&agent=cao&reason=no_coverage",
+    periodHref("/conversations", "7d", { agent: "cao", reason: "no_coverage" }),
+    "/conversations?period=7d&agent=cao&reason=no_coverage",
   );
 });

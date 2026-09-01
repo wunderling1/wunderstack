@@ -24,6 +24,34 @@ const commonSecurityHeaders = [
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  async redirects() {
+    return [
+      { source: "/gesprekken", destination: "/conversations", permanent: true },
+      { source: "/gesprekken/:id", destination: "/conversations/:id", permanent: true },
+      { source: "/signalen", destination: "/signals", permanent: true },
+      { source: "/instellingen", destination: "/settings", permanent: true },
+      {
+        source: "/admin/funds/:fundKey/gesprekken",
+        destination: "/admin/funds/:fundKey/conversations",
+        permanent: true,
+      },
+      {
+        source: "/admin/funds/:fundKey/gesprekken/:id",
+        destination: "/admin/funds/:fundKey/conversations/:id",
+        permanent: true,
+      },
+      {
+        source: "/admin/funds/:fundKey/signalen",
+        destination: "/admin/funds/:fundKey/signals",
+        permanent: true,
+      },
+      {
+        source: "/admin/funds/:fundKey/instellingen",
+        destination: "/admin/funds/:fundKey/settings",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [{ source: "/:path*", headers: commonSecurityHeaders }];
   },
