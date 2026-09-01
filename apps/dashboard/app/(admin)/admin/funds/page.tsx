@@ -14,7 +14,7 @@ import {
 import Link from "next/link";
 import { fundStatusFromInstancesAndActivity, fundStatusLabel } from "@/lib/admin-overview";
 import { listFundUsersCached, listInstancesCached } from "@/lib/fund-lookups";
-import { formatCount, totalTurns } from "@/lib/overview";
+import { formatCount, totalQuestions } from "@/lib/overview";
 import { agentLabel } from "@/lib/release-manifest";
 import { sinceDaysAgo } from "@/lib/window";
 import { CreateFundForm } from "./create-form";
@@ -38,7 +38,7 @@ export default async function FundsAdminPage() {
         listFundUsersCached(fund.key),
       ]);
       const fundActivity = activity.filter((row) => row.fundKey === fund.key);
-      const total = fundActivity.reduce((sum, row) => sum + totalTurns(row.byOutcome), 0);
+      const total = fundActivity.reduce((sum, row) => sum + totalQuestions(row.byOutcome), 0);
       const status = fundStatusFromInstancesAndActivity(
         instances.map((row) => row.agentKey),
         fundActivity,

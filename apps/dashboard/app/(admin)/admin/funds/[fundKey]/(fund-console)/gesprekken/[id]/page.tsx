@@ -23,8 +23,11 @@ export default async function AdminGesprekPermalinkPage({
   return (
     <ConversationDetailView
       item={item}
-      permalink={conversationPermalink(listPath, item.id)}
+      // The requested id, not the conversation's first question (A6).
+      permalink={conversationPermalink(listPath, id)}
+      permalinkFor={(questionId) => conversationPermalink(listPath, questionId)}
       backHref={listPath}
+      highlightId={id}
     />
   );
 }

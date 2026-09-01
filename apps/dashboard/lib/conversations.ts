@@ -112,10 +112,22 @@ export function conversationListHref(
   return `${pathname}?${params.toString()}`;
 }
 
-/** Stable shareable permalink — id only, no list filters, no session cookie. */
+/**
+ * Stable shareable permalink — id only, no list filters, no session cookie.
+ *
+ * The id is a question (event) id or an exercise-session id, never the derived conversation id: a
+ * derived id depends on the window the sharer had selected, a question id does not (A6). The detail
+ * page resolves a question to the conversation it sits in and anchors on it, so every permalink
+ * that was shared before conversations existed still lands in the right place.
+ */
 export function conversationPermalink(listPath: string, id: string): string {
   const base = listPath.endsWith("/") ? listPath.slice(0, -1) : listPath;
   return `${base}/${id}`;
+}
+
+/** Anchor for one question inside a conversation. */
+export function questionAnchorId(id: string): string {
+  return `v-${id}`;
 }
 
 export function parseConversationId(raw: string): string | null {

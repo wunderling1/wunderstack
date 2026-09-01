@@ -68,8 +68,8 @@ function OnboardingCard({ hrefs, period }: { hrefs: OverviewHrefs; period: Perio
     <Card className="flex flex-col gap-3 p-6">
       <h2 className="font-display text-lg font-semibold text-text">Nog niet live</h2>
       <p className="text-sm text-text-muted">
-        Er zijn geen gesprekken in de laatste {PERIOD_LABELS[period]}. Dat is geen 0% — er is nog
-        niets te meten.
+        Er zijn geen vragen gesteld in de laatste {PERIOD_LABELS[period]}. Dat is geen 0% — er is
+        nog niets te meten.
       </p>
       <p className="text-sm text-text">
         Volgende stap:{" "}
@@ -86,14 +86,32 @@ function ActivityBlock({ model, hrefs }: { model: OverviewModel; hrefs: Overview
   return (
     <section className="flex flex-col gap-4">
       <h2 className="text-sm font-semibold text-text">Activiteit</h2>
+      {/* Two units, one destination (S11a, S22): questions are what the KPIs count, conversations
+          are what the list shows. Questions per conversation is the adoption signal — someone who
+          asks three follow-ups is using the instrument; someone who asks once and leaves is not. */}
       <KpiTile
-        label="Gesprekken"
+        label="Vragen en gesprekken"
         value={
           <Link href={hrefs.gesprekken} className="hover:underline">
-            {formatCount(model.currentTotal)}
+            {formatCount(model.currentQuestions)} vragen{" "}
+            <span className="text-base font-normal text-text-muted">
+              in {formatCount(model.currentConversations)} gesprekken
+            </span>
           </Link>
         }
-        hint={`Vorige ${PERIOD_LABELS[model.period]}: ${formatCount(model.previousTotal)}`}
+        hint={
+          <>
+            Vorige {PERIOD_LABELS[model.period]}: {formatCount(model.previousQuestions)} vragen in{" "}
+            {formatCount(model.previousConversations)} gesprekken
+            {model.unthreadedQuestions > 0 ? (
+              <>
+                {" · "}
+                {formatCount(model.unthreadedQuestions)} losse vragen, want MCP en API leveren geen
+                gespreks-id
+              </>
+            ) : null}
+          </>
+        }
       />
       <div>
         <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-text-subtle">
@@ -106,7 +124,9 @@ function ActivityBlock({ model, hrefs }: { model: OverviewModel; hrefs: Overview
             <TableHeader>
               <TableRow>
                 <TableHead>Agent</TableHead>
-                <TableHead>Gesprekken</TableHead>
+                {/* One column, two units: a grounded agent answers questions, an exercise agent
+                    runs sessions (S15/S22). The unit sits in the cell, not in the header. */}
+                <TableHead>Volume</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -122,7 +142,14 @@ function ActivityBlock({ model, hrefs }: { model: OverviewModel; hrefs: Overview
                   </TableCell>
                   <TableCell>
                     <Link href={hrefs.agent(agent.agentKey)} className="hover:underline">
-                      {formatCount(agent.total)}
+                      {formatCount(agent.total)}{" "}
+                      {agent.kind === "grounded"
+                        ? agent.total === 1
+                          ? "vraag"
+                          : "vragen"
+                        : agent.total === 1
+                          ? "sessie"
+                          : "sessies"}
                     </Link>
                   </TableCell>
                 </TableRow>
@@ -193,9 +220,11 @@ function StatusBlock({ model, hrefs }: { model: OverviewModel; hrefs: OverviewHr
 function RecentBlock({ model, hrefs }: { model: OverviewModel; hrefs: OverviewHrefs }) {
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="text-sm font-semibold text-text">Actualiteit</h2>
+      {/* Scanning what is being asked right now is per question, not per conversation (S22). The
+          block keeps its S11 name; the unit it shows is the question. */}
+      <h2 className="text-sm font-semibold text-text">Actualiteit — laatste vragen</h2>
       {model.recent.length === 0 ? (
-        <p className="text-sm text-text-subtle">Geen gesprekken in deze periode.</p>
+        <p className="text-sm text-text-subtle">Geen vragen in deze periode.</p>
       ) : (
         <Table>
           <TableHeader>
@@ -230,9 +259,9 @@ function RecentBlock({ model, hrefs }: { model: OverviewModel; hrefs: OverviewHr
 
 function ActionsBlock({ model, hrefs }: { model: OverviewModel; hrefs: OverviewHrefs }) {
   const justified = model.current.rates.refusedJustified;
-  // The refused turns underneath the gaps — context for the count, never the count itself. A gap is
-  // a repeated question; a single refusal is not yet one.
-  const refusedTurns = "kind" in justified ? 0 : justified.numerator;
+  // The refused questions underneath the gaps — context for the count, never the count itself. A
+  // gap is a repeated question; a single refusal is not yet one.
+  const refusedQuestions = "kind" in justified ? 0 : justified.numerator;
   const gaps = model.knowledgeGaps;
 
   return (
@@ -241,9 +270,9 @@ function ActionsBlock({ model, hrefs }: { model: OverviewModel; hrefs: OverviewH
       <MeasurementNote startedAt={model.measurementStartedAt} />
       {gaps === 0 ? (
         <p className="text-sm text-text-subtle">
-          {refusedTurns === 0
+          {refusedQuestions === 0
             ? "Geen openstaande kennisgaten in deze periode."
-            : `Geen kennisgaten in deze periode: geen vraag kwam ${SIGNAL_MIN_OCCURRENCES}× terug (${formatRate(justified)} turns geweigerd zonder retrieval).`}
+            : `Geen kennisgaten in deze periode: geen vraag kwam ${SIGNAL_MIN_OCCURRENCES}× terug (${formatRate(justified)} vragen geweigerd zonder retrieval).`}
         </p>
       ) : (
         <p className="text-sm text-text">
@@ -252,7 +281,7 @@ function ActionsBlock({ model, hrefs }: { model: OverviewModel; hrefs: OverviewH
           </Link>
           <span className="text-text-muted">
             {" "}
-            (uit {formatRate(justified)} turns geweigerd zonder retrieval)
+            (uit {formatRate(justified)} vragen geweigerd zonder retrieval)
           </span>
         </p>
       )}
@@ -260,8 +289,9 @@ function ActionsBlock({ model, hrefs }: { model: OverviewModel; hrefs: OverviewH
   );
 }
 
+/** Every denominator is questions (S22): "1.061 van 1.271 vragen beantwoord". */
 function outcomeLine(counts: OutcomeCounts, answered: Rate): string {
-  return `${formatRate(answered)} beantwoord · ${formatCount(counts.refused)} geweigerd · ${formatCount(counts.clarified)} verduidelijkt`;
+  return `${formatRate(answered)} vragen beantwoord · ${formatCount(counts.refused)} geweigerd · ${formatCount(counts.clarified)} verduidelijkt`;
 }
 
 /** An exercise agent cites nothing and refuses nothing (S15): it has a session course, not an outcome. */

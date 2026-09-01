@@ -15,7 +15,7 @@ import {
 } from "@wunderstack/ui";
 import Link from "next/link";
 import { answerRateDisplay, statusFromCounts } from "@/lib/admin-overview";
-import { formatCount, totalTurns } from "@/lib/overview";
+import { formatCount, totalQuestions } from "@/lib/overview";
 import { agentLabel, KNOWN_AGENTS } from "@/lib/release-manifest";
 import { sinceDaysAgo } from "@/lib/window";
 
@@ -38,7 +38,7 @@ function rowFromActivity(row: OutcomeActivityRow): AdminRow {
   return {
     fundKey: row.fundKey,
     agentId: row.agentId,
-    total: totalTurns(row.byOutcome),
+    total: totalQuestions(row.byOutcome),
     answered: answerRate(row.byOutcome),
     status: statusFromCounts(row.byOutcome),
     lastOccurredAt: row.lastOccurredAt,

@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { groupIntoConversations } from "./conversation-boundary.js";
 import {
   breakdownCountForFilter,
   includeExerciseSessions,
   includeGroundedTurns,
   mapExerciseRow,
-  mapGroundedRow,
+  mapQuestionRow,
+  matchesOutcomeFilter,
+  toGroundedConversation,
 } from "./conversations.js";
 import type { OutcomeBreakdown } from "./outcomes.js";
 
@@ -82,19 +85,83 @@ test("exercise row is not a question-answer pair", () => {
   assert.equal(item.endReason, "abandoned");
 });
 
-test("grounded row keeps the turn fields the card needs", () => {
-  const item = mapGroundedRow({
+test("a question carries the outcome, and carries it unmatched unless a filter says so", () => {
+  const row = {
     id: "22222222-2222-2222-2222-222222222222",
-    agentId: "cao",
     occurredAt: new Date("2026-09-01T10:00:00.000Z"),
     question: "Hoeveel vakantiedagen?",
     outcome: "answered",
     outcomeReason: "grounded",
     citationCount: 2,
-  });
-  assert.equal(item.kind, "grounded");
-  assert.equal(item.question, "Hoeveel vakantiedagen?");
-  assert.equal(item.outcome, "answered");
+    channel: "playground",
+  };
+  const question = mapQuestionRow(row);
+  assert.equal(question.question, "Hoeveel vakantiedagen?");
+  assert.equal(question.outcome, "answered");
+  assert.equal(question.matchesFilter, false);
+  assert.equal(mapQuestionRow(row, true).matchesFilter, true);
+});
+
+/** Narrows the indexed access the grouper cannot promise to the type system. */
+function onlyGroup<T>(groups: T[]): T {
+  assert.equal(groups.length, 1, "expected exactly one conversation");
+  const [group] = groups;
+  assert.ok(group);
+  return group;
+}
+
+function turn(
+  id: string,
+  minutesFromNoon: number,
+  overrides: { sessionId?: string; agentId?: string; outcome?: string; channel?: string | null } = {},
+) {
+  return {
+    id,
+    sessionId: overrides.sessionId ?? "tab-1",
+    agentId: overrides.agentId ?? "cao",
+    occurredAt: new Date(Date.UTC(2026, 8, 1, 12, minutesFromNoon)),
+    question: `vraag ${id}`,
+    outcome: overrides.outcome ?? "answered",
+    outcomeReason: null,
+    citationCount: 0,
+    channel: overrides.channel === undefined ? "playground" : overrides.channel,
+  };
+}
+
+test("a conversation has a course, not an outcome: the chip sits on each question (S22)", () => {
+  const group = onlyGroup(
+    groupIntoConversations([turn("a", 0), turn("b", 5, { outcome: "refused" }), turn("c", 9)]),
+  );
+
+  const conversation = toGroundedConversation(group, { outcome: "refused" });
+  assert.equal(conversation.kind, "grounded");
+  assert.equal("outcome" in conversation, false, "the container carries no outcome");
+  assert.equal(conversation.questions.length, 3);
+  assert.deepEqual(
+    conversation.questions.map((question) => question.matchesFilter),
+    [false, true, false],
+    "only the refused question is what the filter selected",
+  );
+  assert.equal(conversation.startedAt.getTime(), conversation.questions[0]?.occurredAt.getTime());
+  assert.equal(conversation.occurredAt.getTime(), conversation.questions[2]?.occurredAt.getTime());
+});
+
+test("without a filter no question is marked as matched, so nothing is highlighted", () => {
+  const group = onlyGroup(groupIntoConversations([turn("a", 0), turn("b", 3)]));
+  const conversation = toGroundedConversation(group, {});
+  assert.ok(conversation.questions.every((question) => !question.matchesFilter));
+  assert.ok(conversation.questions.every((question) => matchesOutcomeFilter(question, {})));
+});
+
+test("a channel without a thread id is named as such instead of counted as adoption (A6)", () => {
+  const mcp = onlyGroup(
+    groupIntoConversations([turn("a", 0, { channel: "mcp", sessionId: "one-shot" })]),
+  );
+  assert.equal(toGroundedConversation(mcp).threaded, false);
+
+  // A pre-channel row is playground/embed traffic and does group: one measured session holds 21.
+  const historic = onlyGroup(groupIntoConversations([turn("b", 0, { channel: null })]));
+  assert.equal(toGroundedConversation(historic).threaded, true);
 });
 
 // That a reason filter on listConversations counts the same as getOutcomeBreakdown.refusedByReason

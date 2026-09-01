@@ -256,11 +256,17 @@ describe("fund environment ↔ analytics seam", { skip: !ready }, () => {
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const breakdown = await getOutcomeBreakdown({ fundKey, since });
 
+    // The filter counts questions, not conversations (S22): the KPI unit is the turn, and one
+    // conversation can hold both a refused and an answered question.
     const refusedList = await listConversations({ fundKey, since, outcome: "refused" });
-    assert.equal(refusedList.groundedTotal, breakdown.byOutcome.refused);
+    assert.equal(refusedList.questionTotal, breakdown.byOutcome.refused);
+    assert.ok(
+      refusedList.conversationTotal <= refusedList.questionTotal,
+      "conversations never outnumber the questions they hold",
+    );
 
     const byReason = await listConversations({ fundKey, since, outcomeReason: "no_coverage" });
-    assert.equal(byReason.groundedTotal, breakdown.refusedByReason.no_coverage);
+    assert.equal(byReason.questionTotal, breakdown.refusedByReason.no_coverage);
 
     // An outcome filter is a question about turns, so exercise sessions drop out of the list.
     assert.equal(byReason.exerciseTotal, 0);
