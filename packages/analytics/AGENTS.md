@@ -28,6 +28,8 @@ fondsschema’s ([ADR-multitenant-database.md](../../docs/architecture/ADR-multi
   `countKnowledgeGaps` en `measurementStartedAt` horen in
   `src/fund-environment.integration.test.ts` (echt schema). Broncodeguards mogen blijven voor
   claims *over de bron* (bv. "hier komt geen samenvatter binnen"), met dat verschil erbij genoteerd.
+  **`SignalsQuery.theme` is dormant** — er is nog geen classifier; de dashboardfilter mag de param
+  al tonen, maar analytics past geen theme-WHERE toe tot die classifier bestaat.
   Die integratietests draaien alleen met `DATABASE_URL` + `PROVISIONER_DATABASE_URL`; met
   `GATE_DB=true` en ontbrekende URL wordt de suite rood in plaats van overgeslagen (700-evals:
   skipped ≠ passed).

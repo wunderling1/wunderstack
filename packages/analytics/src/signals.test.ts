@@ -6,6 +6,8 @@ import {
   groupsAtOccurrenceThreshold,
   includeExerciseAdoption,
   mapQuestionSignal,
+  questionSignalsFrom,
+  SIGNAL_LIST_LIMIT,
   SIGNAL_MIN_OCCURRENCES,
   sortByFrequencyRecency,
 } from "./signals.js";
@@ -91,6 +93,16 @@ test("exercise adoption is outside the knowledge-gap query and drops on a ground
   );
 });
 
-// The strength split (none = nothing retrieved, strong = a hit at or above the floor) is asserted
-// through deriveRetrievalStrength in retrieval-strength.test.ts and through the refused turns
-// recorded in fund-environment.integration.test.ts — not by matching the WHERE clause as text.
+test("knowledge gap total is uncapped while the list stops at SIGNAL_LIST_LIMIT", () => {
+  const now = new Date("2026-09-01T12:00:00.000Z");
+  const rows = Array.from({ length: 51 }, (_, index) => ({
+    question: `Vraag ${index}`,
+    occurrenceCount: SIGNAL_MIN_OCCURRENCES,
+    lastOccurredAt: now,
+    latestEventId: `${String(index).padStart(8, "0")}-aaaa-4aaa-8aaa-aaaaaaaaaaaa`,
+  }));
+  const all = questionSignalsFrom(rows, now);
+  const listed = all.slice(0, SIGNAL_LIST_LIMIT);
+  assert.equal(all.length, 51);
+  assert.equal(listed.length, 50);
+});

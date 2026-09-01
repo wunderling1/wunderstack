@@ -24,7 +24,7 @@ export interface OutcomeActivityRow {
   lastOccurredAt: Date | null;
 }
 
-function asDate(value: Date | string | null | undefined): Date | null {
+export function asDate(value: Date | string | null | undefined): Date | null {
   if (value instanceof Date) {
     return Number.isNaN(value.getTime()) ? null : value;
   }

@@ -34,7 +34,7 @@ export interface SignalsQuery {
   since: Date;
   until?: Date;
   agentId?: string;
-  /** Optional theme WHERE. Same HAVING still applies (S18). Not a generated label. */
+  /** Optional theme WHERE. Dormant until a classifier exists — param is kept for future use. */
   theme?: string;
   /** Admin-only: load refused + retrieval strength `strong`. */
   includeSuspicious?: boolean;
@@ -180,7 +180,7 @@ export function includeExerciseAdoption(query: SignalsQuery): boolean {
 }
 
 /** Groups that survive mapping and the threshold, ranked. Uncapped: the caller lists or counts. */
-function questionSignalsFrom(
+export function questionSignalsFrom(
   rows: Array<{
     question: string | null;
     occurrenceCount: unknown;
@@ -225,9 +225,8 @@ async function loadQuestionSignals(
 }
 
 /**
- * How many knowledge gaps exist in this window — the same grouping, the same threshold and the same
- * drop rules as the list itself, so a screen that prints this number links to exactly these groups
- * (S11a). Deliberately not a turn count: three copies of one question are one gap, not three.
+ * How many knowledge gaps exist in this window — uncapped total from the same grouping and
+ * threshold as the list. The Signalen list itself stops at {@link SIGNAL_LIST_LIMIT}.
  */
 export async function countKnowledgeGaps(query: SignalsQuery): Promise<number> {
   return withFundSchema(query.fundKey, async (db) => {

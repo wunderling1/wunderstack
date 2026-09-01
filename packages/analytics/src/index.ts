@@ -44,6 +44,8 @@ export {
 export {
   getCorpusOverview,
   corpusFingerprint,
+  corpusFingerprintDisplay,
+  corpusFingerprintMatchesPinned,
   CORPUS_FINGERPRINT_LENGTH,
   type CorpusDocRow,
 } from "./corpus.js";
@@ -63,7 +65,6 @@ export {
   refusedSuspiciousRate,
   strengthFromSignals,
   emptyRefusedStrength,
-  countOutcome,
   type OutcomeWindow,
   type OutcomeBreakdown,
   type OutcomeCounts,

@@ -41,6 +41,7 @@ export interface ConversationBoundaryRow {
   sessionId: string;
   agentId: string;
   occurredAt: Date;
+  channel: string | null;
 }
 
 export interface ConversationGroup<T> {
@@ -83,8 +84,11 @@ export function groupIntoConversations<T extends ConversationBoundaryRow>(
 
   for (const row of [...rows].sort(compareRows)) {
     const at = row.occurredAt.getTime();
+    const rowThreaded = isThreadedChannel(row.channel);
     const continues =
       current !== undefined &&
+      rowThreaded &&
+      isThreadedChannel(current.questions[0].channel) &&
       current.sessionId === row.sessionId &&
       current.agentId === row.agentId &&
       at - previousAt <= gapMs;

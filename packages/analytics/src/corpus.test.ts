@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { corpusFingerprint, CORPUS_FINGERPRINT_LENGTH, type CorpusDocRow } from "./corpus.js";
+import {
+  corpusFingerprint,
+  corpusFingerprintDisplay,
+  corpusFingerprintMatchesPinned,
+  type CorpusDocRow,
+} from "./corpus.js";
 
 function doc(overrides: Partial<CorpusDocRow> = {}): CorpusDocRow {
   return {
@@ -48,9 +53,18 @@ describe("corpusFingerprint (A5)", () => {
     );
   });
 
-  it("is a short hex value, not a document version", () => {
+  it("stores the full sha256 hex; display uses the first twelve characters", () => {
     const value = corpusFingerprint([doc()]);
-    assert.equal(value?.length, CORPUS_FINGERPRINT_LENGTH);
-    assert.match(String(value), /^[0-9a-f]+$/);
+    assert.equal(value?.length, 64);
+    assert.match(String(value), /^[0-9a-f]{64}$/);
+    assert.equal(corpusFingerprintDisplay(String(value)), value?.slice(0, 12));
+  });
+
+  it("matches legacy twelve-character pins against the full hash prefix", () => {
+    const full = corpusFingerprint([doc()]);
+    assert.ok(full);
+    const legacy = corpusFingerprintDisplay(full);
+    assert.equal(corpusFingerprintMatchesPinned(full, legacy), true);
+    assert.equal(corpusFingerprintMatchesPinned(full, "deadbeef0000"), false);
   });
 });
