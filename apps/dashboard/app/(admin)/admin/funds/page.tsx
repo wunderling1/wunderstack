@@ -1,5 +1,5 @@
-import { count, eq, funds, getDb, users } from "@wunderstack/db";
-import { getAgentActivity } from "@wunderstack/analytics";
+import { eq, funds, getDb } from "@wunderstack/db";
+import { listOutcomeActivity } from "@wunderstack/analytics";
 import { AGENT_KEY_LABELS, AGENT_KEYS } from "@wunderstack/shared";
 import {
   AgentStatusBadge,
@@ -10,10 +10,11 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  type AgentStatus,
 } from "@wunderstack/ui";
 import Link from "next/link";
-import { listInstancesCached } from "@/lib/fund-lookups";
+import { fundStatusFromInstancesAndActivity, fundStatusLabel } from "@/lib/admin-overview";
+import { listFundUsersCached, listInstancesCached } from "@/lib/fund-lookups";
+import { formatCount, totalTurns } from "@/lib/overview";
 import { agentLabel } from "@/lib/release-manifest";
 import { sinceDaysAgo } from "@/lib/window";
 import { CreateFundForm } from "./create-form";
@@ -23,37 +24,32 @@ export const dynamic = "force-dynamic";
 
 const WINDOW_DAYS = 30;
 
-/** Honest status: no events → not live (never green). Activity uses the same rules as /admin. */
-function deriveFundStatus(total: number, errors: number): { status: AgentStatus; label: string } {
-  if (total === 0) return { status: "offline", label: "Nog niet live" };
-  if (errors / total > 0.2) return { status: "degraded", label: "Beperkt" };
-  return { status: "operational", label: "Actief" };
-}
-
 export default async function FundsAdminPage() {
   const [fundRows, inactiveRows, activity] = await Promise.all([
     getDb().select().from(funds).where(eq(funds.status, "active")).orderBy(funds.key),
     getDb().select().from(funds).where(eq(funds.status, "inactive")).orderBy(funds.key),
-    getAgentActivity(sinceDaysAgo(WINDOW_DAYS)),
+    listOutcomeActivity(sinceDaysAgo(WINDOW_DAYS)),
   ]);
 
   const rows = await Promise.all(
     fundRows.map(async (fund) => {
-      const [instances, accountRows] = await Promise.all([
+      const [instances, accounts] = await Promise.all([
         listInstancesCached(fund.key),
-        getDb().select({ n: count() }).from(users).where(eq(users.tenantId, fund.key)),
+        listFundUsersCached(fund.key),
       ]);
       const fundActivity = activity.filter((row) => row.fundKey === fund.key);
-      const total = fundActivity.reduce((sum, row) => sum + row.total, 0);
-      const errors = fundActivity.reduce((sum, row) => sum + row.errors, 0);
-      const { status, label } = deriveFundStatus(total, errors);
+      const total = fundActivity.reduce((sum, row) => sum + totalTurns(row.byOutcome), 0);
+      const status = fundStatusFromInstancesAndActivity(
+        instances.map((row) => row.agentKey),
+        fundActivity,
+      );
       return {
         key: fund.key,
         name: fund.name ?? fund.key,
         agents: instances.map((row) => row.agentKey),
-        accounts: Number(accountRows[0]?.n ?? 0),
+        accounts: accounts.length,
         status,
-        statusLabel: label,
+        statusLabel: fundStatusLabel(status),
         total,
       };
     }),
@@ -65,7 +61,7 @@ export default async function FundsAdminPage() {
         <div>
           <h2 className="font-display text-lg font-semibold">Fondsen</h2>
           <p className="mt-1 text-sm text-text-muted">
-            Overzicht van control.funds. Status is afgeleid van echte activiteit — geen verzonnen
+            Overzicht van control.funds. Status is de laagste stand van de agents — geen verzonnen
             groene gate.
           </p>
         </div>
@@ -117,7 +113,7 @@ export default async function FundsAdminPage() {
                     </div>
                   </TableCell>
                   <TableCell>{row.accounts}</TableCell>
-                  <TableCell>{row.total.toLocaleString("nl-NL")}</TableCell>
+                  <TableCell>{formatCount(row.total)}</TableCell>
                   <TableCell>
                     <AgentStatusBadge status={row.status} label={row.statusLabel} />
                   </TableCell>

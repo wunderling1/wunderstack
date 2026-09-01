@@ -34,9 +34,10 @@ Laagindeling (welk gegeven waar): `docs/decisions/DECISION-dashboard-ia.md`.
   Zie `docs/decisions/DECISION-dashboard-auth.md`.
 - **UI uit `@wunderstack/ui`.** Trust-patterns + primitives. Alleen semantische tokens; geen
   agent-/model-scores in de fund-view. Gedeelde panelen: `components/fund/`.
-- **Eerlijke metriek.** "Beantwoord met geverifieerde citaties" is de v1-maat; copy claimt niet meer.
+- **Eerlijke metriek.** Beantwoordingsgraad is `answered / (answered + refused + clarified)` (D7).
   Ontbrekende manifest-velden tonen **n.n.b.** — geen verzonnen groene gate (§1). Een fonds zonder
-  events is "nog niet live", niet groen. KPI-scope = fondsschema, niet `tenant_id`.
+  events is "nog niet live", niet groen. KPI-scope = fondsschema, niet `tenant_id`. Fondsstatus is
+  de laagste stand van de agents (`deriveFundStatus`).
 
 ## Dashboardindeling — Fase 0 (PR-1/PR-2)
 

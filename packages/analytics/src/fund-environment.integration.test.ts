@@ -12,7 +12,7 @@ import {
   users,
 } from "@wunderstack/db";
 import { answeredGrounded } from "@wunderstack/shared";
-import { getAgentActivity, getCorpusOverview, getKpiSummary, measurementStartedAt } from "./index.js";
+import { getAgentActivity, getCorpusOverview, getKpiSummary, listOutcomeActivity, measurementStartedAt } from "./index.js";
 import { recordInteractionEvent } from "./record.js";
 
 /**
@@ -118,6 +118,13 @@ describe("fund environment ↔ analytics seam", { skip: !ready }, () => {
     assert.equal(activityTotal, 2);
     assert.ok(forThisFund.every((row) => row.fundKey === fundKey));
 
+    const outcomes = await listOutcomeActivity(since);
+    const outcomeRows = outcomes.filter((row) => row.fundKey === fundKey);
+    assert.equal(outcomeRows.length, 1);
+    assert.equal(outcomeRows[0]?.agentId, "cao");
+    assert.equal(outcomeRows[0]?.byOutcome.answered, 2);
+    assert.ok(outcomeRows[0]?.lastOccurredAt instanceof Date);
+
     // Agent-page KPIs use the same source as the fund overview: sum over agents == fund total.
     const cao = await getKpiSummary({ fundKey, agentId: "cao", since });
     const arbo = await getKpiSummary({ fundKey, agentId: "arbo", since });
@@ -135,6 +142,10 @@ describe("fund environment ↔ analytics seam", { skip: !ready }, () => {
 
     await assert.rejects(
       () => getAgentActivity(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)),
+      (error: unknown) => error instanceof Error,
+    );
+    await assert.rejects(
+      () => listOutcomeActivity(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)),
       (error: unknown) => error instanceof Error,
     );
   });

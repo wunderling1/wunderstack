@@ -68,6 +68,8 @@ export {
   type AgentOperationalStatus,
 } from "./outcomes.js";
 
+export { listOutcomeActivity, type OutcomeActivityRow } from "./outcome-activity.js";
+
 export {
   listConversations,
   getConversation,
