@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { inspect } from "node:util";
 import { after, describe, it } from "node:test";
 
 import { closeDb, eq, funds, getDb, sql, users } from "./index.js";
@@ -101,29 +102,83 @@ describe("createFundEnvironment (integration)", { skip: !provisionerSet || !hasD
 
   it("rejects invalid outcome at the DB CHECK after provision", async () => {
     const checkKey = `proef-check-${Date.now().toString(36)}`;
+    const schema = `fund_${checkKey}`;
     await createFundEnvironment({
       fundKey: checkKey,
       name: "CHECK test",
       agentKeys: ["cao"],
     });
 
-    const schema = `fund_${checkKey}`;
-    await assert.rejects(
-      () =>
-        getDb().execute(
+    try {
+      try {
+        await getDb().execute(
           sql.raw(`
             INSERT INTO "${schema}".interaction_events (
               tenant_id, agent_id, fund, session_id, outcome
             ) VALUES ('t', 'cao', '${checkKey}', 's', 'bogus')
           `),
-        ),
-      (error: unknown) => {
-        const message = error instanceof Error ? error.message : String(error);
-        return message.includes("interaction_events_outcome_check") || message.includes("check constraint");
-      },
-    );
+        );
+        assert.fail("INSERT of outcome=bogus should have been rejected");
+      } catch (error) {
+        if (error instanceof assert.AssertionError) throw error;
+        assert.ok(
+          isOutcomeCheckViolation(error),
+          `expected CHECK violation, got: ${inspect(error, { depth: 8 })}`,
+        );
+      }
+    } finally {
+      await getDb().execute(sql.raw(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`));
+      await getDb().delete(funds).where(eq(funds.key, checkKey));
+    }
+  });
+});
 
-    await getDb().execute(sql.raw(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`));
-    await getDb().delete(funds).where(eq(funds.key, checkKey));
+/**
+ * Drizzle wraps the driver error as `Failed query: <sql>`. Postgres lives on `cause`
+ * (postgres.js: `code`, `constraint`; node-pg: `constraint_name`). Inspect the chain, not
+ * the outer message.
+ */
+function isOutcomeCheckViolation(error: unknown): boolean {
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+  while (current !== null && current !== undefined && !seen.has(current)) {
+    seen.add(current);
+    if (typeof current === "object") {
+      const record = current as Record<string, unknown>;
+      if (record.constraint === "interaction_events_outcome_check") return true;
+      if (record.constraint_name === "interaction_events_outcome_check") return true;
+      if (record.code === "23514") return true;
+    }
+    const message = current instanceof Error ? current.message : String(current);
+    if (
+      message.includes("interaction_events_outcome_check") ||
+      message.includes("check constraint")
+    ) {
+      return true;
+    }
+    current =
+      current instanceof Error
+        ? current.cause
+        : typeof current === "object" && current !== null && "cause" in current
+          ? current.cause
+          : undefined;
+  }
+  return /interaction_events_outcome_check|check constraint|\b23514\b/.test(
+    inspect(error, { depth: 8, breakLength: Infinity }),
+  );
+}
+
+describe("isOutcomeCheckViolation", () => {
+  it("does not match a Drizzle Failed query wrapper by message alone", () => {
+    assert.equal(isOutcomeCheckViolation(new Error("Failed query: INSERT INTO …")), false);
+  });
+
+  it("matches postgres.js constraint / 23514 on the cause chain", () => {
+    const root = Object.assign(
+      new Error('new row violates check constraint "interaction_events_outcome_check"'),
+      { code: "23514", constraint: "interaction_events_outcome_check" },
+    );
+    const wrapped = new Error("Failed query: INSERT INTO …", { cause: root });
+    assert.equal(isOutcomeCheckViolation(wrapped), true);
   });
 });
