@@ -55,13 +55,18 @@ const nextConfig = {
   async headers() {
     return [{ source: "/:path*", headers: commonSecurityHeaders }];
   },
-  // Client Router Cache: dynamic stays 0 so KPI pages refetch on every navigation.
-  // Config-tab <Link prefetch> uses the static window (30s) — see FundTabNav / AgentTabNav.
+  // Client Router Cache. A KPI window is 7 or 30 days wide, so 30s of staleness cannot move a
+  // number on screen — while `dynamic: 0` made every tab toggle and every back-navigation a full
+  // server render. The "bijgewerkt om" stamp on each KPI surface is what keeps that honest.
   experimental: {
     staleTimes: {
-      dynamic: 0,
+      dynamic: 30,
       static: 30,
     },
+    // `@wunderstack/ui` is a barrel behind `transpilePackages`, so Next's built-in lucide-react
+    // optimization never reaches the icons it re-exports. Naming both keeps a route's compile graph
+    // to what the page actually imports.
+    optimizePackageImports: ["@wunderstack/ui", "lucide-react"],
   },
   transpilePackages: [
     "@wunderstack/shared",
@@ -69,6 +74,9 @@ const nextConfig = {
     "@wunderstack/analytics",
     "@wunderstack/ui",
   ],
+  // Build-only. `next dev` runs on Turbopack (Next 16 default), which applies TypeScript's own
+  // `.js` -> `.ts` specifier resolution and ignores this hook. `next build --webpack` still needs it:
+  // our workspace packages ship raw TypeScript with NodeNext-style `.js` import specifiers.
   webpack: (config) => {
     config.resolve.extensionAlias = {
       ...config.resolve.extensionAlias,

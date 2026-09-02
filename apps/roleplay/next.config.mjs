@@ -28,6 +28,9 @@ const nextConfig = {
     return [{ source: "/api/:path*", destination: `${RUNTIME_URL}/api/:path*` }];
   },
   transpilePackages: ["@wunderstack/shared", "@wunderstack/ui"],
+  // Build-only. `next dev` runs on Turbopack (Next 16 default), which applies TypeScript's own
+  // `.js` -> `.ts` specifier resolution and ignores this hook. `next build --webpack` still needs it:
+  // our workspace packages ship raw TypeScript with NodeNext-style `.js` import specifiers.
   webpack: (config) => {
     config.resolve.extensionAlias = {
       ...config.resolve.extensionAlias,

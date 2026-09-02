@@ -20,6 +20,7 @@ import {
   FUND_MIGRATION_ROLEPLAY,
   FUND_MIGRATION_TURN_OUTCOME,
   FUND_MIGRATION_OUTCOME_CHECK,
+  FUND_MIGRATION_WINDOW_INDEXES,
   getDb,
   listActiveFunds,
   listAppliedFundMigrations,
@@ -27,6 +28,7 @@ import {
   sql,
   turnOutcomeAlterSql,
   outcomeCheckConstraintSql,
+  windowIndexesSql,
 } from "@wunderstack/db";
 
 interface MigrateResult {
@@ -69,6 +71,18 @@ async function migrateOne(fundKey: string): Promise<MigrateResult> {
     }
     await recordFundMigration(fund.schemaName, FUND_MIGRATION_OUTCOME_CHECK);
     result.applied.push(FUND_MIGRATION_OUTCOME_CHECK);
+  }
+
+  if (!already.includes(FUND_MIGRATION_WINDOW_INDEXES)) {
+    // `ensureFundTables` above already runs these (they live in `fundTableIndexesSql`), so this is
+    // the ledger entry rather than the work. Kept explicit so a schema that was provisioned before
+    // 0005 shows in `schema_migrations` why it now has the indexes.
+    const db = getDb();
+    for (const statement of windowIndexesSql(fund.schemaName)) {
+      await db.execute(sql.raw(statement));
+    }
+    await recordFundMigration(fund.schemaName, FUND_MIGRATION_WINDOW_INDEXES);
+    result.applied.push(FUND_MIGRATION_WINDOW_INDEXES);
   }
 
   return result;

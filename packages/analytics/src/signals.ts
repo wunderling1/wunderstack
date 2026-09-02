@@ -14,6 +14,7 @@ import {
 } from "@wunderstack/db";
 import { isGroundedAgentKey } from "@wunderstack/shared";
 
+import { loadMeasurementStartedAt } from "./outcomes.js";
 import { RETRIEVAL_STRONG_MIN_SCORE } from "./retrieval-strength.js";
 
 /**
@@ -63,7 +64,15 @@ export interface ExerciseAdoptionRow {
 }
 
 export interface SignalsResult {
+  /** D6 measurement start, read in this same transaction — the page shows it above the lists. */
+  measurementStartedAt: Date | null;
   knowledgeGaps: QuestionSignal[];
+  /**
+   * Groups before {@link SIGNAL_LIST_LIMIT} is applied — the same number `countKnowledgeGaps`
+   * returns. Carried on the list because the ranking it comes from is already computed here; a
+   * separate count would be the identical query in a second transaction.
+   */
+  knowledgeGapsTotal: number;
   suspiciousRefusals: QuestionSignal[];
   exerciseAdoption: ExerciseAdoptionRow[];
 }
@@ -215,24 +224,35 @@ function selectQuestionGroups(
     .orderBy(desc(sql`max(${interactionEvents.occurredAt})`));
 }
 
-async function loadQuestionSignals(
+async function loadRankedQuestionSignals(
   db: Database,
   query: SignalsQuery,
   strength: RefusalStrengthFilter,
 ): Promise<QuestionSignal[]> {
   const rows = await selectQuestionGroups(db, query, strength);
-  return questionSignalsFrom(rows, query.now ?? new Date()).slice(0, SIGNAL_LIST_LIMIT);
+  return questionSignalsFrom(rows, query.now ?? new Date());
+}
+
+async function loadQuestionSignals(
+  db: Database,
+  query: SignalsQuery,
+  strength: RefusalStrengthFilter,
+): Promise<QuestionSignal[]> {
+  const ranked = await loadRankedQuestionSignals(db, query, strength);
+  return ranked.slice(0, SIGNAL_LIST_LIMIT);
 }
 
 /**
  * How many knowledge gaps exist in this window — uncapped total from the same grouping and
  * threshold as the list. The Signalen list itself stops at {@link SIGNAL_LIST_LIMIT}.
  */
+export async function loadKnowledgeGapCount(db: Database, query: SignalsQuery): Promise<number> {
+  const rows = await selectQuestionGroups(db, query, "none");
+  return questionSignalsFrom(rows, query.now ?? new Date()).length;
+}
+
 export async function countKnowledgeGaps(query: SignalsQuery): Promise<number> {
-  return withFundSchema(query.fundKey, async (db) => {
-    const rows = await selectQuestionGroups(db, query, "none");
-    return questionSignalsFrom(rows, query.now ?? new Date()).length;
-  });
+  return withFundSchema(query.fundKey, (db) => loadKnowledgeGapCount(db, query));
 }
 
 async function loadExerciseAdoption(
@@ -275,16 +295,27 @@ async function loadExerciseAdoption(
     .slice(0, SIGNAL_LIST_LIMIT);
 }
 
-/** Knowledge gaps, optional suspicious refusals, and exercise adoption — one fund-schema pass. */
+/**
+ * Knowledge gaps, their uncapped total, optional suspicious refusals, exercise adoption and the D6
+ * measurement start — one fund-schema transaction. Everything the Signalen page shows comes from
+ * here, so the page opens one transaction instead of three.
+ */
 export async function listSignals(query: SignalsQuery): Promise<SignalsResult> {
   return withFundSchema(query.fundKey, async (db) => {
-    const knowledgeGaps = await loadQuestionSignals(db, query, "none");
+    const ranked = await loadRankedQuestionSignals(db, query, "none");
     const suspiciousRefusals = query.includeSuspicious
       ? await loadQuestionSignals(db, query, "strong")
       : [];
     const exerciseAdoption = includeExerciseAdoption(query)
       ? await loadExerciseAdoption(db, query)
       : [];
-    return { knowledgeGaps, suspiciousRefusals, exerciseAdoption };
+    const measurementStartedAt = await loadMeasurementStartedAt(db);
+    return {
+      measurementStartedAt,
+      knowledgeGaps: ranked.slice(0, SIGNAL_LIST_LIMIT),
+      knowledgeGapsTotal: ranked.length,
+      suspiciousRefusals,
+      exerciseAdoption,
+    };
   });
 }

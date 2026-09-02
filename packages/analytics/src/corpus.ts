@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { chunks, desc, documents, eq, sql, withFundSchema } from "@wunderstack/db";
+import { chunks, desc, documents, eq, sql, withFundSchema, type Database } from "@wunderstack/db";
 
 export interface CorpusDocRow {
   title: string;
@@ -70,24 +70,30 @@ export async function getCorpusOverview(
   tenantId: string,
   agentKey?: string,
 ): Promise<CorpusDocRow[]> {
-  const rows = await withFundSchema(tenantId, (db) =>
-    db
-      .select({
-        title: documents.title,
-        sourceUri: documents.sourceUri,
-        fund: documents.fund,
-        agentKey: documents.agentKey,
-        version: documents.version,
-        contentHash: documents.contentHash,
-        ingestedAt: documents.ingestedAt,
-        chunkCount: sql<number>`count(${chunks.id})`,
-      })
-      .from(documents)
-      .leftJoin(chunks, eq(chunks.documentId, documents.id))
-      .where(agentKey === undefined ? undefined : eq(documents.agentKey, agentKey))
-      .groupBy(documents.id)
-      .orderBy(desc(documents.ingestedAt)),
-  );
+  return withFundSchema(tenantId, (db) => loadCorpusOverview(db, agentKey));
+}
+
+/** The same read, against a caller's open fund-schema transaction. */
+export async function loadCorpusOverview(
+  db: Database,
+  agentKey?: string,
+): Promise<CorpusDocRow[]> {
+  const rows = await db
+    .select({
+      title: documents.title,
+      sourceUri: documents.sourceUri,
+      fund: documents.fund,
+      agentKey: documents.agentKey,
+      version: documents.version,
+      contentHash: documents.contentHash,
+      ingestedAt: documents.ingestedAt,
+      chunkCount: sql<number>`count(${chunks.id})`,
+    })
+    .from(documents)
+    .leftJoin(chunks, eq(chunks.documentId, documents.id))
+    .where(agentKey === undefined ? undefined : eq(documents.agentKey, agentKey))
+    .groupBy(documents.id)
+    .orderBy(desc(documents.ingestedAt));
 
   return rows.map((row) => ({
     title: row.title,

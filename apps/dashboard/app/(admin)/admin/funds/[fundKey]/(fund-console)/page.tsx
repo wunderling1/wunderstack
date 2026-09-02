@@ -1,7 +1,6 @@
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { FundOverviewView } from "@/components/fund/overview";
-import { loadOverviewModel } from "@/lib/overview-load";
 import { parsePeriod } from "@/lib/period";
 import { parseFundKey } from "@/lib/route-params";
 
@@ -25,11 +24,13 @@ export default async function FundOverviewPage({
 
   const period = parsePeriod(rawPeriod);
   const pathname = headerList.get("x-pathname") ?? `/admin/funds/${fundKey}`;
-  const model = await loadOverviewModel(fundKey, period);
+  const nowMs = Date.now();
 
   return (
     <FundOverviewView
-      model={model}
+      fundKey={fundKey}
+      period={period}
+      nowMs={nowMs}
       hrefs={{
         pathname,
         conversations: `/admin/funds/${fundKey}/conversations`,

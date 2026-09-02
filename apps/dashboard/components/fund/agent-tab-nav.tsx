@@ -33,7 +33,9 @@ export function AgentTabNav({
           <Link
             key={tab.segment || "overview"}
             href={href}
-            prefetch={!selected}
+            // Partial prefetch (default) warms the tab shell; `true` would fetch the whole
+            // dynamic route for every tab in the bar. See DashboardSidebar for the reasoning.
+            prefetch={selected ? false : undefined}
             aria-current={selected ? "page" : undefined}
             className={navPillClassName(selected)}
           >

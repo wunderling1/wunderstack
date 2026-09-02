@@ -65,6 +65,7 @@ export {
   refusedSuspiciousRate,
   strengthFromSignals,
   emptyRefusedStrength,
+  emptyOutcomeBreakdown,
   type OutcomeWindow,
   type OutcomeBreakdown,
   type OutcomeCounts,
@@ -75,6 +76,20 @@ export {
 } from "./outcomes.js";
 
 export { listOutcomeActivity, type OutcomeActivityRow } from "./outcome-activity.js";
+
+// The overview's reads, grouped per page section — one fund-schema transaction each.
+export {
+  getActivitySnapshot,
+  getAgentSnapshot,
+  getAgentPanelSnapshot,
+  type ActivitySnapshot,
+  type AgentSnapshot,
+  type AgentOutcomeRow,
+  type AgentPanelSnapshot,
+  type Pair,
+  type TimeWindow,
+  type WindowPair,
+} from "./overview.js";
 
 export {
   CONVERSATION_GAP_MINUTES,

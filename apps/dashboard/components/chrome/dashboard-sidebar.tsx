@@ -159,9 +159,13 @@ function SidebarBody({
             <Link
               key={item.href}
               href={item.href}
-              // Full prefetch (`true`) of the *current* force-dynamic route plus
-              // `staleTimes.dynamic: 0` re-prefetches forever — the page reloads in a loop.
-              prefetch={!item.selected}
+              // Default (`undefined`) = partial prefetch: the route shell up to its `loading.tsx`,
+              // without the page's data fetch. `true` prefetches the *full* dynamic route, and
+              // every sidebar link is in the viewport — so that fired a complete server render,
+              // fund-schema reads and all, for every nav item on every page load. The selected
+              // route stays off entirely: it is already rendered, and prefetching the route you
+              // are on re-enters it.
+              prefetch={item.selected ? false : undefined}
               aria-current={item.selected ? "page" : undefined}
               onClick={onNavigate}
               className={cn(

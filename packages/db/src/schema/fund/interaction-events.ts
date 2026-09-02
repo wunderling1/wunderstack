@@ -47,7 +47,13 @@ export const interactionEvents = pgTable(
     feedback: text("feedback"),
   },
   (table) => [
+    // Inside a fund schema nothing filters on tenant_id, so this one cannot serve a window read;
+    // it is kept for the cross-fund activity roll-up that groups on (tenant_id, agent_id, fund).
     index("interaction_events_tenant_occurred_idx").on(table.tenantId, table.occurredAt),
+    // The window reads every dashboard page makes: `occurred_at >= $1 and occurred_at < $2`,
+    // optionally narrowed to one agent (fund ledger 0005).
+    index("interaction_events_occurred_idx").on(table.occurredAt),
+    index("interaction_events_agent_occurred_idx").on(table.agentId, table.occurredAt),
     index("interaction_events_fund_idx").on(table.fund),
     index("interaction_events_session_idx").on(table.sessionId),
     index("interaction_events_trace_idx").on(table.traceId),

@@ -54,8 +54,9 @@ const nextConfig = {
     "@mastra/otel-exporter",
     "@grpc/grpc-js",
   ],
-  // Our workspace packages ship raw TypeScript with NodeNext-style `.js` import specifiers (required
-  // for tsx/node ESM + tsc). The bundler must map those `.js` requests to the real `.ts` source.
+  // Build-only. `next dev` runs on Turbopack (Next 16 default), which applies TypeScript's own
+  // `.js` -> `.ts` specifier resolution and ignores this hook. `next build --webpack` still needs it:
+  // our workspace packages ship raw TypeScript with NodeNext-style `.js` import specifiers.
   webpack: (config) => {
     config.resolve.extensionAlias = {
       ...config.resolve.extensionAlias,

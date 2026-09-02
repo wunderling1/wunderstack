@@ -16,9 +16,11 @@ export default async function SignalsPage({
   if (!tenantId) redirect("/login");
   const [search, headerList] = await Promise.all([searchParams, headers()]);
   const pathname = headerList.get("x-pathname") ?? "/signals";
+  const readAt = new Date();
   const model = await loadSignalsModel(tenantId, search, { includeSuspicious: false });
   return (
     <SignalsView
+      readAt={readAt}
       pathname={pathname}
       conversationsPath="/conversations"
       model={model}

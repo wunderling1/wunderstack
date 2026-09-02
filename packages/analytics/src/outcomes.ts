@@ -8,6 +8,7 @@ import {
   sql,
   withFundSchema,
   type Database,
+  type SQL,
 } from "@wunderstack/db";
 import { refusedReasons } from "@wunderstack/shared";
 
@@ -160,23 +161,53 @@ function buildRates(
   };
 }
 
-async function loadOutcomeBreakdown(db: Database, window: OutcomeWindow): Promise<OutcomeBreakdown> {
-  const scope = windowScope(window);
+/**
+ * The twelve `count(*) filter (...)` columns a breakdown is built from, as one reusable set.
+ *
+ * `extra` is ANDed into every filter, which is what lets one pass over the table answer for two
+ * windows (`getActivitySnapshot`) instead of two passes for one window each. Without it the set is
+ * the plain window aggregate this module has always produced.
+ */
+export function breakdownCountSelect(extra?: SQL) {
+  const scoped = (predicate: SQL) =>
+    extra === undefined
+      ? sql<number>`count(*) filter (where ${predicate})`
+      : sql<number>`count(*) filter (where ${extra} and ${predicate})`;
+  const refusedFor = (reason: string) =>
+    scoped(
+      sql`${interactionEvents.outcome} = 'refused' and ${interactionEvents.outcomeReason} = ${reason}`,
+    );
+  const classifiedRefusal = sql`${interactionEvents.outcome} = 'refused' and ${interactionEvents.outcomeReason} is not null`;
+  return {
+    answered: scoped(sql`${interactionEvents.outcome} = 'answered'`),
+    refused: scoped(sql`${interactionEvents.outcome} = 'refused'`),
+    clarified: scoped(sql`${interactionEvents.outcome} = 'clarified'`),
+    error: scoped(sql`${interactionEvents.outcome} = 'error'`),
+    unknown: scoped(sql`${interactionEvents.outcome} = 'unknown'`),
+    refusedNoCoverage: refusedFor("no_coverage"),
+    refusedGuardHardFact: refusedFor("guard_hard_fact"),
+    refusedGuardCitationCoupling: refusedFor("guard_citation_coupling"),
+    refusedOutOfScope: refusedFor("out_of_scope"),
+    refusedStrengthNone: scoped(sql`${classifiedRefusal} and ${interactionEvents.retrievedCount} = 0`),
+    refusedStrengthWeak: scoped(
+      sql`${classifiedRefusal} and ${interactionEvents.retrievedCount} > 0 and (${interactionEvents.topScore} is null or ${interactionEvents.topScore} < ${RETRIEVAL_STRONG_MIN_SCORE})`,
+    ),
+    refusedStrengthStrong: scoped(
+      sql`${classifiedRefusal} and ${interactionEvents.retrievedCount} > 0 and ${interactionEvents.topScore} >= ${RETRIEVAL_STRONG_MIN_SCORE}`,
+    ),
+  };
+}
 
-  const [row] = await db
-    .select({
-      ...outcomeCountSelect(),
-      refusedNoCoverage: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'refused' and ${interactionEvents.outcomeReason} = 'no_coverage')`,
-      refusedGuardHardFact: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'refused' and ${interactionEvents.outcomeReason} = 'guard_hard_fact')`,
-      refusedGuardCitationCoupling: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'refused' and ${interactionEvents.outcomeReason} = 'guard_citation_coupling')`,
-      refusedOutOfScope: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'refused' and ${interactionEvents.outcomeReason} = 'out_of_scope')`,
-      refusedStrengthNone: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'refused' and ${interactionEvents.outcomeReason} is not null and ${interactionEvents.retrievedCount} = 0)`,
-      refusedStrengthWeak: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'refused' and ${interactionEvents.outcomeReason} is not null and ${interactionEvents.retrievedCount} > 0 and (${interactionEvents.topScore} is null or ${interactionEvents.topScore} < ${RETRIEVAL_STRONG_MIN_SCORE}))`,
-      refusedStrengthStrong: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'refused' and ${interactionEvents.outcomeReason} is not null and ${interactionEvents.retrievedCount} > 0 and ${interactionEvents.topScore} >= ${RETRIEVAL_STRONG_MIN_SCORE})`,
-    })
-    .from(interactionEvents)
-    .where(scope);
+/**
+ * A breakdown of nothing: every count zero, every rate `no_measurable_turns`. For an agent the
+ * window holds no rows for — "0 van 0" is not a rate, and the view must not print one.
+ */
+export function emptyOutcomeBreakdown(): OutcomeBreakdown {
+  return breakdownFromRow(undefined);
+}
 
+/** Row from {@link breakdownCountSelect} -> breakdown. The only place those columns are read. */
+export function breakdownFromRow(row: BreakdownRow | undefined): OutcomeBreakdown {
   const byOutcome = countsFromRow(row);
 
   const refusedByReason: RefusedReasonCount = {
@@ -200,6 +231,30 @@ async function loadOutcomeBreakdown(db: Database, window: OutcomeWindow): Promis
   };
 }
 
+export interface BreakdownRow {
+  answered?: unknown;
+  refused?: unknown;
+  clarified?: unknown;
+  error?: unknown;
+  unknown?: unknown;
+  refusedNoCoverage?: unknown;
+  refusedGuardHardFact?: unknown;
+  refusedGuardCitationCoupling?: unknown;
+  refusedOutOfScope?: unknown;
+  refusedStrengthNone?: unknown;
+  refusedStrengthWeak?: unknown;
+  refusedStrengthStrong?: unknown;
+}
+
+export async function loadOutcomeBreakdown(db: Database, window: OutcomeWindow): Promise<OutcomeBreakdown> {
+  const [row] = await db
+    .select(breakdownCountSelect())
+    .from(interactionEvents)
+    .where(windowScope(window));
+  return breakdownFromRow(row);
+}
+
+
 /** Outcome splits and KPI rates for a fund over a time window. */
 export async function getOutcomeBreakdown(window: OutcomeWindow): Promise<OutcomeBreakdown> {
   return withFundSchema(window.fundKey, (db) => loadOutcomeBreakdown(db, window));
@@ -213,17 +268,19 @@ export async function getOutcomeBreakdown(window: OutcomeWindow): Promise<Outcom
  * postgres.js yields a string. Returning that string as `Date` made every screen that
  * splits on outcome_reason print "meting nog niet gestart" or throw in `DateTimeFormat`.
  */
+export async function loadMeasurementStartedAt(db: Database): Promise<Date | null> {
+  const [row] = await db
+    .select({ startedAt: sql<Date | string | null>`min(${interactionEvents.occurredAt})` })
+    .from(interactionEvents)
+    .where(isNotNull(interactionEvents.outcomeReason));
+  const value = row?.startedAt;
+  if (value == null) return null;
+  const started = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(started.getTime()) ? null : started;
+}
+
 export async function measurementStartedAt(fundKey: string): Promise<Date | null> {
-  return withFundSchema(fundKey, async (db) => {
-    const [row] = await db
-      .select({ startedAt: sql<Date | string | null>`min(${interactionEvents.occurredAt})` })
-      .from(interactionEvents)
-      .where(isNotNull(interactionEvents.outcomeReason));
-    const value = row?.startedAt;
-    if (value == null) return null;
-    const started = value instanceof Date ? value : new Date(value);
-    return Number.isNaN(started.getTime()) ? null : started;
-  });
+  return withFundSchema(fundKey, loadMeasurementStartedAt);
 }
 
 /** Honest operational status derived from real activity — never a dressed-up green. */

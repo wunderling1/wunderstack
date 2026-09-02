@@ -1,8 +1,6 @@
 import {
   deriveAgentStatus,
-  getExerciseActivity,
-  getOutcomeBreakdown,
-  getRecentInteractions,
+  getAgentPanelSnapshot,
   type OutcomeBreakdown,
 } from "@wunderstack/analytics";
 import { AgentStatusBadge, Chip, KpiTile, Table, TableBody, TableCell, TableRow } from "@wunderstack/ui";
@@ -28,15 +26,16 @@ export async function AgentOverviewPanel({
   conversationsHref: string;
 }) {
   const since = sinceDaysAgo(WINDOW_DAYS);
-  const window = { fundKey, agentId: agentKey, since };
   const quality = agentShowsQualityColumns(agentKey);
   // An exercise agent writes no interaction event (A4), so reading its volume from the event log
-  // would print 0 next to real sessions. Each profile is measured in its own table (S15/S22).
-  const [breakdown, recent, exercise] = await Promise.all([
-    getOutcomeBreakdown(window),
-    getRecentInteractions(window, 1),
-    quality ? Promise.resolve(null) : getExerciseActivity({ fundKey, since }),
-  ]);
+  // would print 0 next to real sessions. Each profile is measured in its own table (S15/S22) —
+  // and all of it in one fund-schema transaction rather than three.
+  const { breakdown, recent, exercise } = await getAgentPanelSnapshot({
+    fundKey,
+    agentId: agentKey,
+    since,
+    includeExercise: !quality,
+  });
   const manifest = getReleaseManifest(agentKey);
   const total = quality ? totalQuestions(breakdown.byOutcome) : (exercise?.sessionCount ?? 0);
   const status = deriveAgentStatus(total, quality ? breakdown.byOutcome.error : 0);

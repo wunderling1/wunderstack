@@ -1,17 +1,16 @@
 import {
-  countKnowledgeGaps,
   deriveAgentStatus,
-  getConversationVolume,
-  getCorpusOverview,
-  getExerciseActivity,
-  getOutcomeBreakdown,
+  emptyOutcomeBreakdown,
+  getActivitySnapshot,
+  getAgentSnapshot,
   getRecentInteractions,
-  measurementStartedAt,
   type AgentOperationalStatus,
   type InteractionLogRow,
   type OutcomeBreakdown,
+  type WindowPair,
 } from "@wunderstack/analytics";
 import { isGroundedAgentKey } from "@wunderstack/shared";
+import { cache } from "react";
 import { listInstancesCached } from "@/lib/fund-lookups";
 import {
   corpusVersionLabel,
@@ -20,6 +19,23 @@ import {
   totalQuestions,
 } from "@/lib/overview";
 import { currentWindow, previousWindow, type PeriodId } from "@/lib/period";
+
+/**
+ * The overview's model, split along the page's Suspense boundaries.
+ *
+ * Each loader is `cache`d on (fundKey, period, nowMs), so two sections that need the same snapshot
+ * share one read instead of racing to issue two. That is what lets the sections stream
+ * independently *and* lets the Status, Actualiteit and Acties sections honour the onboarding gate
+ * without the page having to resolve it first and serialise everything behind it.
+ *
+ * `nowMs` is a number, not a Date, because `cache` keys on argument identity: two Dates for the
+ * same instant are two cache entries. The page reads the clock once and passes it down.
+ */
+
+export function overviewWindows(period: PeriodId, nowMs: number): WindowPair {
+  const current = currentWindow(period, new Date(nowMs));
+  return { current, previous: previousWindow(current) };
+}
 
 /**
  * One row per agent instance, in the vocabulary of that agent. A grounded agent answers questions,
@@ -45,15 +61,12 @@ export type OverviewAgentRow =
       lastOccurredAt: Date | null;
     };
 
-export interface OverviewModel {
+/** Activiteit + Acties: the two blocks that read the fund-wide window. */
+export interface OverviewActivityModel {
   period: PeriodId;
-  since: Date;
-  until: Date;
-  previousSince: Date;
-  previousUntil: Date;
   measurementStartedAt: Date | null;
+  /** Current-window breakdown — Acties prints its justified-refusal rate. */
   current: OutcomeBreakdown;
-  previous: OutcomeBreakdown;
   /** Questions in the window — the KPI unit (S22). */
   currentQuestions: number;
   previousQuestions: number;
@@ -62,71 +75,101 @@ export interface OverviewModel {
   previousConversations: number;
   /** Questions on a channel that carries no thread id (mcp, api) — named, never bundled (A6). */
   unthreadedQuestions: number;
-  onboarding: boolean;
-  fundStatus: AgentOperationalStatus;
-  /** Groups the Signalen list holds for this window — what "N kennisgaten" counts (S11a). */
-  knowledgeGaps: number;
   /** Conversation volume hit the scan cap — Activity tile counts are a floor. */
   conversationVolumeTruncated: boolean;
-  agents: OverviewAgentRow[];
-  recent: InteractionLogRow[];
+  onboarding: boolean;
+  /** Groups the Signalen list holds for this window — what "N kennisgaten" counts (S11a). */
+  knowledgeGaps: number;
+  /** Exercise sessions in the window. Sessions carry no agent key, so this is the fund's total. */
+  exerciseSessions: number;
+  exerciseLastStartedAt: Date | null;
 }
 
-export async function loadOverviewModel(
-  fundKey: string,
-  period: PeriodId,
-  now = new Date(),
-): Promise<OverviewModel> {
-  const current = currentWindow(period, now);
-  const previous = previousWindow(current);
-  const window = { since: current.since, until: current.until };
-  const prevWindow = { since: previous.since, until: previous.until };
+export interface OverviewAgentsModel {
+  agents: OverviewAgentRow[];
+  fundStatus: AgentOperationalStatus;
+  measurementStartedAt: Date | null;
+  onboarding: boolean;
+}
 
-  const [
-    currentBreakdown,
-    previousBreakdown,
-    startedAt,
-    instances,
-    corpus,
-    recent,
-    exercise,
-    previousExercise,
-    knowledgeGaps,
-    volume,
-    previousVolume,
-  ] = await Promise.all([
-    getOutcomeBreakdown({ fundKey, ...window }),
-    getOutcomeBreakdown({ fundKey, ...prevWindow }),
-    measurementStartedAt(fundKey),
-    listInstancesCached(fundKey),
-    getCorpusOverview(fundKey),
-    getRecentInteractions({ fundKey, since: current.since }, 8),
-    // Sessions carry no agent key: this is the fund's exercise volume. With more than one exercise
-    // instance on a fund it would need one, and this read has to narrow.
-    getExerciseActivity({ fundKey, ...window }),
-    getExerciseActivity({ fundKey, ...prevWindow }),
-    // Counted here, not derived from the refusal rate: Acties must print what Signalen lists.
-    countKnowledgeGaps({ fundKey, ...window, now }),
-    getConversationVolume({ fundKey, ...window }),
-    getConversationVolume({ fundKey, ...prevWindow }),
-  ]);
+export interface OverviewRecentModel {
+  rows: InteractionLogRow[];
+  onboarding: boolean;
+}
 
-  const agents: OverviewAgentRow[] = await Promise.all(
-    instances.map(async (instance): Promise<OverviewAgentRow> => {
+const RECENT_LIMIT = 8;
+
+export const loadActivityModel = cache(
+  async (
+    fundKey: string,
+    period: PeriodId,
+    nowMs: number,
+  ): Promise<OverviewActivityModel> => {
+    const windows = overviewWindows(period, nowMs);
+    const snapshot = await getActivitySnapshot({
+      fundKey,
+      windows,
+      now: new Date(nowMs),
+    });
+
+    // Two numbers, two units (S22): questions come from the outcome breakdown, conversations from
+    // the boundary grouper. An exercise session is a container too, so it counts as a conversation
+    // and contributes no questions — that is why the tile reads "N vragen in M gesprekken" and not
+    // a sum.
+    const currentQuestions = totalQuestions(snapshot.outcomes.current.byOutcome);
+    const previousQuestions = totalQuestions(snapshot.outcomes.previous.byOutcome);
+    const currentConversations =
+      snapshot.volume.current.conversations + snapshot.exercise.current.sessionCount;
+    const previousConversations =
+      snapshot.volume.previous.conversations + snapshot.exercise.previous.sessionCount;
+
+    return {
+      period,
+      measurementStartedAt: snapshot.measurementStartedAt,
+      current: snapshot.outcomes.current,
+      currentQuestions,
+      previousQuestions,
+      currentConversations,
+      previousConversations,
+      unthreadedQuestions: snapshot.volume.current.unthreadedQuestions,
+      conversationVolumeTruncated: snapshot.volume.current.truncated,
+      onboarding: isOnboarding(currentConversations, previousConversations),
+      knowledgeGaps: snapshot.knowledgeGaps,
+      exerciseSessions: snapshot.exercise.current.sessionCount,
+      exerciseLastStartedAt: snapshot.exercise.current.lastStartedAt,
+    };
+  },
+);
+
+export const loadAgentsModel = cache(
+  async (fundKey: string, period: PeriodId, nowMs: number): Promise<OverviewAgentsModel> => {
+    const windows = overviewWindows(period, nowMs);
+    // The exercise volume lives in the activity snapshot; `cache` means asking for it here costs
+    // nothing when the Activiteit section already did. All three start together.
+    const [instances, snapshot, activity] = await Promise.all([
+      listInstancesCached(fundKey),
+      getAgentSnapshot({ fundKey, window: windows.current }),
+      loadActivityModel(fundKey, period, nowMs),
+    ]);
+
+    const byAgent = new Map(snapshot.agents.map((row) => [row.agentId, row]));
+
+    const agents: OverviewAgentRow[] = instances.map((instance): OverviewAgentRow => {
       if (!isGroundedAgentKey(instance.agentKey)) {
+        // Sessions carry no agent key: this is the fund's exercise volume. With more than one
+        // exercise instance on a fund it would need one, and this read has to narrow.
         return {
           kind: "exercise",
           agentKey: instance.agentKey,
-          total: exercise.sessionCount,
+          total: activity.exerciseSessions,
           // No error concept on a session: an abandoned run is a signal, not a failure of the agent.
-          status: deriveAgentStatus(exercise.sessionCount, 0),
-          lastOccurredAt: exercise.lastStartedAt,
+          status: deriveAgentStatus(activity.exerciseSessions, 0),
+          lastOccurredAt: activity.exerciseLastStartedAt,
         };
       }
-      const [breakdown, last] = await Promise.all([
-        getOutcomeBreakdown({ fundKey, agentId: instance.agentKey, ...window }),
-        getRecentInteractions({ fundKey, agentId: instance.agentKey, since: current.since }, 1),
-      ]);
+      // An instance with no rows in the window is not missing from the table — it is offline.
+      const row = byAgent.get(instance.agentKey);
+      const breakdown = row?.breakdown ?? emptyOutcomeBreakdown();
       const total = totalQuestions(breakdown.byOutcome);
       return {
         kind: "grounded",
@@ -134,41 +177,31 @@ export async function loadOverviewModel(
         breakdown,
         total,
         status: deriveAgentStatus(total, breakdown.byOutcome.error),
-        lastOccurredAt: last[0]?.occurredAt ?? null,
+        lastOccurredAt: row?.lastOccurredAt ?? null,
         corpusVersion: corpusVersionLabel(
-          corpus.filter((doc) => doc.agentKey === instance.agentKey).map((doc) => doc.version),
+          snapshot.corpus
+            .filter((doc) => doc.agentKey === instance.agentKey)
+            .map((doc) => doc.version),
         ),
       };
-    }),
-  );
+    });
 
-  // Two numbers, two units (S22): questions come from the outcome breakdown, conversations from the
-  // boundary grouper. An exercise session is a container too, so it counts as a conversation and
-  // contributes no questions — that is why the tile reads "N vragen in M gesprekken" and not a sum.
-  const currentQuestions = totalQuestions(currentBreakdown.byOutcome);
-  const previousQuestions = totalQuestions(previousBreakdown.byOutcome);
-  const currentConversations = volume.conversations + exercise.sessionCount;
-  const previousConversations = previousVolume.conversations + previousExercise.sessionCount;
+    return {
+      agents,
+      fundStatus: fundStatusFromAgents(agents),
+      measurementStartedAt: activity.measurementStartedAt,
+      onboarding: activity.onboarding,
+    };
+  },
+);
 
-  return {
-    period,
-    since: current.since,
-    until: current.until,
-    previousSince: previous.since,
-    previousUntil: previous.until,
-    measurementStartedAt: startedAt,
-    current: currentBreakdown,
-    previous: previousBreakdown,
-    currentQuestions,
-    previousQuestions,
-    currentConversations,
-    previousConversations,
-    unthreadedQuestions: volume.unthreadedQuestions,
-    onboarding: isOnboarding(currentConversations, previousConversations),
-    fundStatus: fundStatusFromAgents(agents),
-    knowledgeGaps,
-    conversationVolumeTruncated: volume.truncated,
-    agents,
-    recent,
-  };
-}
+export const loadRecentModel = cache(
+  async (fundKey: string, period: PeriodId, nowMs: number): Promise<OverviewRecentModel> => {
+    const windows = overviewWindows(period, nowMs);
+    const [rows, activity] = await Promise.all([
+      getRecentInteractions({ fundKey, since: windows.current.since }, RECENT_LIMIT),
+      loadActivityModel(fundKey, period, nowMs),
+    ]);
+    return { rows, onboarding: activity.onboarding };
+  },
+);

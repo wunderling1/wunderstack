@@ -2,6 +2,7 @@ import type { ConversationItem } from "@wunderstack/analytics";
 import { ConversationCard } from "@/components/fund/conversation-cards";
 import { ConversationFiltersForm } from "@/components/fund/conversation-filters";
 import { ScanTruncationNote } from "@/components/fund/measurement-note";
+import { UpdatedAt } from "@/components/fund/updated-at";
 import { conversationPermalink, type ConversationFilters } from "@/lib/conversations";
 import { formatCount } from "@/lib/overview";
 
@@ -15,6 +16,7 @@ export function ConversationsView({
   conversationTotal,
   breakdownCount,
   truncated,
+  readAt,
 }: {
   pathname: string;
   listPath: string;
@@ -25,6 +27,8 @@ export function ConversationsView({
   conversationTotal: number;
   breakdownCount: number | null;
   truncated: boolean;
+  /** When these rows were read — the Client Router Cache can hand back a page up to 30s old. */
+  readAt: Date;
 }) {
   const permalinkFor = (id: string) => conversationPermalink(listPath, id);
   const groundedItems = items.filter((item) => item.kind === "grounded");
@@ -32,11 +36,14 @@ export function ConversationsView({
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h2 className="font-display text-lg font-semibold text-text">Gesprekken</h2>
-        <p className="mt-1 text-sm text-text-muted">
-          Fondsbreed overzicht. Filters staan in de URL zodat een selectie deelbaar is.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="font-display text-lg font-semibold text-text">Gesprekken</h2>
+          <p className="mt-1 text-sm text-text-muted">
+            Fondsbreed overzicht. Filters staan in de URL zodat een selectie deelbaar is.
+          </p>
+        </div>
+        <UpdatedAt at={readAt} />
       </div>
 
       <ConversationFiltersForm pathname={pathname} filters={filters} agents={agents} />

@@ -7,6 +7,7 @@ import {
 } from "@wunderstack/analytics";
 import { MeasurementNote } from "@/components/fund/measurement-note";
 import { PeriodPicker } from "@/components/fund/period-picker";
+import { UpdatedAt } from "@/components/fund/updated-at";
 import { conversationPermalink } from "@/lib/conversations";
 import { formatCount } from "@/lib/overview";
 import { agentLabel } from "@/lib/release-manifest";
@@ -20,21 +21,27 @@ export function SignalsView({
   conversationsPath,
   model,
   showSuspicious,
+  readAt,
 }: {
   pathname: string;
   conversationsPath: string;
   model: SignalsModel;
   showSuspicious: boolean;
+  /** When these signals were read — the Client Router Cache can hand back a page up to 30s old. */
+  readAt: Date;
 }) {
   return (
     <div className="flex flex-col gap-10">
-      <div>
-        <h2 className="font-display text-lg font-semibold text-text">Signalen</h2>
-        <p className="mt-1 text-sm text-text-muted">
-          Letterlijke vragen en oefenscenario&apos;s — geen gegenereerde thema&apos;s of
-          samenvattingen. Een groep verschijnt pas bij {SIGNAL_MIN_OCCURRENCES} identieke vragen in
-          deze selectie.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="font-display text-lg font-semibold text-text">Signalen</h2>
+          <p className="mt-1 text-sm text-text-muted">
+            Letterlijke vragen en oefenscenario&apos;s — geen gegenereerde thema&apos;s of
+            samenvattingen. Een groep verschijnt pas bij {SIGNAL_MIN_OCCURRENCES} identieke vragen
+            in deze selectie.
+          </p>
+        </div>
+        <UpdatedAt at={readAt} />
       </div>
 
       <SignalsFiltersForm pathname={pathname} filters={model.filters} agents={model.agents} />

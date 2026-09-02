@@ -27,6 +27,9 @@ const nextConfig = {
   // Marketing is a content site: it depends only on the design system + shared types. It must NEVER
   // pull the agent/model runtime into its bundle (enforced by depcruise no-marketing-to-agents).
   transpilePackages: ["@wunderstack/shared", "@wunderstack/ui"],
+  // Build-only. `next dev` runs on Turbopack (Next 16 default), which applies TypeScript's own
+  // `.js` -> `.ts` specifier resolution and ignores this hook. `next build --webpack` still needs it:
+  // our workspace packages ship raw TypeScript with NodeNext-style `.js` import specifiers.
   webpack: (config) => {
     config.resolve.extensionAlias = {
       ...config.resolve.extensionAlias,
