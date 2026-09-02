@@ -125,7 +125,7 @@ async function loadTopThemes(db: Database, window: KpiWindow, limit: number): Pr
     .map((row) => ({ theme: row.theme, count: toNumber(row.count) }));
 }
 
-async function loadRecentInteractions(
+export async function loadRecentInteractions(
   db: Database,
   window: KpiWindow,
   limit: number,

@@ -24,7 +24,7 @@ import {
   isThreadedChannel,
   type ConversationGroup,
 } from "./conversation-boundary.js";
-import type { OutcomeBreakdown } from "./outcomes.js";
+import { loadOutcomeBreakdown, type OutcomeBreakdown } from "./outcomes.js";
 
 /** Conversations (containers) listed on one page. */
 export const CONVERSATION_LIST_LIMIT = 50;
@@ -96,6 +96,11 @@ export type ConversationItem = GroundedConversation | ExerciseConversation;
 
 export interface ConversationList {
   items: ConversationItem[];
+  /**
+   * Window + agent breakdown, unaffected by the outcome/reason filter — the page prints a filtered
+   * count against it. Read in the list's own transaction: same scope, same rows, no second BEGIN.
+   */
+  breakdown: OutcomeBreakdown;
   /** Questions matching the filter — the KPI unit (S22). */
   questionTotal: number;
   /** Conversations holding at least one matching question. */
@@ -162,6 +167,16 @@ function sessionWindowParts(query: { since: Date; until?: Date }) {
 
 function toNumber(value: unknown): number {
   return typeof value === "number" ? value : Number(value ?? 0);
+}
+
+/** `max(...)` goes through drizzle `sql`, not the column mapper, so postgres.js yields a string. */
+function asDate(value: Date | string | null | undefined): Date | null {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value === "string" && value.length > 0) {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return null;
 }
 
 function asSessionStatus(value: string): RoleplaySessionStatus {
@@ -310,6 +325,50 @@ function scanWindow(db: Database, query: { since: Date; until?: Date; agentId?: 
     .limit(CONVERSATION_TURN_SCAN_CAP);
 }
 
+/**
+ * The five columns {@link groupIntoConversations} needs. Counting conversations reads no question
+ * text: pulling `question` for up to {@link CONVERSATION_TURN_SCAN_CAP} rows only to throw it away
+ * is the cheapest thing on this page to stop doing.
+ */
+export const boundaryColumns = {
+  id: interactionEvents.id,
+  sessionId: interactionEvents.sessionId,
+  agentId: interactionEvents.agentId,
+  occurredAt: interactionEvents.occurredAt,
+  channel: interactionEvents.channel,
+};
+
+export type BoundaryRow = {
+  id: string;
+  sessionId: string;
+  agentId: string;
+  occurredAt: Date;
+  channel: string | null;
+};
+
+/** Boundary-column scan over one window, newest first, capped at `limit`. */
+export function scanBoundaryWindow(
+  db: Database,
+  query: { since: Date; until?: Date; agentId?: string },
+  limit: number = CONVERSATION_TURN_SCAN_CAP,
+) {
+  return db
+    .select(boundaryColumns)
+    .from(interactionEvents)
+    .where(scopeParts(query))
+    .orderBy(desc(interactionEvents.occurredAt))
+    .limit(limit);
+}
+
+/** Conversations and unthreaded questions in one already-scanned set of boundary rows. */
+export function volumeFromRows(rows: readonly BoundaryRow[], cap: number): ConversationVolume {
+  return {
+    conversations: groupIntoConversations(rows).length,
+    unthreadedQuestions: rows.filter((row) => !isThreadedChannel(row.channel)).length,
+    truncated: rows.length >= cap,
+  };
+}
+
 async function loadGroundedConversations(
   db: Database,
   query: ConversationQuery,
@@ -390,8 +449,16 @@ async function loadConversationList(
 
   const items: ConversationItem[] = [...grounded.items, ...exercise.items];
 
+  const breakdown = await loadOutcomeBreakdown(db, {
+    fundKey: query.fundKey,
+    since: query.since,
+    until: query.until,
+    agentId: query.agentId,
+  });
+
   return {
     items,
+    breakdown,
     questionTotal: grounded.questionTotal,
     conversationTotal: grounded.conversationTotal,
     exerciseTotal: exercise.total,
@@ -415,12 +482,8 @@ export async function getConversationVolume(window: {
   agentId?: string;
 }): Promise<ConversationVolume> {
   return withFundSchema(window.fundKey, async (db) => {
-    const rows = await scanWindow(db, window);
-    return {
-      conversations: groupIntoConversations(rows).length,
-      unthreadedQuestions: rows.filter((row) => !isThreadedChannel(row.channel)).length,
-      truncated: rows.length >= CONVERSATION_TURN_SCAN_CAP,
-    };
+    const rows = await scanBoundaryWindow(db, window);
+    return volumeFromRows(rows, CONVERSATION_TURN_SCAN_CAP);
   });
 }
 
@@ -439,22 +502,29 @@ export async function getExerciseActivity(query: {
   since: Date;
   until?: Date;
 }): Promise<ExerciseActivity> {
-  return withFundSchema(query.fundKey, async (db) => {
-    const scope = sessionWindowParts(query);
-    const [countRows, lastRows] = await Promise.all([
-      db.select({ n: sql<number>`count(*)` }).from(roleplaySessions).where(scope),
-      db
-        .select({ startedAt: roleplaySessions.startedAt })
-        .from(roleplaySessions)
-        .where(scope)
-        .orderBy(desc(roleplaySessions.startedAt))
-        .limit(1),
-    ]);
-    return {
-      sessionCount: toNumber(countRows[0]?.n),
-      lastStartedAt: lastRows[0]?.startedAt ?? null,
-    };
-  });
+  return withFundSchema(query.fundKey, (db) => loadExerciseActivity(db, query));
+}
+
+/**
+ * The same read, against a caller's open fund-schema transaction. Count and last start come from
+ * one aggregate: postgres.js cannot pipeline two selects on one connection, so two would be two
+ * round trips for one row.
+ */
+export async function loadExerciseActivity(
+  db: Database,
+  query: { since: Date; until?: Date },
+): Promise<ExerciseActivity> {
+  const [row] = await db
+    .select({
+      sessionCount: sql<number>`count(*)`,
+      lastStartedAt: sql<Date | string | null>`max(${roleplaySessions.startedAt})`,
+    })
+    .from(roleplaySessions)
+    .where(sessionWindowParts(query));
+  return {
+    sessionCount: toNumber(row?.sessionCount),
+    lastStartedAt: asDate(row?.lastStartedAt),
+  };
 }
 
 /**

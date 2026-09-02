@@ -16,9 +16,11 @@ export default async function ConversationsPage({
   if (!tenantId) redirect("/login");
   const [search, headerList] = await Promise.all([searchParams, headers()]);
   const pathname = headerList.get("x-pathname") ?? "/conversations";
+  const readAt = new Date();
   const model = await loadConversationsModel(tenantId, search);
   return (
     <ConversationsView
+      readAt={readAt}
       pathname={pathname}
       listPath="/conversations"
       filters={model.filters}

@@ -11,13 +11,23 @@ import {
   TableRow,
 } from "@wunderstack/ui";
 import Link from "next/link";
+import { Suspense } from "react";
 import { SIGNAL_MIN_OCCURRENCES, type OutcomeCounts, type Rate } from "@wunderstack/analytics";
 import { MeasurementNote, ScanTruncationNote } from "@/components/fund/measurement-note";
+import { SectionSkeleton } from "@/components/fund/panel-skeleton";
 import { PeriodPicker } from "@/components/fund/period-picker";
+import { UpdatedAt } from "@/components/fund/updated-at";
 import { formatCount, formatRate } from "@/lib/overview";
 import { outcomeChipVariant, outcomeLabel } from "@/lib/conversations";
 import { PERIOD_LABELS, type PeriodId } from "@/lib/period";
-import type { OverviewModel } from "@/lib/overview-load";
+import {
+  loadActivityModel,
+  loadAgentsModel,
+  loadRecentModel,
+  type OverviewActivityModel,
+  type OverviewAgentsModel,
+  type OverviewRecentModel,
+} from "@/lib/overview-load";
 import { agentLabel } from "@/lib/release-manifest";
 
 const dateTime = new Intl.DateTimeFormat("nl-NL", { dateStyle: "short", timeStyle: "short" });
@@ -30,38 +40,96 @@ export interface OverviewHrefs {
   agent: (agentKey: string) => string;
 }
 
-export function FundOverviewView({
-  model,
-  hrefs,
-}: {
-  model: OverviewModel;
+interface SectionProps {
+  fundKey: string;
+  period: PeriodId;
+  nowMs: number;
   hrefs: OverviewHrefs;
-}) {
-  if (model.onboarding) {
-    return (
-      <div className="flex flex-col gap-6">
-        <PeriodPicker pathname={hrefs.pathname} period={model.period} />
-        <OnboardingCard hrefs={hrefs} period={model.period} />
-      </div>
-    );
-  }
+}
 
+/**
+ * The fund overview, streamed per section.
+ *
+ * Chrome (period picker, timestamp) renders immediately; each block below arrives when its own
+ * reads land instead of when the slowest read on the page does. The blocks share their snapshots
+ * through the `cache`d loaders in `lib/overview-load.ts`, so streaming costs no extra query.
+ *
+ * The onboarding gate is per section rather than around the page: a page-level `await` would have
+ * to resolve before any section could start its own read, which is exactly the serialisation the
+ * boundaries exist to remove. Every section asks the same cached activity model, so they agree.
+ *
+ * The price of keeping that gate is that all four sections depend on the activity model, so they
+ * land in two waves rather than four: chrome first, then everything the activity snapshot gates.
+ * Dropping the gate would buy a third wave and cost the "Nog niet live" page — not a trade to make
+ * for a fund with no traffic, which is exactly the fund that page is for.
+ */
+export function FundOverviewView(props: SectionProps) {
   return (
     <div className="flex flex-col gap-10">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <PeriodPicker pathname={hrefs.pathname} period={model.period} />
-        <AgentStatusBadge
-          status={model.fundStatus}
-          label={model.fundStatus === "offline" ? "Nog niet live" : undefined}
-        />
+        <PeriodPicker pathname={props.hrefs.pathname} period={props.period} />
+        <div className="flex items-center gap-4">
+          <UpdatedAt at={new Date(props.nowMs)} />
+          <Suspense fallback={null}>
+            <FundStatus {...props} />
+          </Suspense>
+        </div>
       </div>
 
-      <ActivityBlock model={model} hrefs={hrefs} />
-      <StatusBlock model={model} hrefs={hrefs} />
-      <RecentBlock model={model} hrefs={hrefs} />
-      <ActionsBlock model={model} hrefs={hrefs} />
+      <Suspense fallback={<SectionSkeleton blocks={2} />}>
+        <ActivitySection {...props} />
+      </Suspense>
+      <Suspense fallback={<SectionSkeleton blocks={1} />}>
+        <StatusSection {...props} />
+      </Suspense>
+      <Suspense fallback={<SectionSkeleton blocks={1} />}>
+        <RecentSection {...props} />
+      </Suspense>
+      <Suspense fallback={<SectionSkeleton blocks={1} />}>
+        <ActionsSection {...props} />
+      </Suspense>
     </div>
   );
+}
+
+async function FundStatus({ fundKey, period, nowMs }: SectionProps) {
+  const model = await loadAgentsModel(fundKey, period, nowMs);
+  if (model.onboarding) return null;
+  return (
+    <AgentStatusBadge
+      status={model.fundStatus}
+      label={model.fundStatus === "offline" ? "Nog niet live" : undefined}
+    />
+  );
+}
+
+async function ActivitySection({ fundKey, period, nowMs, hrefs }: SectionProps) {
+  // Started together, not one after the other: the agents model already awaits the activity model
+  // internally, so sequencing them here would add a round trip and buy nothing.
+  const [model, agents] = await Promise.all([
+    loadActivityModel(fundKey, period, nowMs),
+    loadAgentsModel(fundKey, period, nowMs),
+  ]);
+  if (model.onboarding) return <OnboardingCard hrefs={hrefs} period={model.period} />;
+  return <ActivityBlock model={model} agents={agents} hrefs={hrefs} />;
+}
+
+async function StatusSection({ fundKey, period, nowMs, hrefs }: SectionProps) {
+  const model = await loadAgentsModel(fundKey, period, nowMs);
+  if (model.onboarding) return null;
+  return <StatusBlock model={model} hrefs={hrefs} />;
+}
+
+async function RecentSection({ fundKey, period, nowMs, hrefs }: SectionProps) {
+  const model = await loadRecentModel(fundKey, period, nowMs);
+  if (model.onboarding) return null;
+  return <RecentBlock model={model} hrefs={hrefs} />;
+}
+
+async function ActionsSection({ fundKey, period, nowMs, hrefs }: SectionProps) {
+  const model = await loadActivityModel(fundKey, period, nowMs);
+  if (model.onboarding) return null;
+  return <ActionsBlock model={model} hrefs={hrefs} />;
 }
 
 function OnboardingCard({ hrefs, period }: { hrefs: OverviewHrefs; period: PeriodId }) {
@@ -83,7 +151,15 @@ function OnboardingCard({ hrefs, period }: { hrefs: OverviewHrefs; period: Perio
   );
 }
 
-function ActivityBlock({ model, hrefs }: { model: OverviewModel; hrefs: OverviewHrefs }) {
+function ActivityBlock({
+  model,
+  agents,
+  hrefs,
+}: {
+  model: OverviewActivityModel;
+  agents: OverviewAgentsModel;
+  hrefs: OverviewHrefs;
+}) {
   return (
     <section className="flex flex-col gap-4">
       <h2 className="text-sm font-semibold text-text">Activiteit</h2>
@@ -119,7 +195,7 @@ function ActivityBlock({ model, hrefs }: { model: OverviewModel; hrefs: Overview
         <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-text-subtle">
           Mix per agent
         </h3>
-        {model.agents.length === 0 ? (
+        {agents.agents.length === 0 ? (
           <p className="text-sm text-text-subtle">Nog geen agents op dit fonds.</p>
         ) : (
           <Table>
@@ -132,7 +208,7 @@ function ActivityBlock({ model, hrefs }: { model: OverviewModel; hrefs: Overview
               </TableRow>
             </TableHeader>
             <TableBody>
-              {model.agents.map((agent) => (
+              {agents.agents.map((agent) => (
                 <TableRow key={agent.agentKey}>
                   <TableCell>
                     <Link
@@ -164,7 +240,7 @@ function ActivityBlock({ model, hrefs }: { model: OverviewModel; hrefs: Overview
   );
 }
 
-function StatusBlock({ model, hrefs }: { model: OverviewModel; hrefs: OverviewHrefs }) {
+function StatusBlock({ model, hrefs }: { model: OverviewAgentsModel; hrefs: OverviewHrefs }) {
   return (
     <section className="flex flex-col gap-3">
       <h2 className="text-sm font-semibold text-text">Status</h2>
@@ -219,13 +295,13 @@ function StatusBlock({ model, hrefs }: { model: OverviewModel; hrefs: OverviewHr
   );
 }
 
-function RecentBlock({ model, hrefs }: { model: OverviewModel; hrefs: OverviewHrefs }) {
+function RecentBlock({ model, hrefs }: { model: OverviewRecentModel; hrefs: OverviewHrefs }) {
   return (
     <section className="flex flex-col gap-3">
       {/* Scanning what is being asked right now is per question, not per conversation (S22). The
           block keeps its S11 name; the unit it shows is the question. */}
       <h2 className="text-sm font-semibold text-text">Actualiteit — laatste vragen</h2>
-      {model.recent.length === 0 ? (
+      {model.rows.length === 0 ? (
         <p className="text-sm text-text-subtle">Geen vragen in deze periode.</p>
       ) : (
         <Table>
@@ -237,7 +313,7 @@ function RecentBlock({ model, hrefs }: { model: OverviewModel; hrefs: OverviewHr
             </TableRow>
           </TableHeader>
           <TableBody>
-            {model.recent.map((row, index) => (
+            {model.rows.map((row, index) => (
               <TableRow key={`${row.occurredAt.toISOString()}-${index}`}>
                 <TableCell className="whitespace-nowrap text-text-muted">
                   {dateTime.format(row.occurredAt)}
@@ -259,7 +335,7 @@ function RecentBlock({ model, hrefs }: { model: OverviewModel; hrefs: OverviewHr
   );
 }
 
-function ActionsBlock({ model, hrefs }: { model: OverviewModel; hrefs: OverviewHrefs }) {
+function ActionsBlock({ model, hrefs }: { model: OverviewActivityModel; hrefs: OverviewHrefs }) {
   const justified = model.current.rates.refusedJustified;
   // The refused questions underneath the gaps — context for the count, never the count itself. A
   // gap is a repeated question; a single refusal is not yet one.

@@ -22,6 +22,20 @@ export const FUND_MIGRATION_TURN_OUTCOME = "0003_turn_outcome";
 /** Repair path: add outcome CHECK when a fund was provisioned before CREATE included it. */
 export const FUND_MIGRATION_OUTCOME_CHECK = "0004_outcome_check";
 
+/**
+ * Ledger 0005: indexes for the window reads every dashboard page makes.
+ *
+ * Inside a fund schema nothing filters on `tenant_id` — the schema is the fund — so
+ * `interaction_events_tenant_occurred_idx` cannot serve `occurred_at >= $1 and occurred_at < $2`:
+ * its leading column is never in the predicate. Every KPI query therefore fell back to a seq scan.
+ * At the volumes measured on 1 September 2026 (224 rows) that is free; it stops being free long
+ * before anyone notices it happening.
+ *
+ * The tenant index stays: `getAgentActivity` still groups on `(tenant_id, agent_id, fund)`, and
+ * dropping an index is a separate decision from adding one.
+ */
+export const FUND_MIGRATION_WINDOW_INDEXES = "0005_window_indexes";
+
 export const INTERACTION_EVENTS_OUTCOME_CHECK =
   "CHECK (outcome IN ('answered', 'refused', 'clarified', 'error', 'unknown'))";
 
@@ -199,6 +213,20 @@ export function fundTableIndexesSql(schemaName: string): string[] {
     `CREATE INDEX IF NOT EXISTS interaction_events_session_idx ON ${q}.interaction_events (session_id)`,
     `CREATE INDEX IF NOT EXISTS interaction_events_trace_idx ON ${q}.interaction_events (trace_id)`,
     `CREATE INDEX IF NOT EXISTS interaction_events_channel_idx ON ${q}.interaction_events (channel)`,
+    ...windowIndexesSql(schemaName),
+  ];
+}
+
+/**
+ * The window indexes (ledger 0005), separately so the migration can apply them to schemas that
+ * already exist. Plain ascending: Postgres scans a btree backwards, so `order by occurred_at desc`
+ * is served without a DESC index.
+ */
+export function windowIndexesSql(schemaName: string): string[] {
+  const q = quoteIdent(schemaName);
+  return [
+    `CREATE INDEX IF NOT EXISTS interaction_events_occurred_idx ON ${q}.interaction_events (occurred_at)`,
+    `CREATE INDEX IF NOT EXISTS interaction_events_agent_occurred_idx ON ${q}.interaction_events (agent_id, occurred_at)`,
   ];
 }
 

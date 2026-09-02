@@ -23,10 +23,12 @@ export default async function AdminSignalsPage({
   if (!fundKey) notFound();
 
   const pathname = headerList.get("x-pathname") ?? `/admin/funds/${fundKey}/signals`;
+  const readAt = new Date();
   const model = await loadSignalsModel(fundKey, search, { includeSuspicious: true });
 
   return (
     <SignalsView
+      readAt={readAt}
       pathname={pathname}
       conversationsPath={`/admin/funds/${fundKey}/conversations`}
       model={model}

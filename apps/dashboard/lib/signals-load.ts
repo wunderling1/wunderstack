@@ -1,7 +1,5 @@
 import {
-  countKnowledgeGaps,
   listSignals,
-  measurementStartedAt,
   type ExerciseAdoptionRow,
   type QuestionSignal,
 } from "@wunderstack/analytics";
@@ -30,31 +28,24 @@ export async function loadSignalsModel(
   const filters = parseSignalsFilters(search, agents);
   const window = currentWindow(filters.period, now);
 
-  const [signals, startedAt, knowledgeGapsTotal] = await Promise.all([
-    listSignals({
-      fundKey,
-      since: window.since,
-      until: window.until,
-      agentId: filters.agentId,
-      includeSuspicious: options.includeSuspicious,
-      now,
-    }),
-    measurementStartedAt(fundKey),
-    countKnowledgeGaps({
-      fundKey,
-      since: window.since,
-      until: window.until,
-      agentId: filters.agentId,
-      now,
-    }),
-  ]);
+  // One transaction. The gap total and the measurement start used to be two more reads; both come
+  // out of the ranking `listSignals` already builds, so asking for them separately was the same
+  // query twice plus a BEGIN/COMMIT each.
+  const signals = await listSignals({
+    fundKey,
+    since: window.since,
+    until: window.until,
+    agentId: filters.agentId,
+    includeSuspicious: options.includeSuspicious,
+    now,
+  });
 
   return {
     filters,
     agents,
-    measurementStartedAt: startedAt,
+    measurementStartedAt: signals.measurementStartedAt,
     knowledgeGaps: signals.knowledgeGaps,
-    knowledgeGapsTotal,
+    knowledgeGapsTotal: signals.knowledgeGapsTotal,
     suspiciousRefusals: options.includeSuspicious ? signals.suspiciousRefusals : [],
     exerciseAdoption: signals.exerciseAdoption,
   };

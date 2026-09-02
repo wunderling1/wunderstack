@@ -24,10 +24,12 @@ export default async function AdminConversationsPage({
 
   const listPath = `/admin/funds/${fundKey}/conversations`;
   const pathname = headerList.get("x-pathname") ?? listPath;
+  const readAt = new Date();
   const model = await loadConversationsModel(fundKey, search);
 
   return (
     <ConversationsView
+      readAt={readAt}
       pathname={pathname}
       listPath={listPath}
       filters={model.filters}

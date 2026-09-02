@@ -23,8 +23,10 @@ export {
   FUND_MIGRATION_ROLEPLAY,
   FUND_MIGRATION_TURN_OUTCOME,
   FUND_MIGRATION_OUTCOME_CHECK,
+  FUND_MIGRATION_WINDOW_INDEXES,
   turnOutcomeAlterSql,
   outcomeCheckConstraintSql,
+  windowIndexesSql,
   provisionDdl,
   roleplayDdl,
   roleplayAlterSql,
@@ -164,6 +166,9 @@ export {
 // Re-export the query operators consumers need, so the ORM stays behind this seam
 // (no package/script imports drizzle-orm directly). Extend as new operators are needed.
 export { eq, and, asc, desc, gte, gt, lt, lte, inArray, isNotNull, count, sql } from "drizzle-orm";
+// `SQL` is the type of a composed fragment — needed by callers that build one filter and reuse it
+// across several aggregate columns (see `breakdownCountSelect` in @wunderstack/analytics).
+export type { SQL } from "drizzle-orm";
 // pgvector distance helper used by retrieval (Fase 5). Kept here so the ORM stays behind
 // this seam; add l2Distance/innerProduct here too if a later phase needs them.
 export { cosineDistance } from "drizzle-orm";

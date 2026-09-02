@@ -1,6 +1,5 @@
 import {
   breakdownCountForFilter,
-  getOutcomeBreakdown,
   listConversations,
   type ConversationItem,
 } from "@wunderstack/analytics";
@@ -42,15 +41,9 @@ export async function loadConversationsModel(
     outcomeReason: filters.reason,
   };
 
-  const [list, breakdown] = await Promise.all([
-    listConversations(query),
-    getOutcomeBreakdown({
-      fundKey,
-      since: window.since,
-      until: window.until,
-      agentId: filters.agentId,
-    }),
-  ]);
+  // The breakdown comes back on the list: same window, same agent scope, same transaction. As two
+  // calls it was the same rows read twice, each paying its own BEGIN + SET LOCAL + COMMIT.
+  const list = await listConversations(query);
 
   return {
     filters,
@@ -60,7 +53,7 @@ export async function loadConversationsModel(
     // An exercise session is a container with turns, the same shape as a conversation (S22), so it
     // counts here. It carries no questions, which is why the two totals are not a sum of each other.
     conversationTotal: list.conversationTotal + list.exerciseTotal,
-    breakdownCount: breakdownCountForFilter(breakdown, {
+    breakdownCount: breakdownCountForFilter(list.breakdown, {
       outcome: filters.outcome,
       outcomeReason: filters.reason,
     }),
