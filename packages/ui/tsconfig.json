@@ -5,6 +5,10 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
+    // Tests run on the native runner (`node --experimental-strip-types`), which resolves
+    // `./x.ts` but not `./x`. Only test files use the extension; components and the barrel stay
+    // extensionless so Turbopack can map them (see tsconfig.base.json -> Bundler).
+    "allowImportingTsExtensions": true,
     "noEmit": true
   },
   "include": ["src"]

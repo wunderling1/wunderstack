@@ -60,6 +60,9 @@ export interface RetrievalOutput extends RetrievalMeta {
   chunks: RetrievedChunk[];
   /** chunkId -> full chunk content, for verbatim quote verification. */
   fullChunkContent: [string, string][];
+  consideredCount: number;
+  aboveThresholdCount: number;
+  droppedChunks: RetrievedChunk[];
 }
 
 /**
@@ -92,5 +95,8 @@ export async function runRetrieval(input: RetrievalInput): Promise<RetrievalOutp
     ...meta,
     chunks: result.chunks,
     fullChunkContent: result.chunks.map((chunk) => [chunk.chunkId, chunk.content]),
+    consideredCount: result.consideredCount,
+    aboveThresholdCount: result.aboveThresholdCount,
+    droppedChunks: result.droppedChunks,
   };
 }

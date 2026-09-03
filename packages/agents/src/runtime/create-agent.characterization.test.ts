@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { arboProfile } from "../arbo/profile.js";
-import { NOT_IN_CATALOG_MESSAGE } from "../arbo/prompt.js";
-import { caoProfile } from "../cao/profile.js";
-import type { AgentStreamEvent } from "../types.js";
-import { createGroundedAgent, followUpSpanName } from "./create-agent.js";
-import type { AgentRuntimeProfile, RetrievalOutput } from "./profile.js";
+import { arboProfile } from "../arbo/profile";
+import { NOT_IN_CATALOG_MESSAGE } from "../arbo/prompt";
+import { caoProfile } from "../cao/profile";
+import type { AgentStreamEvent } from "../types";
+import { createGroundedAgent, followUpSpanName } from "./create-agent";
+import type { AgentRuntimeProfile, RetrievalOutput } from "./profile";
 
 /**
  * Characterization: arbo empty-retrieval stream must stay byte-identical to the pre-profile
@@ -20,30 +20,44 @@ const EMPTY_RETRIEVAL: RetrievalOutput = {
   timings: { rewriteMs: 0, embedMs: 0, searchMs: 0, rerankMs: 0, totalMs: 0 },
   chunks: [],
   fullChunkContent: [],
+  consideredCount: 0,
+  aboveThresholdCount: 0,
+  droppedChunks: [],
+};
+
+const EMPTY_RETRIEVAL_EVENT = {
+  type: "retrieval" as const,
+  corpus: { label: "Corpus", version: "" },
+  considered: 0,
+  aboveThreshold: 0,
+  hits: [] as { label: string; dropped: boolean }[],
 };
 
 const ZERO_USAGE = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
 /** Recorded 24 Aug 2026 against arbo/agent.ts before createGroundedAgent (empty-hit stream). */
-const ARBO_EMPTY_HIT_STREAM: AgentStreamEvent[] = [
-  { type: "status", phase: "searching" },
-  { type: "text", delta: NOT_IN_CATALOG_MESSAGE },
-  {
-    type: "citations",
-    found: false,
-    needsClarification: false,
-    turnOutcome: { outcome: "refused", outcomeReason: "no_coverage" },
-    retrievedCount: 0,
-    topScore: null,
-    citations: [],
-    citationVerificationFailed: false,
-    answer: NOT_IN_CATALOG_MESSAGE,
-  },
-  { type: "done", usage: ZERO_USAGE, traceId: null },
-];
-
+function arboEmptyHitStream(question: string): AgentStreamEvent[] {
+  return [
+    { type: "status", phase: "searching" },
+    { ...EMPTY_RETRIEVAL_EVENT, query: question },
+    { type: "text", delta: NOT_IN_CATALOG_MESSAGE },
+    {
+      type: "citations",
+      found: false,
+      needsClarification: false,
+      turnOutcome: { outcome: "refused", outcomeReason: "no_coverage" },
+      retrievedCount: 0,
+      topScore: null,
+      citations: [],
+      citationVerificationFailed: false,
+      answer: NOT_IN_CATALOG_MESSAGE,
+    },
+    { type: "done", usage: ZERO_USAGE, traceId: null },
+  ];
+}
 describe("arbo characterization — empty retrieval stream", () => {
   it("emits the same events as the pre-refactor arbo agent (no clarify, catalog refusal)", async () => {
+    const question = "Wat is de maximale tilnorm?";
     const profile: AgentRuntimeProfile = {
       ...arboProfile,
       runRetrieval: async () => EMPTY_RETRIEVAL,
@@ -51,15 +65,16 @@ describe("arbo characterization — empty retrieval stream", () => {
     const agent = createGroundedAgent(profile);
     const events: AgentStreamEvent[] = [];
     for await (const event of agent.answerStream({
-      question: "Wat is de maximale tilnorm?",
+      question,
       fund: "oomt",
     })) {
       events.push(event);
     }
-    assert.deepEqual(events, ARBO_EMPTY_HIT_STREAM);
+    assert.deepEqual(events, arboEmptyHitStream(question));
   });
 
   it("does not run clarify for a salary-shaped question (clarify: null)", async () => {
+    const question = "Hoeveel verdien ik?";
     let retrieved = false;
     const profile: AgentRuntimeProfile = {
       ...arboProfile,
@@ -71,7 +86,7 @@ describe("arbo characterization — empty retrieval stream", () => {
     const agent = createGroundedAgent(profile);
     const events: AgentStreamEvent[] = [];
     for await (const event of agent.answerStream({
-      question: "Hoeveel verdien ik?",
+      question,
       fund: "oomt",
     })) {
       events.push(event);
@@ -81,7 +96,7 @@ describe("arbo characterization — empty retrieval stream", () => {
       events.some((event) => event.type === "citations" && event.needsClarification === true),
       false,
     );
-    assert.deepEqual(events, ARBO_EMPTY_HIT_STREAM);
+    assert.deepEqual(events, arboEmptyHitStream(question));
   });
 });
 

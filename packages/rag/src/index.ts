@@ -3,11 +3,11 @@
 
 import { requireRerankConfig } from "@wunderstack/shared";
 
-import { assemble, type AssembledContext, type RetrievalTimings } from "./assemble.js";
-import { mergeRetrievedChunks } from "./merge-chunks.js";
-import { rerank } from "./rerank.js";
-import { retrieveInputSchema, retrieveValidatedTimed, type RetrieveInput } from "./retrieve.js";
-import { rewriteQuery, type QueryExpansion } from "./rewrite.js";
+import { assemble, type AssembledContext, type RetrievalTimings } from "./assemble";
+import { mergeRetrievedChunks } from "./merge-chunks";
+import { rerank } from "./rerank";
+import { retrieveInputSchema, retrieveValidatedTimed, type RetrieveInput } from "./retrieve";
+import { rewriteQuery, type QueryExpansion } from "./rewrite";
 
 type RetrieveContextInput = RetrieveInput & { queryExpansions?: QueryExpansion[] };
 
@@ -65,6 +65,13 @@ export async function retrieveContext(input: RetrieveContextInput): Promise<Asse
       ? (retrieveLists[0]?.chunks ?? [])
       : mergeRetrievedChunks(retrieveLists.map((result) => result.chunks));
 
+  const consideredCount = retrieveLists.reduce((sum, result) => sum + result.consideredCount, 0);
+  const droppedChunks =
+    retrieveLists.length === 1
+      ? (retrieveLists[0]?.droppedChunks ?? [])
+      : mergeRetrievedChunks(retrieveLists.map((result) => result.droppedChunks));
+  const aboveThresholdCount = retrieved.length;
+
   const embedMs = Math.max(...retrieveLists.map((result) => result.timings.embedMs));
   const searchMs = Math.max(...retrieveLists.map((result) => result.timings.searchMs));
 
@@ -78,7 +85,12 @@ export async function retrieveContext(input: RetrieveContextInput): Promise<Asse
     totalMs: performance.now() - totalStart,
   };
 
-  return assemble(reranked, timings);
+  return {
+    ...assemble(reranked, timings),
+    consideredCount,
+    aboveThresholdCount,
+    droppedChunks,
+  };
 }
 
 export {
@@ -92,11 +104,12 @@ export {
   type RetrievedChunk,
   type RetrievedChunkSource,
   type RetrievedChunkStructure,
-} from "./retrieve.js";
-export { mergeRetrievedChunks } from "./merge-chunks.js";
-export { rerank, type RerankInput, type RerankResult, type RerankStatus } from "./rerank.js";
-export { rewriteQuery, type RewriteResult, type QueryExpansion } from "./rewrite.js";
-export { assemble, type AssembledContext, type RetrievalTimings } from "./assemble.js";
+} from "./retrieve";
+export { mergeRetrievedChunks } from "./merge-chunks";
+export { rerank, type RerankInput, type RerankResult, type RerankStatus } from "./rerank";
+export { rewriteQuery, type RewriteResult, type QueryExpansion } from "./rewrite";
+export { assemble, type AssembledContext, type RetrievalTimings } from "./assemble";
+export { deriveChunkHeading } from "./heading";
 export {
   fetchParentPassage,
   listCorpora,
@@ -109,7 +122,7 @@ export {
   type PassageInput,
   type PassageResult,
   type StructuralRefs,
-} from "./passage.js";
+} from "./passage";
 // Re-exported so short-lived callers (the eval run) can close the DB pool and exit cleanly without
 // depending on @wunderstack/db directly. Long-lived servers keep the pool and never call this.
 export { closeDb } from "@wunderstack/db";

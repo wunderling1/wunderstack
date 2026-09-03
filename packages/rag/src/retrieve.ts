@@ -152,7 +152,12 @@ export function searchPathForRetrieve(input: { fund: string; searchPath?: string
 export async function retrieveFromVector(
   queryVector: number[],
   input: RetrieveFromVectorInput,
-): Promise<{ chunks: RetrievedChunk[]; searchMs: number }> {
+): Promise<{
+  chunks: RetrievedChunk[];
+  droppedChunks: RetrievedChunk[];
+  consideredCount: number;
+  searchMs: number;
+}> {
   const config = requireRerankConfig();
   const candidateK = input.candidateK ?? config.candidateK;
   const minScore = input.minScore ?? 0;
@@ -165,20 +170,35 @@ export async function retrieveFromVector(
 /** Retrieval with per-phase timings for Langfuse latency budgets. */
 export async function retrieveValidatedTimed(
   input: ParsedRetrieveInput,
-): Promise<{ chunks: RetrievedChunk[]; timings: RetrievePhaseTimings }> {
+): Promise<{
+  chunks: RetrievedChunk[];
+  droppedChunks: RetrievedChunk[];
+  consideredCount: number;
+  timings: RetrievePhaseTimings;
+}> {
   const embedStart = performance.now();
   const queryVector = await embedQuery(input.query);
   const embedMs = performance.now() - embedStart;
 
-  const { chunks: hits, searchMs } = await retrieveFromVector(queryVector, input);
-  return { chunks: hits, timings: { embedMs, searchMs } };
+  const {
+    chunks: hits,
+    droppedChunks,
+    consideredCount,
+    searchMs,
+  } = await retrieveFromVector(queryVector, input);
+  return { chunks: hits, droppedChunks, consideredCount, timings: { embedMs, searchMs } };
 }
 
 async function searchByVector(
   db: Pick<Database, "select">,
   queryVector: number[],
   input: { fund: string; agentKey: string; minScore: number; candidateK: number; schemaName: string },
-): Promise<{ chunks: RetrievedChunk[]; searchMs: number }> {
+): Promise<{
+  chunks: RetrievedChunk[];
+  droppedChunks: RetrievedChunk[];
+  consideredCount: number;
+  searchMs: number;
+}> {
   const { fund, agentKey, minScore, candidateK, schemaName } = input;
   const distance = cosineDistance(chunks.embedding, queryVector);
 
@@ -233,7 +253,26 @@ async function searchByVector(
       },
       metadata: row.metadata,
     }))
-    .filter((hit) => hit.score >= minScore);
+    ;
 
-  return { chunks: mapped, searchMs };
+  const { kept, dropped } = partitionByMinScore(mapped, minScore);
+
+  return { chunks: kept, droppedChunks: dropped, consideredCount: mapped.length, searchMs };
+}
+
+/** Split vector hits by the cosine minScore threshold (reporting only — scores stay server-side). */
+export function partitionByMinScore(
+  hits: RetrievedChunk[],
+  minScore: number,
+): { kept: RetrievedChunk[]; dropped: RetrievedChunk[] } {
+  const kept: RetrievedChunk[] = [];
+  const dropped: RetrievedChunk[] = [];
+  for (const hit of hits) {
+    if (hit.score >= minScore) {
+      kept.push(hit);
+    } else {
+      dropped.push(hit);
+    }
+  }
+  return { kept, dropped };
 }

@@ -2,7 +2,7 @@ import { retrieveContext, type RetrievedChunk } from "@wunderstack/rag";
 import { citationSchema } from "@wunderstack/shared";
 import { z } from "zod";
 
-import { ARBO_QUERY_EXPANSIONS, rewriteArboQuery } from "./rewrite.js";
+import { ARBO_QUERY_EXPANSIONS, rewriteArboQuery } from "./rewrite";
 
 export const retrievalInputSchema = z.object({
   query: z.string().min(1),
@@ -39,6 +39,9 @@ export type RetrievalMeta = z.infer<typeof retrievalMetaSchema>;
 export interface RetrievalOutput extends RetrievalMeta {
   chunks: RetrievedChunk[];
   fullChunkContent: [string, string][];
+  consideredCount: number;
+  aboveThresholdCount: number;
+  droppedChunks: RetrievedChunk[];
 }
 
 export async function runRetrieval(input: RetrievalInput): Promise<RetrievalOutput> {
@@ -70,5 +73,8 @@ export async function runRetrieval(input: RetrievalInput): Promise<RetrievalOutp
     ...meta,
     chunks: result.chunks,
     fullChunkContent: result.chunks.map((chunk) => [chunk.chunkId, chunk.content]),
+    consideredCount: result.consideredCount,
+    aboveThresholdCount: result.aboveThresholdCount,
+    droppedChunks: result.droppedChunks,
   };
 }

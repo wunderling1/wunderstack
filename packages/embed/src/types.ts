@@ -13,7 +13,7 @@ import { z } from "zod";
  * breaking an older embed bundle.
  *
  * Discriminators match `@wunderstack/shared` `chatEventSchema`:
- * `status | text | citations | followups | done | error`.
+ * `status | retrieval | text | citations | followups | done | error`.
  */
 
 export const embedCitationSchema = z.object({
@@ -35,7 +35,16 @@ const embedWritableTurnOutcomeSchema = z.object({
   outcomeReason: z.string().nullable(),
 });
 
+export const embedStatusLabelsSchema = z
+  .object({
+    searching: z.string().min(1).max(80),
+    retrieved: z.string().min(1).max(80),
+    generating: z.string().min(1).max(80),
+  })
+  .strict();
+
 export const chatStatusPhases = ["searching", "retrieved", "generating"] as const;
+export type ChatStatusPhase = (typeof chatStatusPhases)[number];
 
 export const chatEventSchema = z.discriminatedUnion("type", [
   z.object({
@@ -43,6 +52,23 @@ export const chatEventSchema = z.discriminatedUnion("type", [
     phase: z.enum(chatStatusPhases),
     count: z.number().int().nonnegative().optional(),
     topScore: z.number().min(0).max(1).nullable().optional(),
+  }),
+  z.object({
+    type: z.literal("retrieval"),
+    corpus: z.object({
+      label: z.string().min(1),
+      version: z.string(),
+    }),
+    /** Present on current runtimes; optional so an older bundle still accepts a newer stream. */
+    query: z.string().optional(),
+    considered: z.number().int().nonnegative(),
+    aboveThreshold: z.number().int().nonnegative(),
+    hits: z.array(
+      z.object({
+        label: z.string().min(1),
+        dropped: z.boolean(),
+      }),
+    ).max(6),
   }),
   z.object({ type: z.literal("text"), delta: z.string() }),
   z.object({
@@ -105,6 +131,8 @@ export const embedConfigSchema = z.object({
   article50: z.string(),
   /** Concrete fund this instance serves; sent on chat so the request is never unscoped. */
   fund: z.string().min(1).optional(),
+  /** Dutch labels for retrieval progress phases (from agent_config or agent defaults). */
+  statusLabels: embedStatusLabelsSchema.optional(),
 });
 export type EmbedConfig = z.infer<typeof embedConfigSchema>;
 

@@ -36,7 +36,6 @@ export default async function WidgetPage({
         starterCategories={starterCategories}
         starterTitle={tenantConfig?.texts.tagline}
         starterIntro={tenantConfig?.texts.intro}
-        statusLabels={tenantConfig?.statusLabels}
       />
     </main>
   );

@@ -1,6 +1,7 @@
 import type { Citation } from "@wunderstack/shared";
 
-import type { RetrievedChunk } from "./retrieve.js";
+import { deriveChunkHeading } from "./heading";
+import type { RetrievedChunk } from "./retrieve";
 
 export interface RetrievalTimings {
   rewriteMs: number;
@@ -29,6 +30,12 @@ export interface AssembledContext {
   chunks: RetrievedChunk[];
   /** Per-phase wall-clock timings for Langfuse latency budgets. */
   timings: RetrievalTimings;
+  /** Candidates fetched from pgvector before the minScore filter (summed across retrieval queries). */
+  consideredCount: number;
+  /** Unique chunks that cleared minScore before reranking. */
+  aboveThresholdCount: number;
+  /** Chunks that failed minScore — for progress reporting only, not fed to the model. */
+  droppedChunks: RetrievedChunk[];
 }
 
 /** Collapse whitespace and clip to a readable snippet for pre-generation placeholders. */
@@ -54,7 +61,7 @@ export function assemble(chunks: RetrievedChunk[], timings: RetrievalTimings): A
       article: hit.structure.article,
       lid: hit.structure.lid,
       sourceRef: hit.structure.sourceRef,
-      heading: hit.structure.sourceRef,
+      heading: deriveChunkHeading(hit),
       snippet: makeSnippet(hit.content),
     };
   });
@@ -67,5 +74,5 @@ export function assemble(chunks: RetrievedChunk[], timings: RetrievalTimings): A
     })
     .join("\n\n");
 
-  return { context, citations, chunks, timings };
+  return { context, citations, chunks, timings, consideredCount: 0, aboveThresholdCount: chunks.length, droppedChunks: [] };
 }

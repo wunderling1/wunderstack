@@ -2,7 +2,6 @@
 
 import { useEffect, useRef } from "react";
 import { DEFAULT_THEME, type StarterCategory } from "@/lib/fund-theme";
-import type { TenantPublicConfig } from "@wunderstack/shared";
 import type { PlaygroundAgent } from "@/lib/runtime-config";
 import { Composer } from "./composer";
 import { MessageList } from "./message-list";
@@ -40,8 +39,6 @@ interface ChatProps {
   starterTitle?: string;
   /** Empty-state supporting sentence from GET /api/config. */
   starterIntro?: string;
-  /** Progress phase labels from GET /api/config. */
-  statusLabels?: TenantPublicConfig["statusLabels"];
 }
 
 export function Chat({
@@ -51,7 +48,6 @@ export function Chat({
   starterCategories,
   starterTitle,
   starterIntro,
-  statusLabels,
 }: ChatProps) {
   const { messages, isStreaming, send, sendFeedback } = useChat(fund, agent);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -94,7 +90,6 @@ export function Chat({
           messages={messages}
           {...(fund ? { fund } : {})}
           agent={agent}
-          {...(statusLabels ? { statusLabels } : {})}
           onFeedback={sendFeedback}
           onFollowUp={send}
           followUpsDisabled={isStreaming}

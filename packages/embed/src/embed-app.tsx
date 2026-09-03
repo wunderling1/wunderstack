@@ -1,10 +1,16 @@
 import {
+  accumulateTraceItems,
   AnswerCard,
+  AnswerTrace,
   Card,
   CitationBlock,
   Field,
   IconButton,
   RefusalNotice,
+  traceItemsFromEvent,
+  traceSummaryLabel,
+  usePacedTrace,
+  type AnswerTraceItem,
 } from "@wunderstack/ui";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Starters, resolveStarterCategories } from "./starters";
@@ -22,6 +28,14 @@ interface Turn {
   text: string;
   citations?: EmbedCitation[];
   refused?: boolean;
+  turnOutcome?: { outcome: string; outcomeReason: string | null };
+  /** What the runtime reported doing this turn, in arrival order (drives `AnswerTrace`). */
+  trace?: AnswerTraceItem[];
+  /** Measured retrieval totals for the summary line; null until a retrieval event arrives. */
+  retrieval?: {
+    considered: number;
+    aboveThreshold: number;
+  } | null;
   /** Grounded follow-up chips from the `followups` stream event. */
   followUpQuestions?: string[];
 }
@@ -37,6 +51,82 @@ interface Props {
 
 const DEFAULT_ARTICLE_50 =
   "Je praat met een AI-assistent. Antwoorden kunnen onjuist zijn; controleer belangrijke informatie bij de bron.";
+
+/** Head line of the progress trace, per agent. Unknown agents get the neutral wording. */
+const TRACE_HEADS: Record<string, string> = {
+  cao: "Zoeken in de CAO",
+  arbo: "Zoeken in de Arbocatalogus",
+};
+
+/** Corpus wording for the finished summary line. */
+const SEARCHED_LABELS: Record<string, string> = {
+  cao: "Zocht in de CAO",
+  arbo: "Zocht in de Arbocatalogus",
+};
+
+function traceHead(agentId: string): string {
+  return TRACE_HEADS[agentId] ?? "Zoeken in de bronnen";
+}
+
+function searchedLabel(agentId: string): string {
+  return SEARCHED_LABELS[agentId] ?? "Zocht in de bronnen";
+}
+
+/**
+ * The wait UI. Its own component because pacing is a hook, and the turn list is rendered in a map.
+ */
+function AgentWait({ head, trace }: { head: string; trace: AnswerTraceItem[] }) {
+  const paced = usePacedTrace(trace);
+  return <AnswerTrace head={head} steps={accumulateTraceItems(paced)} inFlight size="sm" />;
+}
+
+const TRACE_OUTCOMES = ["answered", "refused", "clarified", "error"] as const;
+
+/**
+ * The stream mirror types `outcome` as a plain string so a runtime that adds a value does not break
+ * an older bundle (see types.ts). An outcome this bundle does not know is therefore not a verdict it
+ * can render, so it yields no line at all rather than guessing.
+ */
+function knownOutcome(
+  value: string | undefined,
+): (typeof TRACE_OUTCOMES)[number] | null {
+  return TRACE_OUTCOMES.find((outcome) => outcome === value) ?? null;
+}
+
+function TraceRecap({
+  agentId,
+  turn,
+  className,
+}: {
+  agentId: string;
+  turn: Turn;
+  className?: string;
+}) {
+  const steps = accumulateTraceItems(turn.trace ?? []);
+  const outcome = knownOutcome(turn.turnOutcome?.outcome);
+  if (outcome === null || steps.length === 0) {
+    return null;
+  }
+  const summary = traceSummaryLabel({
+    outcome,
+    searchedLabel: searchedLabel(agentId),
+    considered: turn.retrieval?.considered ?? 0,
+    aboveThreshold: turn.retrieval?.aboveThreshold ?? 0,
+  });
+  if (summary === null) {
+    return null;
+  }
+  return (
+    <AnswerTrace
+      head={traceHead(agentId)}
+      steps={steps}
+      inFlight={false}
+      summary={summary}
+      size="sm"
+      {...(className === undefined ? {} : { className })}
+    />
+  );
+}
 
 /** Same key as the playground: one identity model across surfaces (DECISION-analytics-retention). */
 const SESSION_STORAGE_KEY = "wunderstack-session-id";
@@ -153,7 +243,6 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
   const logo = config?.theme.logo;
   const snippetHint = agentId.trim();
   const resolvedAgentId = config?.agentId ?? (snippetHint || "cao");
-
   useEffect(() => {
     if (!config || snippetHint.length === 0) return;
     if (snippetHint === config.agentId) return;
@@ -172,14 +261,33 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
   }
 
   function applyEvent(event: ChatEvent): void {
-    if (event.type === "text") {
+    if (event.type === "status" || event.type === "retrieval") {
+      const items = traceItemsFromEvent(event);
+      updateLast((turn) => ({
+        ...turn,
+        ...(items.length > 0 ? { trace: [...(turn.trace ?? []), ...items] } : {}),
+        ...(event.type === "retrieval"
+          ? {
+              retrieval: {
+                considered: event.considered,
+                aboveThreshold: event.aboveThreshold,
+              },
+            }
+          : {}),
+      }));
+    } else if (event.type === "text") {
       updateLast((turn) => ({ ...turn, text: turn.text + event.delta }));
     } else if (event.type === "citations") {
+      const clarifyItems = traceItemsFromEvent(event);
       updateLast((turn) => ({
         ...turn,
         text: event.answer || turn.text,
         citations: event.citations,
-        refused: !event.found && !event.needsClarification,
+        turnOutcome: event.turnOutcome,
+        refused: event.turnOutcome.outcome === "refused",
+        ...(clarifyItems.length > 0
+          ? { trace: [...(turn.trace ?? []), ...clarifyItems] }
+          : {}),
       }));
     } else if (event.type === "followups") {
       updateLast((turn) => ({ ...turn, followUpQuestions: event.questions }));
@@ -196,7 +304,12 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
       .slice(-6)
       .map((turn) => ({ role: turn.role === "agent" ? "assistant" : "user", content: turn.text }))
       .filter((message) => message.content.length > 0);
-    setTurns((prev) => [...prev, { role: "user", text: question }, { role: "agent", text: "" }]);
+    setTurns((prev) => [
+      ...prev,
+      { role: "user", text: question },
+      // Empty trace: the head line carries the wait until the first measured event lands (B1).
+      { role: "agent", text: "", trace: [] },
+    ]);
     setBusy(true);
 
     try {
@@ -281,19 +394,37 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
             {...(config?.texts.intro ? { intro: config.texts.intro } : {})}
           />
         ) : null}
-        {turns.map((turn, index) => (
+        {turns.map((turn, index) => {
+          // Text can land before the citations event that carries the outcome. Keep the live
+          // trace on the in-flight agent turn until that outcome arrives (A2 layout stability).
+          const agentWaiting =
+            turn.role === "agent" &&
+            turn.turnOutcome === undefined &&
+            index === turns.length - 1 &&
+            busy;
+          return (
           <div key={index} data-turn-index={index} className="flex flex-col gap-2">
-            {turn.refused ? (
-              <RefusalNotice>{turn.text}</RefusalNotice>
+            {agentWaiting ? (
+              <AgentWait head={traceHead(resolvedAgentId)} trace={turn.trace ?? []} />
+            ) : turn.refused ? (
+              <>
+                <TraceRecap agentId={resolvedAgentId} turn={turn} />
+                <RefusalNotice>{turn.text}</RefusalNotice>
+              </>
             ) : (
-              <AnswerCard
-                role={turn.role}
-                {...(turn.role === "agent"
-                  ? { agentLabel: "AI-assistent", agentSubLabel: resolvedAgentId }
-                  : {})}
-              >
-                {turn.text || (turn.role === "agent" ? "…" : "")}
-              </AnswerCard>
+              <>
+                {turn.role === "agent" ? (
+                  <TraceRecap agentId={resolvedAgentId} turn={turn} />
+                ) : null}
+                <AnswerCard
+                  role={turn.role}
+                  {...(turn.role === "agent"
+                    ? { agentLabel: "AI-assistent", agentSubLabel: resolvedAgentId }
+                    : {})}
+                >
+                  {turn.text}
+                </AnswerCard>
+              </>
             )}
             {turn.citations && turn.citations.length > 0 ? (
               <div className="flex flex-col gap-2">
@@ -302,7 +433,7 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
                     key={citation.ref}
                     refNumber={citation.ref}
                     verification="verified"
-                    label={citation.sourceRef ?? citation.heading ?? citation.title}
+                    label={citation.heading ?? citation.sourceRef ?? citation.title}
                     quote={citation.snippet || citation.quote}
                   />
                 ))}
@@ -330,7 +461,8 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
               </div>
             ) : null}
           </div>
-        ))}
+          );
+        })}
       </div>
 
       <form

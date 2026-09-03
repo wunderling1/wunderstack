@@ -98,12 +98,23 @@ export type AgentStreamPhase = "searching" | "retrieved" | "generating";
 
 /**
  * Streaming counterpart of `AgentAnswer`, as a sequence of events the API layer can forward to the
- * browser (see apps/playground). Order on the normal path: zero or more `status` events, zero or more
- * `text` deltas, exactly one `citations` (verified), optionally one `followups`, then exactly one
- * `done`. Clarify and not-found paths emit `text` → `citations` → `done` (no followups).
+ * browser (see apps/playground). Order on the normal path: zero or more `status` events, one
+ * `retrieval` event after search completes, zero or more `text` deltas, exactly one `citations`
+ * (verified), optionally one `followups`, then exactly one `done`. Clarify path emits
+ * `text` → `citations` → `done` (no retrieval). Empty-retrieval path emits
+ * `status` → `retrieval` → `text` → `citations` → `done` (no followups).
  */
 export type AgentStreamEvent =
   | { type: "status"; phase: AgentStreamPhase; count?: number; topScore?: number | null }
+  | {
+      type: "retrieval";
+      corpus: { label: string; version: string };
+      /** The text that was actually searched — the user's question, or the condensed follow-up. */
+      query: string;
+      considered: number;
+      aboveThreshold: number;
+      hits: Array<{ label: string; dropped: boolean }>;
+    }
   | { type: "text"; delta: string }
   | {
       type: "citations";

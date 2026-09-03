@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { traceItemsFromEvent, type AnswerTraceItem } from "@wunderstack/ui";
 import {
   chatEventSchema,
   type ChatCitation,
-  type ChatStatusPhase,
+  type WritableTurnOutcome,
 } from "@/app/api/chat/contract";
 import { readChatInactivityMs } from "@/lib/public-env";
 import { runtimeApiHeaders } from "@/lib/runtime-api";
@@ -30,6 +31,8 @@ export interface ChatMessage {
   found: boolean | null;
   /** True when the assistant asked a clarifying question instead of answering. */
   needsClarification: boolean;
+  /** Pipeline outcome from the citations event (B5 — same value analytics writes). */
+  turnOutcome: WritableTurnOutcome | null;
   /** Langfuse trace id for this answer (null when tracing is unconfigured); enables feedback. */
   traceId: string | null;
   /** The rating the user gave this answer, once submitted. */
@@ -37,10 +40,19 @@ export interface ChatMessage {
   /** Grounded follow-up question chips (empty until a `followups` event arrives). */
   followUpQuestions: string[];
   streaming: boolean;
-  /** Current progress phase while waiting for the answer; drives the status line + skeleton. */
-  phase: ChatStatusPhase | null;
-  /** Number of retrieved passages (from the `retrieved` phase), for the status label. */
-  retrievedCount: number | null;
+  /**
+   * What the runtime reported doing this turn, in arrival order — the source for `AnswerTrace`.
+   * Only measured events land here; the client adds nothing of its own.
+   */
+  trace: AnswerTraceItem[];
+  /**
+   * Measured retrieval totals for the summary line. Null until a `retrieval` event arrives
+   * (clarify turns never search, so they stay null).
+   */
+  retrieval: {
+    considered: number;
+    aboveThreshold: number;
+  } | null;
 }
 
 const GENERIC_ERROR = "Er ging iets mis bij het beantwoorden van je vraag. Probeer het opnieuw.";
@@ -159,12 +171,13 @@ export function useChat(fund?: string, agent: PlaygroundAgent = "cao") {
           citationVerificationFailed: false,
           found: null,
           needsClarification: false,
+          turnOutcome: null,
           traceId: null,
           feedback: null,
           followUpQuestions: [],
           streaming: false,
-          phase: null,
-          retrievedCount: null,
+          trace: [],
+          retrieval: null,
         },
         {
           id: assistantId,
@@ -174,13 +187,15 @@ export function useChat(fund?: string, agent: PlaygroundAgent = "cao") {
           citationVerificationFailed: false,
           found: null,
           needsClarification: false,
+          turnOutcome: null,
           traceId: null,
           feedback: null,
           followUpQuestions: [],
           streaming: true,
-          // Optimistic first phase so a named status shows <100ms after send, before any server event.
-          phase: "searching",
-          retrievedCount: null,
+          // Empty: the trace only shows measured events. Until the first one lands, the wait UI is
+          // its head line ("Zoeken in de CAO") — true from the moment the question is sent (B1).
+          trace: [],
+          retrieval: null,
         },
       ]);
 
@@ -239,21 +254,31 @@ export function useChat(fund?: string, agent: PlaygroundAgent = "cao") {
             return;
           }
           const event = parsed.data;
-          if (event.type === "status") {
+          if (event.type === "status" || event.type === "retrieval") {
+            const items = traceItemsFromEvent(event);
             patchAssistant(assistantId, (m) => ({
               ...m,
-              phase: event.phase,
-              retrievedCount: event.count ?? m.retrievedCount,
+              ...(items.length > 0 ? { trace: [...m.trace, ...items] } : {}),
+              ...(event.type === "retrieval"
+                ? {
+                    retrieval: {
+                      considered: event.considered,
+                      aboveThreshold: event.aboveThreshold,
+                    },
+                  }
+                : {}),
             }));
           } else if (event.type === "citations") {
             // Reconcile: replace streamed text with the final answer (failed markers stripped),
             // and attach the verified citations. Stop any pending token flush from re-appending.
+            // Clarify turns also feed the trace here (one "read" step, no search — A2).
             reconciled = true;
             pendingText = "";
             if (rafId !== null) {
               cancelAnimationFrame(rafId);
               rafId = null;
             }
+            const clarifyItems = traceItemsFromEvent(event);
             patchAssistant(assistantId, (m) => ({
               ...m,
               text: event.answer,
@@ -261,6 +286,8 @@ export function useChat(fund?: string, agent: PlaygroundAgent = "cao") {
               citationVerificationFailed: event.citationVerificationFailed,
               found: event.found,
               needsClarification: event.needsClarification,
+              turnOutcome: event.turnOutcome,
+              ...(clarifyItems.length > 0 ? { trace: [...m.trace, ...clarifyItems] } : {}),
             }));
           } else if (event.type === "text") {
             pendingText += event.delta;

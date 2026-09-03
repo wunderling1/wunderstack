@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { verifyAndBuild } from "./create-agent.js";
-import type { RetrievalOutput } from "./profile.js";
-import { AGENT_PROFILES } from "./registry.js";
+import { verifyAndBuild } from "./create-agent";
+import type { RetrievalOutput } from "./profile";
+import { AGENT_PROFILES } from "./registry";
 
 /**
  * Hard-fact guard coverage per registered profile. Arbo has no G2-answer gate yet, so this
@@ -19,6 +19,9 @@ function retrievalWithGrounding(grounding: string): RetrievalOutput {
     timings: { rewriteMs: 0, embedMs: 0, searchMs: 0, rerankMs: 0, totalMs: 0 },
     chunks: [],
     fullChunkContent: [["c1", grounding]],
+    consideredCount: 0,
+    aboveThresholdCount: 0,
+    droppedChunks: [],
   };
 }
 

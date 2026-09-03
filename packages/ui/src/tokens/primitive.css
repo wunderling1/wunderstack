@@ -13,14 +13,19 @@
   --indigo-700: #2629a3;
   --indigo-900: #191b66;
 
-  /* Neutrals */
+  /* Neutrals — warm ink / ivory (white default + black marketing canvas) */
   --neutral-0: #ffffff;
-  --neutral-50: #f6f6f7;
-  --neutral-100: #f1f2f4;
-  --neutral-200: #e7e8eb;
-  --neutral-400: #9aa0aa;
-  --neutral-500: #5c6470;
-  --neutral-900: #0e1220;
+  --neutral-50: #fafaf9;
+  --neutral-100: #f2f1f0;
+  --neutral-200: #e5e5e3;
+  --neutral-300: #cccac6;
+  --neutral-400: #adaba5;
+  --neutral-500: #8f8b85;
+  --neutral-600: #706d66;
+  --neutral-700: #524f49;
+  --neutral-800: #33312c;
+  --neutral-900: #1f1d1a;
+  --neutral-950: #0f0e0d;
 
   /* Pastel state tints (bg / fg pairs) */
   --verified-bg: #e7f5ea;
@@ -51,6 +56,12 @@
   --duration-spin: 1000ms;
   /* Placeholder breathing. Slower than spin: a skeleton reports waiting, not progress. */
   --duration-pulse: 2000ms;
+  /* Sheen travel across a line of text. Slowest loop: it reads as "busy", not as a countdown. */
+  --duration-sheen: 2400ms;
+  /* Three writing dots. Period of one full opacity cycle on a single dot. */
+  --duration-dots: 1200ms;
+  /* Stagger between writing dots — delay = n × this token, never a literal. */
+  --duration-dot-stagger: 200ms;
 
   /* Motion — easing */
   --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);

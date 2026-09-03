@@ -1,14 +1,14 @@
 import { z } from "zod";
 
-import { agentChannelSchema } from "./channel.js";
-import { citationSchema } from "./citation.js";
-import { writableTurnOutcomeSchema } from "./interaction-outcome.js";
+import { agentChannelSchema } from "./channel";
+import { citationSchema } from "./citation";
+import { writableTurnOutcomeSchema } from "./interaction-outcome";
 
 /**
  * Chat API contract (request + NDJSON events). Runtime and playground import this; the embed keeps a
  * looser local mirror (`packages/embed/src/types.ts`) because it must not load `@wunderstack/shared`
  * (that barrel parses `process.env`). Discriminators must stay in sync:
- * `status | text | citations | followups | done | error`.
+ * `status | retrieval | text | citations | followups | done | error`.
  */
 
 export const chatHistoryMessageSchema = z.object({
@@ -44,6 +44,11 @@ export const chatStatusPhases = ["searching", "retrieved", "generating"] as cons
 
 export type ChatStatusPhase = (typeof chatStatusPhases)[number];
 
+export const chatRetrievalHitSchema = z.object({
+  label: z.string().min(1),
+  dropped: z.boolean(),
+});
+
 /** One event in the NDJSON response stream. Mirrors the agent's stream events plus a terminal error. */
 export const chatEventSchema = z.discriminatedUnion("type", [
   z.object({
@@ -53,6 +58,18 @@ export const chatEventSchema = z.discriminatedUnion("type", [
     count: z.number().int().nonnegative().optional(),
     /** Highest similarity among retrieved hits; present on the `retrieved` phase. */
     topScore: z.number().min(0).max(1).nullable().optional(),
+  }),
+  z.object({
+    type: z.literal("retrieval"),
+    corpus: z.object({
+      label: z.string().min(1),
+      version: z.string(),
+    }),
+    /** The text that was actually searched — the user's question, or the condensed follow-up. */
+    query: z.string().min(1),
+    considered: z.number().int().nonnegative(),
+    aboveThreshold: z.number().int().nonnegative(),
+    hits: z.array(chatRetrievalHitSchema).max(6),
   }),
   z.object({ type: z.literal("text"), delta: z.string() }),
   z.object({

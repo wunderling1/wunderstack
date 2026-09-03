@@ -1,36 +1,59 @@
-export { cn } from "./lib/cn.js";
+export { cn } from "./lib/cn";
+export {
+  createProgressQueue,
+  defaultProgressGaps,
+  instantProgressGaps,
+  type CancelScheduled,
+  type ProgressGaps,
+  type ProgressItemKind,
+  type ProgressQueue,
+  type ProgressQueueOptions,
+} from "./lib/progress-queue";
+export {
+  accumulateTraceItems,
+  TRACE_SUMMARY,
+  traceItemsFromEvent,
+  traceSummaryLabel,
+  type AnswerTraceChip,
+  type AnswerTraceEvent,
+  type AnswerTraceItem,
+  type AnswerTraceStep,
+  type AnswerTraceSummaryInput,
+  type AnswerTraceTone,
+} from "./lib/answer-trace";
+export { usePacedTrace } from "./lib/use-paced-trace";
 
 // Primitives
-export { Button, buttonVariants, type ButtonProps, type ButtonSize } from "./primitives/button.js";
-export { IconButton, type IconButtonProps } from "./primitives/icon-button.js";
-export { Field, type FieldProps } from "./primitives/field.js";
-export { Textarea, type TextareaProps } from "./primitives/textarea.js";
-export { Card, type CardProps } from "./primitives/card.js";
-export { Chip, chipVariants, type ChipProps } from "./primitives/chip.js";
-export { Pill, pillVariants, type PillProps } from "./primitives/pill.js";
-export { Avatar, type AvatarProps } from "./primitives/avatar.js";
-export { Icon, type IconProps } from "./primitives/icon.js";
-export { Select, type SelectProps } from "./primitives/select.js";
-export { Checkbox, type CheckboxProps } from "./primitives/checkbox.js";
+export { Button, buttonVariants, type ButtonProps, type ButtonSize } from "./primitives/button";
+export { IconButton, type IconButtonProps } from "./primitives/icon-button";
+export { Field, type FieldProps } from "./primitives/field";
+export { Textarea, type TextareaProps } from "./primitives/textarea";
+export { Card, type CardProps } from "./primitives/card";
+export { Chip, chipVariants, type ChipProps } from "./primitives/chip";
+export { Pill, pillVariants, type PillProps } from "./primitives/pill";
+export { Avatar, type AvatarProps } from "./primitives/avatar";
+export { Icon, type IconProps } from "./primitives/icon";
+export { Select, type SelectProps } from "./primitives/select";
+export { Checkbox, type CheckboxProps } from "./primitives/checkbox";
 export {
   RadioGroup,
   Radio,
   type RadioGroupProps,
   type RadioProps,
-} from "./primitives/radio-group.js";
+} from "./primitives/radio-group";
 export {
   Accordion,
   AccordionItem,
   AccordionTrigger,
   AccordionContent,
-} from "./primitives/accordion.js";
+} from "./primitives/accordion";
 export {
   Breadcrumbs,
   BreadcrumbItem,
   BreadcrumbLink,
   BreadcrumbPage,
   BreadcrumbSeparator,
-} from "./primitives/breadcrumbs.js";
+} from "./primitives/breadcrumbs";
 export {
   Tabs,
   TabsList,
@@ -39,7 +62,7 @@ export {
   type TabsProps,
   type TabsTriggerProps,
   type TabsContentProps,
-} from "./primitives/tabs.js";
+} from "./primitives/tabs";
 export {
   Table,
   TableHeader,
@@ -48,7 +71,7 @@ export {
   TableHead,
   TableCell,
   TableCaption,
-} from "./primitives/table.js";
+} from "./primitives/table";
 export {
   Dialog,
   DialogTrigger,
@@ -60,14 +83,14 @@ export {
   DialogTitle,
   DialogDescription,
   type DialogContentProps,
-} from "./primitives/dialog.js";
+} from "./primitives/dialog";
 export {
   NavPills,
   NavPill,
   navPillClassName,
   type NavPillsProps,
   type NavPillProps,
-} from "./primitives/nav-pills.js";
+} from "./primitives/nav-pills";
 
 // Trust-patterns (layer 3, D16) — the visual translation of the grounding architecture
 export {
@@ -76,30 +99,31 @@ export {
   type CitationBlockProps,
   type CitationBadgeProps,
   type CitationVerification,
-} from "./trust-patterns/citation-block.js";
+} from "./trust-patterns/citation-block";
 export {
   AnswerCard,
   type AnswerCardProps,
   type AnswerRole,
   type DensitySize,
-} from "./trust-patterns/answer-card.js";
-export { RefusalNotice, type RefusalNoticeProps } from "./trust-patterns/refusal-notice.js";
+} from "./trust-patterns/answer-card";
+export { RefusalNotice, type RefusalNoticeProps } from "./trust-patterns/refusal-notice";
 export {
   AgentStatusBadge,
   type AgentStatusBadgeProps,
   type AgentStatus,
-} from "./trust-patterns/agent-status-badge.js";
-export { KpiTile, type KpiTileProps } from "./trust-patterns/kpi-tile.js";
+} from "./trust-patterns/agent-status-badge";
+export { KpiTile, type KpiTileProps } from "./trust-patterns/kpi-tile";
 export {
   CardSection,
   type CardSectionProps,
-} from "./trust-patterns/card-section.js";
+} from "./trust-patterns/card-section";
 export {
   AnswerProgress,
   type AnswerProgressProps,
   type AnswerProgressStep,
-} from "./trust-patterns/answer-progress.js";
-export { Composer, type ComposerProps } from "./trust-patterns/composer.js";
+} from "./trust-patterns/answer-progress";
+export { AnswerTrace, type AnswerTraceProps } from "./trust-patterns/answer-trace";
+export { Composer, type ComposerProps } from "./trust-patterns/composer";
 
 export {
   Activity,
@@ -111,4 +135,4 @@ export {
   Settings,
   X,
   type LucideIcon,
-} from "./icons.js";
+} from "./icons";
