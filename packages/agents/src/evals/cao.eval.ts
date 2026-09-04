@@ -116,7 +116,13 @@ import {
 } from "./fund-answer-layer";
 import { extraPromptContractChecks } from "./agent-profile";
 import { corpusIsolationContractChecks, corpusIsolationLiveChecks } from "./corpus-isolation";
-import { createEvalHarness, type EvalCheck as Check, type GateGroup, type GateRunResult } from "./harness";
+import {
+  createEvalHarness,
+  formatEvalVerdict,
+  type EvalCheck as Check,
+  type GateGroup,
+  type GateRunResult,
+} from "./harness";
 import { GATE_SPECS, type GateId, type GateSpec } from "./gates";
 import {
   aggregateScores,
@@ -507,6 +513,9 @@ function retrievalOutputFromPassages(passages: GoldenPassage[]): RetrievalOutput
     timings: EVAL_RETRIEVAL_TIMINGS,
     chunks,
     fullChunkContent: passages.map((passage) => [passage.id, passage.content]),
+    consideredCount: assembled.consideredCount,
+    aboveThresholdCount: assembled.aboveThresholdCount,
+    droppedChunks: assembled.droppedChunks,
   };
 }
 
@@ -2007,12 +2016,17 @@ async function main(): Promise<void> {
     allPassed = writeRunArtefact(completed && allPassed);
   }
 
-  if (!allPassed) {
-    console.error("\nEval FAILED — an accuracy gate regressed or a required gate could not run. See above.");
+  const verdict = formatEvalVerdict(gateResults, {
+    allPassed,
+    partialFilter: GATE_FILTER.length > 0,
+  });
+  if (verdict.kind === "FAILED") {
+    console.error(`\n${verdict.line}`);
     process.exitCode = 1;
     return;
   }
-  console.log("\nEval PASSED.");
+  // INCOMPLETE keeps exit 0: fork PRs skip G2/G3 by design; lying with PASSED was F0-04.
+  console.log(`\n${verdict.line}`);
 }
 
 try {
