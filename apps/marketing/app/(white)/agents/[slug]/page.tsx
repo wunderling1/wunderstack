@@ -7,8 +7,9 @@ import { AGENTS, agentBySlug } from "@/content/agents";
 import { env } from "@/lib/env";
 
 /**
- * Per-agent detail page (Fase 5). Live agents (CAO) mount the real Fase 4 embed against tenant zero;
- * non-live agents show a scripted walkthrough — never a live demo for an agent that does not exist.
+ * Per-agent detail page (Fase 5). Live agents that have a public demo key (CAO) mount the Fase 4
+ * embed; other live agents (arbo) and “binnenkort” entries show a scripted walkthrough — never a
+ * fake live demo for an agent that is not on the registry.
  */
 export function generateStaticParams() {
   return AGENTS.map((agent) => ({ slug: agent.slug }));
@@ -23,6 +24,11 @@ function embedConfig(): { scriptSrc: string; agentKey: string } | null {
   return { scriptSrc: `${base}/embed.js`, agentKey: key };
 }
 
+/** Public marketing embed is wired for CAO (tenant zero) only. */
+function hasPublicEmbedDemo(slug: string): boolean {
+  return slug === "cao";
+}
+
 export default async function AgentDetail({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const agent = agentBySlug(slug);
@@ -30,7 +36,9 @@ export default async function AgentDetail({ params }: { params: Promise<{ slug: 
     notFound();
   }
 
-  const embed = agent.status === "live" ? embedConfig() : null;
+  const embed = agent.status === "live" && hasPublicEmbedDemo(agent.slug) ? embedConfig() : null;
+  const showLiveDemo = agent.status === "live" && hasPublicEmbedDemo(agent.slug);
+  const showWalkthrough = !showLiveDemo;
 
   return (
     <div className="flex flex-col gap-10">
@@ -64,7 +72,7 @@ export default async function AgentDetail({ params }: { params: Promise<{ slug: 
         </ul>
       </section>
 
-      {agent.status === "live" ? (
+      {showLiveDemo ? (
         <section className="flex flex-col gap-3">
           <h2 className="font-display text-xl font-semibold">Probeer het live</h2>
           {embed ? (
@@ -87,11 +95,17 @@ export default async function AgentDetail({ params }: { params: Promise<{ slug: 
             </Card>
           )}
         </section>
-      ) : (
+      ) : null}
+
+      {showWalkthrough ? (
         <section className="flex flex-col gap-3">
-          <h2 className="font-display text-xl font-semibold">Scripted walkthrough</h2>
+          <h2 className="font-display text-xl font-semibold">
+            {agent.status === "live" ? "Hoe het werkt" : "Scripted walkthrough"}
+          </h2>
           <p className="text-text-muted">
-            Deze agent is nog niet live. Zo werkt hij straks:
+            {agent.status === "live"
+              ? "Deze agent draait in de runtime; de publieke marketing-demo is nog CAO-only."
+              : "Deze agent is nog niet live. Zo werkt hij straks:"}
           </p>
           <ol className="flex flex-col gap-2">
             {agent.walkthrough.map((step, index) => (
@@ -104,7 +118,7 @@ export default async function AgentDetail({ params }: { params: Promise<{ slug: 
             ))}
           </ol>
         </section>
-      )}
+      ) : null}
     </div>
   );
 }
