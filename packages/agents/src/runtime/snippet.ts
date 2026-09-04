@@ -1,4 +1,4 @@
-import { normalizeWhitespace } from "./verify-citations.js";
+import { normalizeWhitespace } from "./verify-citations";
 
 const SNIPPET_MAX_CHARS = 320;
 const CONTEXT_SENTENCES = 2;

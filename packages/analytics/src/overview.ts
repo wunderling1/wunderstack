@@ -10,6 +10,14 @@ import {
 } from "@wunderstack/db";
 
 import {
+  fillDailySeries,
+  loadDailyQuestionSeries,
+  loadLastQuestionAt,
+  loadPulseTicks,
+  type DayCount,
+  type PulseResult,
+} from "./activity-series";
+import {
   CONVERSATION_TURN_SCAN_CAP,
   loadExerciseActivity,
   scanBoundaryWindow,
@@ -17,10 +25,10 @@ import {
   type BoundaryRow,
   type ConversationVolume,
   type ExerciseActivity,
-} from "./conversations.js";
-import { loadCorpusOverview, type CorpusDocRow } from "./corpus.js";
-import { loadRecentInteractions, type InteractionLogRow } from "./kpi.js";
-import { asDate } from "./outcome-activity.js";
+} from "./conversations";
+import { loadCorpusOverview, type CorpusDocRow } from "./corpus";
+import { loadRecentInteractions, type InteractionLogRow } from "./kpi";
+import { asDate } from "./outcome-activity";
 import {
   breakdownCountSelect,
   breakdownFromRow,
@@ -28,8 +36,8 @@ import {
   loadOutcomeBreakdown,
   type BreakdownRow,
   type OutcomeBreakdown,
-} from "./outcomes.js";
-import { loadKnowledgeGapCount } from "./signals.js";
+} from "./outcomes";
+import { loadKnowledgeGapCount } from "./signals";
 
 /**
  * The overview's reads, grouped the way the page renders them.
@@ -69,13 +77,21 @@ export interface ActivitySnapshot {
   volume: Pair<ConversationVolume>;
   exercise: Pair<ExerciseActivity>;
   measurementStartedAt: Date | null;
-  /** Groups the Signalen list holds for the current window — what "N kennisgaten" counts (S11a). */
+  /** Unanswered questions in the current window — the Signalen headline (same WHERE as the list). */
   knowledgeGaps: number;
+  /** Same WHERE over the previous window of equal length. */
+  previousKnowledgeGaps: number;
+  /** Questions per civil day in the current window, zeros filled (Activiteit-reeks). */
+  dailySeries: DayCount[];
+  /** Questions in the last hour — the Activiteit pulse, not clipped to the period. */
+  pulse: PulseResult;
+  /** Latest question on the fund, window-free — names the quiet-hour line. */
+  lastQuestionAt: Date | null;
 }
 
 /** One agent's slice of the window, in the grounded vocabulary. Exercise volume is read elsewhere. */
 export interface AgentOutcomeRow {
-  agentId: string;
+  agentKey: string;
   breakdown: OutcomeBreakdown;
   lastOccurredAt: Date | null;
 }
@@ -216,8 +232,7 @@ async function loadExercisePair(
 }
 
 /**
- * Everything the Activiteit and Acties blocks need, in one fund-schema transaction: four queries
- * where the D6 loader used eight transactions.
+ * Everything the Activiteit and Acties blocks need, in one fund-schema transaction.
  */
 export async function getActivitySnapshot(input: {
   fundKey: string;
@@ -236,7 +251,27 @@ export async function getActivitySnapshot(input: {
       until: input.windows.current.until,
       now,
     });
-    return { outcomes, volume, exercise, measurementStartedAt, knowledgeGaps };
+    const previousKnowledgeGaps = await loadKnowledgeGapCount(db, {
+      fundKey: input.fundKey,
+      since: input.windows.previous.since,
+      until: input.windows.previous.until,
+      now,
+    });
+    const dailyCounts = await loadDailyQuestionSeries(db, input.windows.current);
+    const dailySeries = fillDailySeries(input.windows.current, dailyCounts);
+    const pulse = await loadPulseTicks(db, now);
+    const lastQuestionAt = await loadLastQuestionAt(db);
+    return {
+      outcomes,
+      volume,
+      exercise,
+      measurementStartedAt,
+      knowledgeGaps,
+      previousKnowledgeGaps,
+      dailySeries,
+      pulse,
+      lastQuestionAt,
+    };
   });
 }
 
@@ -252,17 +287,17 @@ export async function getAgentSnapshot(input: {
   return withFundSchema(input.fundKey, async (db) => {
     const rows = await db
       .select({
-        agentId: interactionEvents.agentId,
+        agentKey: interactionEvents.agentKey,
         lastOccurredAt: sql<Date | string | null>`max(${interactionEvents.occurredAt})`,
         ...breakdownCountSelect(),
       })
       .from(interactionEvents)
       .where(withinEvents(input.window))
-      .groupBy(interactionEvents.agentId);
+      .groupBy(interactionEvents.agentKey);
     const corpus = await loadCorpusOverview(db);
     return {
       agents: rows.map((row) => ({
-        agentId: row.agentId,
+        agentKey: row.agentKey,
         breakdown: breakdownFromRow(row),
         lastOccurredAt: asDate(row.lastOccurredAt),
       })),
@@ -274,12 +309,12 @@ export async function getAgentSnapshot(input: {
 /** The agent detail panel's three reads in one transaction. */
 export async function getAgentPanelSnapshot(input: {
   fundKey: string;
-  agentId: string;
+  agentKey: string;
   since: Date;
   /** True for an exercise agent: its volume lives in `roleplay_sessions`, not the event log. */
   includeExercise: boolean;
 }): Promise<AgentPanelSnapshot> {
-  const window = { fundKey: input.fundKey, agentId: input.agentId, since: input.since };
+  const window = { fundKey: input.fundKey, agentKey: input.agentKey, since: input.since };
   return withFundSchema(input.fundKey, async (db) => {
     const breakdown = await loadOutcomeBreakdown(db, window);
     const recent = await loadRecentInteractions(db, window, 1);

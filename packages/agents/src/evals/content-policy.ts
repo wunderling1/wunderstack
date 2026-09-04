@@ -21,8 +21,8 @@
  * file — advisory is applied in cao.eval.ts / roleplay-gates.ts to avoid a cycle.
  */
 
-import { ANSWER_THRESHOLDS } from "./answer-floors.js";
-import { ROLEPLAY_THRESHOLDS } from "./roleplay-floors.js";
+import { ANSWER_THRESHOLDS } from "./answer-floors";
+import { ROLEPLAY_THRESHOLDS } from "./roleplay-floors";
 
 /** What a check measures. mechanism = the pipeline keeps its promise. content = the text is good enough. */
 export type CheckKind = "mechanism" | "content";

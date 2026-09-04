@@ -16,7 +16,7 @@ import {
   type RoleplayResultTarget,
 } from "@wunderstack/shared";
 
-import { parseScenarioSnapshot } from "./snapshot.js";
+import { parseScenarioSnapshot } from "./snapshot";
 
 /**
  * Outbox for roleplay results (Fase 7, R4).

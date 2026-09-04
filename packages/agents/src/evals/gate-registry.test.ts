@@ -11,7 +11,7 @@ import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { GATE_SPECS } from "./gates.js";
+import { GATE_SPECS } from "./gates";
 
 const here = dirname(fileURLToPath(import.meta.url));
 // packages/agents/src/evals -> repo root -> docs/eval/GATE-ARCHITECTURE.md

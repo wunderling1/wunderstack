@@ -8,13 +8,11 @@ export function DashboardChrome({
   view,
   fundKey,
   switcherOptions = [],
-  brandSubtitle,
   children,
 }: {
   view: FundNavView;
   fundKey: string;
   switcherOptions?: SwitcherOption[];
-  brandSubtitle: string;
   children: ReactNode;
 }) {
   return (
@@ -23,7 +21,6 @@ export function DashboardChrome({
         view={view}
         fundKey={fundKey}
         switcherOptions={view === "admin" ? switcherOptions : []}
-        brandSubtitle={brandSubtitle}
       />
       <div className="min-w-0 flex-1 overflow-y-auto bg-page">
         <div className="mx-auto w-full max-w-5xl px-6 py-8">{children}</div>

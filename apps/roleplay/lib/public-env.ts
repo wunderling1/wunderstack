@@ -5,7 +5,11 @@ import { z } from "zod";
  * parses the whole process env at import.
  */
 
-const DEFAULT_INACTIVITY_MS = 20_000;
+/**
+ * Silence budget for one streamed turn. Three server heartbeats wide (RUNTIME_CHAT_HEARTBEAT_MS
+ * is 10s): a single missed heartbeat is a hiccup, not a dead stream.
+ */
+const DEFAULT_INACTIVITY_MS = 30_000;
 const inactivityMsSchema = z.coerce.number().int().positive().max(300_000);
 
 export function readRoleplayInactivityMs(): number {

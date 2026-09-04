@@ -1,6 +1,6 @@
 import { boolean, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
-import { control } from "./schema.js";
+import { control } from "./schema";
 
 /**
  * Dashboard users (Fase 3). Backs Auth.js Credentials login for `apps/dashboard`.

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { mapPool } from "./map-pool.js";
+import { mapPool } from "./map-pool";
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {

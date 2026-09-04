@@ -1,5 +1,5 @@
 import type { HTMLAttributes, TdHTMLAttributes, ThHTMLAttributes } from "react";
-import { cn } from "../lib/cn.js";
+import { cn } from "../lib/cn";
 
 /** Scrollable data table. Semantic tokens only; header/rows use hairline borders + sunk hover. */
 export function Table({ className, ...props }: HTMLAttributes<HTMLTableElement>) {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { ensureBlockListMarkdown } from "./ensure-block-list-markdown.js";
+import { ensureBlockListMarkdown } from "./ensure-block-list-markdown";
 
 describe("ensureBlockListMarkdown", () => {
   it("leaves already-structured nested lists unchanged", () => {

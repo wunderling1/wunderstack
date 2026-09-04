@@ -28,17 +28,14 @@ const nextConfig = {
     return [{ source: "/api/:path*", destination: `${RUNTIME_URL}/api/:path*` }];
   },
   transpilePackages: ["@wunderstack/shared", "@wunderstack/ui"],
-  // Build-only. `next dev` runs on Turbopack (Next 16 default), which applies TypeScript's own
-  // `.js` -> `.ts` specifier resolution and ignores this hook. `next build --webpack` still needs it:
-  // our workspace packages ship raw TypeScript with NodeNext-style `.js` import specifiers.
-  webpack: (config) => {
-    config.resolve.extensionAlias = {
-      ...config.resolve.extensionAlias,
-      ".js": [".ts", ".tsx", ".js"],
-      ".mjs": [".mts", ".mjs"],
-    };
-    return config;
-  },
+  // Dev bundler, declared on purpose. Turbopack is the Next 16 default and needs no resolution
+  // config here: our workspace packages import relatively WITHOUT file extensions, so there is
+  // nothing to remap. That is deliberate — Turbopack cannot remap `.js` -> `.ts`
+  // (vercel/next.js#82945; 16.3.4 exposes only resolveAlias / resolveExtensions), which is exactly
+  // what broke `next dev` while the packages still carried NodeNext-style `.js` specifiers.
+  // Do not reintroduce those suffixes, and do not add `--webpack` to a dev script:
+  // `scripts/check-bundler.sh` fails the build if you do.
+  turbopack: {},
 };
 
 export default nextConfig;

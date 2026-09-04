@@ -4,6 +4,8 @@ export {
   streamText,
   getModelPricing,
   listModelPricing,
+  assertSovereignModel,
+  withTestModelRegistry,
   type ChatMessage,
   type ChatRole,
   type GenerateTextInput,
@@ -15,14 +17,14 @@ export {
   type StreamTextInput,
   type StreamTextPart,
   type TokenUsage,
-} from "./models.js";
+} from "./models";
 
 export {
   DEFAULT_EMBEDDING_VERSION,
   embed,
   type EmbedInput,
   type EmbeddingResult,
-} from "./embeddings.js";
+} from "./embeddings";
 
 export {
   ensureHttpKeepAlive,
@@ -30,11 +32,11 @@ export {
   isTransientProviderError,
   ProviderHttpError,
   TRANSIENT_PROVIDER_STATUSES,
-} from "./http.js";
+} from "./http";
 
 export {
   rerankDocuments,
   type RerankInput,
   type RerankResult,
   type RerankResultItem,
-} from "./rerank.js";
+} from "./rerank";

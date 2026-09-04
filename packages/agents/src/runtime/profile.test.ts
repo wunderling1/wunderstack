@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { arboProfile } from "../arbo/profile.js";
-import { caoProfile } from "../cao/profile.js";
-import { NOT_FOUND_MESSAGE } from "../cao/prompt.js";
-import { NOT_IN_CATALOG_MESSAGE } from "../arbo/prompt.js";
+import { arboProfile } from "../arbo/profile";
+import { caoProfile } from "../cao/profile";
+import { NOT_FOUND_MESSAGE } from "../cao/prompt";
+import { NOT_IN_CATALOG_MESSAGE } from "../arbo/prompt";
 
 describe("agent runtime profiles — specialisation snapshot", () => {
   it("locks cao profile fields that specialise the shared pipeline", () => {
@@ -24,9 +24,8 @@ describe("agent runtime profiles — specialisation snapshot", () => {
     assert.equal(parsed.minScore, 0.35);
   });
 
-  it("runRetrieval is bound to the profile agentKey (via tools)", async () => {
-    // Structural check only — do not hit the DB. The tool modules hardcode agentKey.
-    assert.equal(caoProfile.runRetrieval.name, "runRetrieval");
+  it("runRetrieval is bound per profile (cao shares grounded helper; arbo wraps rewrite)", async () => {
+    assert.equal(caoProfile.runRetrieval.name, "runGroundedRetrieval");
     assert.equal(arboProfile.runRetrieval.name, "runRetrieval");
     assert.notEqual(caoProfile.runRetrieval, arboProfile.runRetrieval);
   });

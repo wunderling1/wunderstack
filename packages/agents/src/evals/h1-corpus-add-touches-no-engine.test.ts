@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 
-import { FUND_SET_PROFILE_SUBDIR, loadFundSetsFrom } from "./golden-set.js";
+import { FUND_SET_PROFILE_SUBDIR, loadFundSetsFrom } from "./golden-set";
 
 describe("h1-corpus-add-touches-no-engine", () => {
   it("discovers a probe set from fixture + profile in a temp dir without touching gate code", () => {

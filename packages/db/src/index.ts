@@ -1,12 +1,12 @@
-export * from "./schema/index.js";
-export { getDb, getWriterDb, getProvisionerDb, closeDb, type Database } from "./client.js";
-export { assertFundKey, quoteIdent, quoteLiteral, FUND_KEY_RE, SCHEMA_NAME_RE } from "./ident.js";
+export * from "./schema/index";
+export { getDb, getWriterDb, getProvisionerDb, closeDb, type Database } from "./client";
+export { assertFundKey, quoteIdent, quoteLiteral, FUND_KEY_RE, SCHEMA_NAME_RE } from "./ident";
 export {
   assertOpaqueConnectionKey,
   resolveConnection,
   connectionEnvName,
-} from "./connection-key.js";
-export { withSearchPath, withFundContext } from "./search-path.js";
+} from "./connection-key";
+export { withSearchPath, withFundContext } from "./search-path";
 export {
   withFundSchema,
   listActiveFunds,
@@ -17,7 +17,7 @@ export {
   recordFundMigration,
   listAppliedFundMigrations,
   type ActiveFund,
-} from "./fund-schema.js";
+} from "./fund-schema";
 export {
   FUND_MIGRATION_PROVISION,
   FUND_MIGRATION_ROLEPLAY,
@@ -50,14 +50,14 @@ export {
   copyEventsSql,
   revokePublicFundSchemaSql,
   assertNoAnnOrPartitionSql,
-} from "./fund-ddl.js";
+} from "./fund-ddl";
 export {
   grantReaderOnControlSql,
   grantReaderOnFundSchemaSql,
   grantOwnerOnFundSchemaSql,
-} from "./grants.js";
-export { canDropPublicCorpus, type FundCopyCheck, type DropPublicDecision } from "./drop-public-corpus.js";
-export { recordAuditEvent, AUDIT_ACTIONS, type AuditAction } from "./audit-events.js";
+} from "./grants";
+export { canDropPublicCorpus, type FundCopyCheck, type DropPublicDecision } from "./drop-public-corpus";
+export { recordAuditEvent, AUDIT_ACTIONS, type AuditAction } from "./audit-events";
 export {
   createFundEnvironment,
   buildFundEnvironmentStatements,
@@ -65,7 +65,7 @@ export {
   type CreateFundEnvironmentInput,
   type CreateFundEnvironmentResult,
   type CreatedAgentInstance,
-} from "./fund-environment.js";
+} from "./fund-environment";
 export {
   createFundUser,
   updateUserPassword,
@@ -75,7 +75,7 @@ export {
   updateFundUserEmail,
   listFundUsers,
   type FundUserPublic,
-} from "./dashboard-users.js";
+} from "./dashboard-users";
 export {
   getFund,
   getLatestFundDump,
@@ -83,6 +83,7 @@ export {
   updateFundDisplayName,
   getFundTheme,
   updateFundTheme,
+  parseStoredFundTheme,
   addFundAgent,
   openFundDump,
   deactivateFund,
@@ -100,7 +101,7 @@ export {
   type FundDumpAudit,
   type FundDumpStream,
   type AddedAgentInstance,
-} from "./fund-lifecycle.js";
+} from "./fund-lifecycle";
 export {
   resolveInstanceByPublicKey,
   resolveInstanceByFundAgent,
@@ -113,11 +114,11 @@ export {
   type InstanceClaims,
   type BindClaimsResult,
   type UnkeyedInstancePick,
-} from "./resolve-instance.js";
+} from "./resolve-instance";
 export {
   generateTenantKey,
   fundSchemaName,
-  getTenantConfig,
+  assertStoredSchemaName,
   getInstance,
   getInstanceByPublicKey,
   listInstances,
@@ -129,8 +130,8 @@ export {
   pinInstanceReleaseTag,
   type TenantConfigInput,
   type TenantConfig,
-} from "./agent-instances.js";
-export { getAgentConfig, parseAgentConfigData } from "./agent-config.js";
+} from "./agent-instances";
+export { getAgentConfig, parseAgentConfigData } from "./agent-config";
 export {
   listScenarios,
   getScenario,
@@ -141,7 +142,7 @@ export {
   scenarioContentFingerprint,
   ScenarioSlugTakenError,
   ScenarioNotFoundError,
-} from "./roleplay-scenarios.js";
+} from "./roleplay-scenarios";
 export {
   listLti11Consumers,
   getActiveLti11ConsumerByKey,
@@ -161,11 +162,11 @@ export {
   Lti11ConsumerNotFoundError,
   type Lti11ConsumerPublic,
   type Lti11LaunchAuth,
-} from "./lti11.js";
+} from "./lti11";
 
 // Re-export the query operators consumers need, so the ORM stays behind this seam
 // (no package/script imports drizzle-orm directly). Extend as new operators are needed.
-export { eq, and, asc, desc, gte, gt, lt, lte, inArray, isNotNull, count, sql } from "drizzle-orm";
+export { eq, and, not, asc, desc, gte, gt, lt, lte, inArray, isNotNull, count, sql } from "drizzle-orm";
 // `SQL` is the type of a composed fragment — needed by callers that build one filter and reuse it
 // across several aggregate columns (see `breakdownCountSelect` in @wunderstack/analytics).
 export type { SQL } from "drizzle-orm";

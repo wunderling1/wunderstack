@@ -7,9 +7,9 @@ import { env, errored, type GroundedAgentKey } from "@wunderstack/shared";
 import { getTenantId } from "@wunderstack/tenant";
 import { z } from "zod";
 
-import { getAgentById } from "./agent.js";
-import { resolveFundScope } from "./fund-scope.js";
-import { loadCorpusVersion } from "./instance-scope.js";
+import { getAgentById } from "./agent";
+import { resolveFundScope } from "./fund-scope";
+import { loadCorpusVersion } from "./instance-scope";
 import {
   ASK_ARBO_ERROR_MESSAGE,
   ASK_ARBO_TOOL_DESCRIPTION,
@@ -19,7 +19,7 @@ import {
   askArboOutputSchema,
   askArboSuccessResult,
   toAskArboOutput,
-} from "./mcp-ask-arbo.js";
+} from "./mcp-ask-arbo";
 import {
   ASK_CAO_TOOL_DESCRIPTION,
   ASK_CAO_TOOL_NAME,
@@ -28,8 +28,8 @@ import {
   askCaoOutputSchema,
   askCaoSuccessResult,
   toAskCaoOutput,
-} from "./mcp-ask-cao.js";
-import { acquireSlot, checkDailyCap, releaseSlot } from "./rate-limit.js";
+} from "./mcp-ask-cao";
+import { acquireSlot, checkDailyCap, releaseSlot } from "./rate-limit";
 
 /**
  * Stateless MCP server factory for `/api/mcp` (PLAN-mcp-server). Fresh instance per request via
@@ -128,7 +128,7 @@ function buildServer(): McpServer {
           try {
             await recordInteractionEvent({
               tenantId,
-              agentId,
+              agentKey: agentId,
               fund: scope.fund,
               sessionId,
               channel: "mcp",
@@ -149,7 +149,7 @@ function buildServer(): McpServer {
           try {
             await recordInteractionEvent({
               tenantId,
-              agentId,
+              agentKey: agentId,
               fund: scope.fund,
               sessionId,
               channel: "mcp",
@@ -209,7 +209,7 @@ function buildServer(): McpServer {
           try {
             await recordInteractionEvent({
               tenantId,
-              agentId,
+              agentKey: agentId,
               fund: scope.fund,
               sessionId,
               channel: "mcp",
@@ -229,7 +229,7 @@ function buildServer(): McpServer {
           try {
             await recordInteractionEvent({
               tenantId,
-              agentId,
+              agentKey: agentId,
               fund: scope.fund,
               sessionId,
               channel: "mcp",

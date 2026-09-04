@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { assertSafeDeliveryUrl, isPrivateIp, UnsafeDeliveryUrlError } from "./safe-delivery-url.js";
+import { assertSafeDeliveryUrl, isPrivateIp, UnsafeDeliveryUrlError } from "./safe-delivery-url";
 
 describe("isPrivateIp", () => {
   it("rejects the ranges an SSRF via a customer URL would actually use", () => {

@@ -7,7 +7,7 @@ import {
   computeSignature,
   pctEncode,
   validateSignature,
-} from "./oauth.js";
+} from "./oauth";
 
 describe("pctEncode", () => {
   it("encodes RFC 3986 reserved chars that encodeURIComponent leaves alone", () => {

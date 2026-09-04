@@ -2,9 +2,9 @@ import { generateText, type ChatMessage } from "@wunderstack/ai";
 import { env } from "@wunderstack/shared";
 import { z } from "zod";
 
-import { extractJsonPayload, JUDGE_MODEL, runJudgeWithParseRetry } from "./judge.js";
-import { retryWithBackoff } from "./retry.js";
-import type { RoleplayRevealPolicy } from "./roleplay-golden-set.js";
+import { extractJsonPayload, JUDGE_MODEL, runJudgeWithParseRetry } from "./judge";
+import { retryWithBackoff } from "./retry";
+import type { RoleplayRevealPolicy } from "./roleplay-golden-set";
 
 /**
  * Scorers for the roleplay gate family (Fase 6).

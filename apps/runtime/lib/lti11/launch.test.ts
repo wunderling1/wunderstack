@@ -6,7 +6,7 @@ import {
   LTI11_MAX_TIMESTAMP_SKEW_SECONDS,
   parseLaunchPathHint,
   resolveScenarioSlug,
-} from "./launch.js";
+} from "./launch";
 
 describe("parseLaunchPathHint", () => {
   it("only accepts gesprek/<slug> — no learning-path launch in v1", () => {

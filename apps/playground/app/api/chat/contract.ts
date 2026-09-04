@@ -8,8 +8,10 @@ export {
   chatRequestSchema,
   chatStatusPhases,
   chatEventSchema,
+  errored,
   type ChatRequest,
   type ChatCitation,
   type ChatStatusPhase,
   type ChatEvent,
-} from "@wunderstack/shared";
+  type WritableTurnOutcome,
+} from "@wunderstack/shared/browser";

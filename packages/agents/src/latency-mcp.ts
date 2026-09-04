@@ -2,8 +2,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { createCaoAgent } from "./index.js";
-import { goldenFundSets } from "./evals/golden-set.js";
+import { createCaoAgent } from "./index";
+import { goldenFundSets } from "./evals/golden-set";
 
 /**
  * One-off pipeline-latency measurement for PLAN-mcp-server Fase 1b.

@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { env } from "@wunderstack/shared";
 
-import { signWebhookBody, WEBHOOK_SIGNATURE_HEADER, WEBHOOK_TIMESTAMP_HEADER } from "./webhook-sign.js";
+import { signWebhookBody, WEBHOOK_SIGNATURE_HEADER, WEBHOOK_TIMESTAMP_HEADER } from "./webhook-sign";
 
 /**
  * HMAC signature + replay verification for inbound webhooks (security-audit finding #5, API2 Broken

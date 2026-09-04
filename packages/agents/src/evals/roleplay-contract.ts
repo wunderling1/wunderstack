@@ -8,17 +8,17 @@ import {
   buildReviewUserMessage,
   buildTurnSystemPrompt,
   buildTurnUserMessage,
-} from "../roleplay/prompts.js";
-import { normalizeRubricWeights } from "../roleplay/rubric.js";
-import { scenarioFixture } from "../roleplay/scenario-fixture.js";
-import { roleplayScenarioPromptSchema } from "../roleplay/snapshot.js";
-import { ROLEPLAY_PROMPT_VERSION } from "../roleplay/version.js";
-import type { EvalCheck } from "./harness.js";
+} from "../roleplay/prompts";
+import { normalizeRubricWeights } from "../roleplay/rubric";
+import { scenarioFixture } from "../roleplay/scenario-fixture";
+import { roleplayScenarioPromptSchema } from "../roleplay/snapshot";
+import { ROLEPLAY_PROMPT_VERSION } from "../roleplay/version";
+import type { EvalCheck } from "./harness";
 import {
   ROLEPLAY_FIXTURE_HASH,
   ROLEPLAY_SET_VERSION,
   roleplayScenarios,
-} from "./roleplay-golden-set.js";
+} from "./roleplay-golden-set";
 
 /**
  * G1-roleplay-contract — the offline change-detector for the roleplay agent.

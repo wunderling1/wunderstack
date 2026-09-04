@@ -1,10 +1,18 @@
 import {
+  accumulateTraceItems,
   AnswerCard,
+  AnswerTrace,
   Card,
   CitationBlock,
+  createStreamWatchdog,
   Field,
   IconButton,
   RefusalNotice,
+  traceItemsFromEvent,
+  traceSummaryLabel,
+  usePacedTrace,
+  useScrollAnchor,
+  type AnswerTraceItem,
 } from "@wunderstack/ui";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Starters, resolveStarterCategories } from "./starters";
@@ -17,11 +25,26 @@ import {
   type EmbedLayout,
 } from "./types";
 
+/** Silence budget: three server heartbeats (10s). Embed is an IIFE — no NEXT_PUBLIC_* env. */
+const CHAT_INACTIVITY_MS = 30_000;
+const INACTIVITY_ERROR =
+  "De verbinding met de assistent viel stil. Probeer je vraag opnieuw te stellen.";
+const GENERIC_ERROR = "Er ging iets mis. Probeer het later opnieuw.";
+
 interface Turn {
   role: "user" | "agent";
   text: string;
   citations?: EmbedCitation[];
   refused?: boolean;
+  turnOutcome?: { outcome: string; outcomeReason: string | null };
+  /** What the runtime reported doing this turn, in arrival order (drives `AnswerTrace`). */
+  trace?: AnswerTraceItem[];
+  /** Measured retrieval totals for the summary line; null until a retrieval event arrives. */
+  retrieval?: {
+    considered: number;
+    aboveThreshold: number;
+    used?: number;
+  } | null;
   /** Grounded follow-up chips from the `followups` stream event. */
   followUpQuestions?: string[];
 }
@@ -37,6 +60,83 @@ interface Props {
 
 const DEFAULT_ARTICLE_50 =
   "Je praat met een AI-assistent. Antwoorden kunnen onjuist zijn; controleer belangrijke informatie bij de bron.";
+
+/** Head line of the progress trace, per agent. Unknown agents get the neutral wording. */
+const TRACE_HEADS: Record<string, string> = {
+  cao: "Zoeken in de CAO",
+  arbo: "Zoeken in de Arbocatalogus",
+};
+
+/** Corpus wording for the finished summary line. */
+const SEARCHED_LABELS: Record<string, string> = {
+  cao: "Gezocht in de CAO",
+  arbo: "Gezocht in de Arbocatalogus",
+};
+
+function traceHead(agentId: string): string {
+  return TRACE_HEADS[agentId] ?? "Zoeken in de bronnen";
+}
+
+function searchedLabel(agentId: string): string {
+  return SEARCHED_LABELS[agentId] ?? "Gezocht in de bronnen";
+}
+
+/**
+ * The wait UI. Its own component because pacing is a hook, and the turn list is rendered in a map.
+ */
+function AgentWait({ head, trace }: { head: string; trace: AnswerTraceItem[] }) {
+  const paced = usePacedTrace(trace);
+  return <AnswerTrace head={head} steps={accumulateTraceItems(paced)} inFlight size="sm" />;
+}
+
+const TRACE_OUTCOMES = ["answered", "refused", "clarified", "error"] as const;
+
+/**
+ * The stream mirror types `outcome` as a plain string so a runtime that adds a value does not break
+ * an older bundle (see types.ts). An outcome this bundle does not know is therefore not a verdict it
+ * can render, so it yields no line at all rather than guessing.
+ */
+function knownOutcome(
+  value: string | undefined,
+): (typeof TRACE_OUTCOMES)[number] | null {
+  return TRACE_OUTCOMES.find((outcome) => outcome === value) ?? null;
+}
+
+function TraceRecap({
+  agentId,
+  turn,
+  className,
+}: {
+  agentId: string;
+  turn: Turn;
+  className?: string;
+}) {
+  const steps = accumulateTraceItems(turn.trace ?? []);
+  const outcome = knownOutcome(turn.turnOutcome?.outcome);
+  if (outcome === null || steps.length === 0) {
+    return null;
+  }
+  const summary = traceSummaryLabel({
+    outcome,
+    searchedLabel: searchedLabel(agentId),
+    considered: turn.retrieval?.considered ?? 0,
+    aboveThreshold: turn.retrieval?.aboveThreshold ?? 0,
+    ...(turn.retrieval?.used === undefined ? {} : { used: turn.retrieval.used }),
+  });
+  if (summary === null) {
+    return null;
+  }
+  return (
+    <AnswerTrace
+      head={traceHead(agentId)}
+      steps={steps}
+      inFlight={false}
+      summary={summary}
+      size="sm"
+      {...(className === undefined ? {} : { className })}
+    />
+  );
+}
 
 /** Same key as the playground: one identity model across surfaces (DECISION-analytics-retention). */
 const SESSION_STORAGE_KEY = "wunderstack-session-id";
@@ -73,16 +173,18 @@ function readOrCreateSessionId(): string {
   return id;
 }
 
-/** Align a new turn to the top of the thread so the answer is readable from the start. */
-function scrollChildToStart(container: HTMLElement, child: HTMLElement): void {
-  const nextTop =
-    container.scrollTop + (child.getBoundingClientRect().top - container.getBoundingClientRect().top);
-  container.scrollTo({ top: Math.max(0, nextTop), behavior: "smooth" });
-}
-
 function lastUserTurnIndex(turns: Turn[]): number | undefined {
   for (let i = turns.length - 1; i >= 0; i--) {
     if (turns[i]?.role === "user") {
+      return i;
+    }
+  }
+  return undefined;
+}
+
+function lastAgentTurnIndex(turns: Turn[]): number | undefined {
+  for (let i = turns.length - 1; i >= 0; i--) {
+    if (turns[i]?.role === "agent") {
       return i;
     }
   }
@@ -136,24 +238,23 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
   }, [endpoint, agentKey]);
 
   const lastUserIndex = lastUserTurnIndex(turns);
-
-  // Scroll only when a new user turn starts (or the panel opens onto an existing thread).
-  // Stick-to-bottom would land on follow-up chips once the answer footer grows.
-  useEffect(() => {
-    if (!open) return;
-    if (lastUserIndex === undefined) return;
-    const container = scrollRef.current;
-    const target = container?.querySelector(`[data-turn-index="${String(lastUserIndex)}"]`);
-    if (!container || !(target instanceof HTMLElement)) return;
-    scrollChildToStart(container, target);
-  }, [lastUserIndex, open]);
+  const lastAgentIndex = lastAgentTurnIndex(turns);
+  const lastAgent = lastAgentIndex === undefined ? undefined : turns[lastAgentIndex];
+  useScrollAnchor({
+    containerRef: scrollRef,
+    lastUserId: lastUserIndex === undefined ? undefined : String(lastUserIndex),
+    lastAssistantId: lastAgentIndex === undefined ? undefined : String(lastAgentIndex),
+    assistantWaiting: lastAgent !== undefined && lastAgent.turnOutcome === undefined && busy,
+    assistantStreaming: busy,
+    itemAttr: "data-turn-index",
+    enabled: open,
+  });
 
   const article50 = config?.article50 ?? DEFAULT_ARTICLE_50;
   const tagline = config?.texts.tagline ?? "Stel je vraag";
   const logo = config?.theme.logo;
   const snippetHint = agentId.trim();
   const resolvedAgentId = config?.agentId ?? (snippetHint || "cao");
-
   useEffect(() => {
     if (!config || snippetHint.length === 0) return;
     if (snippetHint === config.agentId) return;
@@ -172,19 +273,43 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
   }
 
   function applyEvent(event: ChatEvent): void {
-    if (event.type === "text") {
+    if (event.type === "status" || event.type === "retrieval") {
+      const items = traceItemsFromEvent(event);
+      updateLast((turn) => ({
+        ...turn,
+        ...(items.length > 0 ? { trace: [...(turn.trace ?? []), ...items] } : {}),
+        ...(event.type === "retrieval"
+          ? {
+              retrieval: {
+                considered: event.considered,
+                aboveThreshold: event.aboveThreshold,
+                ...(event.used === undefined ? {} : { used: event.used }),
+              },
+            }
+          : {}),
+      }));
+    } else if (event.type === "text") {
       updateLast((turn) => ({ ...turn, text: turn.text + event.delta }));
     } else if (event.type === "citations") {
+      const clarifyItems = traceItemsFromEvent(event);
       updateLast((turn) => ({
         ...turn,
         text: event.answer || turn.text,
         citations: event.citations,
-        refused: !event.found && !event.needsClarification,
+        turnOutcome: event.turnOutcome,
+        refused: event.turnOutcome.outcome === "refused",
+        ...(clarifyItems.length > 0
+          ? { trace: [...(turn.trace ?? []), ...clarifyItems] }
+          : {}),
       }));
     } else if (event.type === "followups") {
       updateLast((turn) => ({ ...turn, followUpQuestions: event.questions }));
     } else if (event.type === "error") {
-      updateLast((turn) => ({ ...turn, text: event.message }));
+      updateLast((turn) => ({
+        ...turn,
+        text: event.message,
+        turnOutcome: { outcome: "error", outcomeReason: "provider_error" },
+      }));
     }
   }
 
@@ -196,8 +321,23 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
       .slice(-6)
       .map((turn) => ({ role: turn.role === "agent" ? "assistant" : "user", content: turn.text }))
       .filter((message) => message.content.length > 0);
-    setTurns((prev) => [...prev, { role: "user", text: question }, { role: "agent", text: "" }]);
+    setTurns((prev) => [
+      ...prev,
+      { role: "user", text: question },
+      // Empty trace: the head line carries the wait until the first measured event lands (B1).
+      { role: "agent", text: "", trace: [] },
+    ]);
     setBusy(true);
+
+    const controller = new AbortController();
+    let abortedForInactivity = false;
+    const watchdog = createStreamWatchdog({
+      timeoutMs: CHAT_INACTIVITY_MS,
+      onTimeout: () => {
+        abortedForInactivity = true;
+        controller.abort();
+      },
+    });
 
     try {
       const res = await fetch(`${endpoint}/api/chat`, {
@@ -213,37 +353,53 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
           channel: "embed",
           ...(config?.fund ? { fund: config.fund } : {}),
         }),
+        signal: controller.signal,
       });
       if (!res.ok || !res.body) throw new Error("request_failed");
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-        for (const raw of lines) {
-          if (!raw.trim()) continue;
-          let json: unknown;
-          try {
-            json = JSON.parse(raw);
-          } catch {
-            continue; /* ignore a partial/garbled line */
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          watchdog.signal();
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+          for (const raw of lines) {
+            if (!raw.trim()) continue;
+            let json: unknown;
+            try {
+              json = JSON.parse(raw);
+            } catch {
+              continue; /* ignore a partial/garbled line */
+            }
+            // Validate each stream event at the boundary; skip anything off-contract.
+            const parsed = chatEventSchema.safeParse(json);
+            if (parsed.success) applyEvent(parsed.data);
           }
-          // Validate each stream event at the boundary; skip anything off-contract.
-          const parsed = chatEventSchema.safeParse(json);
-          if (parsed.success) applyEvent(parsed.data);
         }
+      } finally {
+        watchdog.stop();
       }
     } catch {
-      updateLast((turn) => ({
-        ...turn,
-        text: turn.text || "Er ging iets mis. Probeer het later opnieuw.",
-      }));
+      if (abortedForInactivity) {
+        updateLast((turn) => ({
+          ...turn,
+          text: turn.text || INACTIVITY_ERROR,
+          turnOutcome: turn.turnOutcome ?? { outcome: "error", outcomeReason: "timeout" },
+        }));
+      } else if (!controller.signal.aborted) {
+        updateLast((turn) => ({
+          ...turn,
+          text: turn.text || GENERIC_ERROR,
+          turnOutcome: turn.turnOutcome ?? { outcome: "error", outcomeReason: "provider_error" },
+        }));
+      }
     } finally {
+      watchdog.stop();
       setBusy(false);
     }
   }
@@ -272,7 +428,12 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
         )}
       </div>
 
-      <div ref={scrollRef} className="flex flex-1 flex-col gap-3 overflow-y-auto bg-page px-4 py-4">
+      <div className="relative min-h-0 flex-1">
+        <div
+          ref={scrollRef}
+          data-chat-scroll
+          className="absolute inset-0 overflow-y-auto bg-page px-4 py-4"
+        >
         {turns.length === 0 ? (
           <Starters
             categories={resolveStarterCategories(config?.texts)}
@@ -280,20 +441,47 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
             {...(config?.texts.tagline ? { title: config.texts.tagline } : {})}
             {...(config?.texts.intro ? { intro: config.texts.intro } : {})}
           />
-        ) : null}
-        {turns.map((turn, index) => (
-          <div key={index} data-turn-index={index} className="flex flex-col gap-2">
-            {turn.refused ? (
-              <RefusalNotice>{turn.text}</RefusalNotice>
+        ) : (
+        <div className="flex flex-col gap-3" data-message-list>
+        {turns.map((turn, index) => {
+          // Text can land before the citations event that carries the outcome. Keep the live
+          // trace on the in-flight agent turn until that outcome arrives (A2 layout stability).
+          const agentWaiting =
+            turn.role === "agent" &&
+            turn.turnOutcome === undefined &&
+            index === turns.length - 1 &&
+            busy;
+          return (
+          <div
+            key={index}
+            data-turn-index={index}
+            className={
+              index === turns.length - 1
+                ? "flex min-h-[var(--turn-min-height,0px)] flex-col gap-2"
+                : "flex flex-col gap-2"
+            }
+          >
+            {agentWaiting ? (
+              <AgentWait head={traceHead(resolvedAgentId)} trace={turn.trace ?? []} />
+            ) : turn.refused ? (
+              <>
+                <TraceRecap agentId={resolvedAgentId} turn={turn} />
+                <RefusalNotice>{turn.text}</RefusalNotice>
+              </>
             ) : (
-              <AnswerCard
-                role={turn.role}
-                {...(turn.role === "agent"
-                  ? { agentLabel: "AI-assistent", agentSubLabel: resolvedAgentId }
-                  : {})}
-              >
-                {turn.text || (turn.role === "agent" ? "…" : "")}
-              </AnswerCard>
+              <>
+                {turn.role === "agent" ? (
+                  <TraceRecap agentId={resolvedAgentId} turn={turn} />
+                ) : null}
+                <AnswerCard
+                  role={turn.role}
+                  {...(turn.role === "agent"
+                    ? { agentLabel: "AI-assistent", agentSubLabel: resolvedAgentId }
+                    : {})}
+                >
+                  {turn.text}
+                </AnswerCard>
+              </>
             )}
             {turn.citations && turn.citations.length > 0 ? (
               <div className="flex flex-col gap-2">
@@ -302,7 +490,7 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
                     key={citation.ref}
                     refNumber={citation.ref}
                     verification="verified"
-                    label={citation.sourceRef ?? citation.heading ?? citation.title}
+                    label={citation.heading ?? citation.sourceRef ?? citation.title}
                     quote={citation.snippet || citation.quote}
                   />
                 ))}
@@ -330,7 +518,11 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
               </div>
             ) : null}
           </div>
-        ))}
+          );
+        })}
+        </div>
+        )}
+        </div>
       </div>
 
       <form

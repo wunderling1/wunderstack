@@ -8,7 +8,7 @@ import {
   pickUnkeyedInstance,
   retrievalScope,
   type ResolvedInstance,
-} from "./resolve-instance.js";
+} from "./resolve-instance";
 
 function oomtCao(): ResolvedInstance {
   return instanceFromRow({

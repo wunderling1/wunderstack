@@ -9,7 +9,7 @@ import {
   groundedAgentKeySchema,
   isAgentKey,
   isGroundedAgentKey,
-} from "./agent-keys.js";
+} from "./agent-keys";
 
 describe("AGENT_KEYS", () => {
   it("lists every instanceable agent with a label", () => {

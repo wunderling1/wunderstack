@@ -1,7 +1,7 @@
 import { ROLEPLAY_TIMEOUT_MS } from "@wunderstack/agents";
 import type { RoleplayEvent } from "@wunderstack/shared";
 
-import { pipeNdjsonStream, type PipeNdjsonResult } from "./ndjson-stream.js";
+import { pipeNdjsonStream, type PipeNdjsonResult } from "./ndjson-stream";
 
 /**
  * Roleplay's slice of the NDJSON stream contract. The robustness lives in `ndjson-stream.ts`,

@@ -30,7 +30,7 @@ export {
   lti11Launches,
   type Lti11Launch,
   type NewLti11Launch,
-} from "./control/index.js";
+} from "./control/index";
 
 export {
   documents,
@@ -54,4 +54,4 @@ export {
   type NewRoleplayReview,
   type RoleplayResultDelivery,
   type NewRoleplayResultDelivery,
-} from "./fund/index.js";
+} from "./fund/index";

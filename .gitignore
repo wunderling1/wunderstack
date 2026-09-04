@@ -22,5 +22,7 @@ baseline-v4-*-dump.json
 # Scratch and debug output. scripts/check-root.sh sends throwaway files here, so it has
 # to be ignored for that advice to hold.
 tmp/
+# tsx write cache (distinct from tmp/); must not be committed.
+.tmp/
 
 .DS_Store

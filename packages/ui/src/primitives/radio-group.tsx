@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useId } from "react";
 import type { ChangeEvent, HTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
-import { cn } from "../lib/cn.js";
+import { cn } from "../lib/cn";
 
 interface RadioGroupContextValue {
   name: string;

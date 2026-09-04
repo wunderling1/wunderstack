@@ -2,13 +2,13 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { getLti11ConsumerForDelivery } from "@wunderstack/db";
 import type { RoleplayLti11Target, RoleplayResultEnvelope } from "@wunderstack/shared";
 
-import { assertSafeDeliveryUrl, type DnsLookup } from "../safe-delivery-url.js";
+import { assertSafeDeliveryUrl, type DnsLookup } from "../safe-delivery-url";
 import {
   buildSignatureBaseString,
   computeBodyHash,
   computeSignature,
   pctEncode,
-} from "./oauth.js";
+} from "./oauth";
 
 const OUTCOMES_TIMEOUT_MS = 20_000;
 

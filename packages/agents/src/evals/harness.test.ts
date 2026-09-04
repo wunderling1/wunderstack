@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import type { GateSpec } from "./gates.js";
-import { createEvalHarness, skipReason } from "./harness.js";
+import type { GateSpec } from "./gates";
+import { createEvalHarness, formatEvalVerdict, skipReason } from "./harness";
 
 const SPEC: GateSpec = {
   id: "G2-answer",
@@ -88,5 +88,58 @@ describe("skipReason / pushUnavailable", () => {
     assert.equal(ok, false);
     assert.equal(harness.gateResults[0]?.status, "failed");
     assert.match(harness.gateResults[0]?.checks[0]?.name ?? "", /^REQUIRED-BUT-UNAVAILABLE:/);
+  });
+});
+
+describe("formatEvalVerdict (F0-04: skip is not PASSED)", () => {
+  it("is INCOMPLETE when any gate was skipped, even if blocking checks are green", () => {
+    const verdict = formatEvalVerdict(
+      [{ status: "passed" }, { status: "skipped" }, { status: "skipped" }],
+      { allPassed: true },
+    );
+    assert.equal(verdict.kind, "INCOMPLETE");
+    assert.equal(verdict.run, 1);
+    assert.equal(verdict.skipped, 2);
+    assert.match(verdict.line, /^Eval INCOMPLETE — 1 run, 2 skipped\./);
+    assert.doesNotMatch(verdict.line, /PASSED/);
+  });
+
+  it("is PASSED only when every recorded gate ran and passed (zero skips)", () => {
+    const verdict = formatEvalVerdict(
+      [{ status: "passed" }, { status: "advisory-failed" }],
+      { allPassed: true },
+    );
+    assert.equal(verdict.kind, "PASSED");
+    assert.equal(verdict.run, 2);
+    assert.equal(verdict.skipped, 0);
+    assert.match(verdict.line, /^Eval PASSED — 2 run, 0 skipped\./);
+  });
+
+  it("is INCOMPLETE on a partial EVAL_ONLY filter even with zero skips in the results", () => {
+    const verdict = formatEvalVerdict([{ status: "passed" }], {
+      allPassed: true,
+      partialFilter: true,
+    });
+    assert.equal(verdict.kind, "INCOMPLETE");
+    assert.doesNotMatch(verdict.line, /PASSED/);
+  });
+
+  it("is FAILED when allPassed is false, regardless of skips", () => {
+    const verdict = formatEvalVerdict([{ status: "failed" }, { status: "skipped" }], {
+      allPassed: false,
+    });
+    assert.equal(verdict.kind, "FAILED");
+    assert.match(verdict.line, /^Eval FAILED/);
+  });
+
+  it("does not count not-applicable as skipped", () => {
+    const verdict = formatEvalVerdict(
+      [{ status: "passed" }, { status: "not-applicable" }],
+      { allPassed: true },
+    );
+    assert.equal(verdict.kind, "PASSED");
+    assert.equal(verdict.run, 1);
+    assert.equal(verdict.skipped, 0);
+    assert.equal(verdict.notApplicable, 1);
   });
 });

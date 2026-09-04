@@ -89,7 +89,7 @@ export type AgentAnswer = z.infer<typeof agentAnswerSchema>;
 
 /**
  * Progress phases the agent passes through while answering. Emitted as `status` events so the UI can
- * show named progress ("CAO doorzoeken…" → "N passages gevonden" → "Antwoord formuleren…") instead
+ * show named progress ("CAO doorzoeken…" → "N fragmenten gevonden" → "Antwoord opstellen…") instead
  * of an undifferentiated spinner. The phase names are language-neutral; the app maps them to
  * user-facing (Dutch) labels. Only the normal answer path emits these; the clarify and not-found
  * paths return too fast for a phase flash to help.
@@ -98,12 +98,25 @@ export type AgentStreamPhase = "searching" | "retrieved" | "generating";
 
 /**
  * Streaming counterpart of `AgentAnswer`, as a sequence of events the API layer can forward to the
- * browser (see apps/playground). Order on the normal path: zero or more `status` events, zero or more
- * `text` deltas, exactly one `citations` (verified), optionally one `followups`, then exactly one
- * `done`. Clarify and not-found paths emit `text` → `citations` → `done` (no followups).
+ * browser (see apps/playground). Order on the normal path: zero or more `status` events, one
+ * `retrieval` event after search completes, zero or more `text` deltas, exactly one `citations`
+ * (verified), optionally one `followups`, then exactly one `done`. Clarify path emits
+ * `text` → `citations` → `done` (no retrieval). Empty-retrieval path emits
+ * `status` → `retrieval` → `text` → `citations` → `done` (no followups).
  */
 export type AgentStreamEvent =
   | { type: "status"; phase: AgentStreamPhase; count?: number; topScore?: number | null }
+  | {
+      type: "retrieval";
+      corpus: { label: string; version: string };
+      /** The text that was actually searched — the user's question, or the condensed follow-up. */
+      query: string;
+      considered: number;
+      aboveThreshold: number;
+      /** Unique headings in the reranked context the model saw. */
+      used: number;
+      hits: Array<{ label: string; dropped: boolean }>;
+    }
   | { type: "text"; delta: string }
   | {
       type: "citations";

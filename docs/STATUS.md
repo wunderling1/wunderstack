@@ -1,6 +1,11 @@
 # Wunderstack Status
 _Gegenereerd: 2026-07-19 · Audit-methode: statische verificatie (geen test-runs) · branch: `fix/citation-pipeline`_
 
+> **VERVALLEN (2026-09-04).** Dit document is een historische snapshot van juli 2026 en is **niet**
+> de actuele status van de tree. Gebruik `docs/plans/PLAN-q4-gereedheid.md`, de fase-0/1-audits onder
+> `docs/audit/`, en `git`/`eval-report.json` voor actuele waarheid. Claims hieronder over Auth.js,
+> tweede agent, of rode gates zijn achterhaald (dashboard-auth en `arbo` staan in de registry).
+
 > **Update 2026-07-21 (branch `fix/eval-gate-enforcement`).** De gates worden nu bijgehouden in het
 > vier-lagen-model (G1–G4); het enige levende gate-document is `docs/eval/GATE-ARCHITECTURE.md`.
 > Een volledige eval-run op deze branch is **integraal groen** (`eval-report.json` → `passed: true`).

@@ -1,6 +1,6 @@
 import { cva, type VariantProps } from "class-variance-authority";
 import type { HTMLAttributes } from "react";
-import { cn } from "../lib/cn.js";
+import { cn } from "../lib/cn";
 
 /*
  * Product rule (decision D) — the trust layer does not animate.

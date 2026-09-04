@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { FUND_KEY_RE } from "./ident.js";
+import { FUND_KEY_RE } from "./ident";
 import {
   AgentInstanceExistsError,
   ConfirmationMismatchError,
@@ -10,8 +10,26 @@ import {
   FundNotFoundError,
   assertDeactivateAllowed,
   buildPgDumpArgs,
+  parseStoredFundTheme,
   redactSecrets,
-} from "./fund-lifecycle.js";
+} from "./fund-lifecycle";
+
+describe("parseStoredFundTheme (F1-04)", () => {
+  it("returns {} for corrupt jsonb instead of throwing", () => {
+    assert.deepEqual(parseStoredFundTheme({ primary: "not-a-hex" }), {});
+    assert.deepEqual(parseStoredFundTheme({ unknownKey: true }), {});
+    assert.deepEqual(parseStoredFundTheme("oops"), {});
+  });
+
+  it("returns the parsed theme for a valid object", () => {
+    assert.deepEqual(parseStoredFundTheme({ primary: "#4f46e5" }), { primary: "#4f46e5" });
+  });
+
+  it("treats null/undefined as empty theme", () => {
+    assert.deepEqual(parseStoredFundTheme(null), {});
+    assert.deepEqual(parseStoredFundTheme(undefined), {});
+  });
+});
 
 describe("buildPgDumpArgs", () => {
   it("dumps one schema without --clean (no DROP SCHEMA in the dump)", () => {

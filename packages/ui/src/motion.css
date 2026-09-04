@@ -1,0 +1,180 @@
+/*
+ * The motion component layer, split out of styles.css so both Tailwind entries can reach it:
+ * the apps import styles.css, while packages/embed/src/tailwind.css builds its own entry for the
+ * shadow tree and would otherwise ship the tokens without the classes that use them — which is
+ * exactly how the embed lost every animation once.
+ *
+ * Imported by styles.css; do not import Tailwind or the tokens here.
+ */
+
+/*
+ * Motion component layer — semantic CSS classes referenced by packages/ui primitives.
+ * Only transform and opacity for enter/exit; background-color and box-shadow on state timing.
+ * No transitions on layout properties (height, width, top, left, margin, padding).
+ */
+@layer components {
+  /* Button / IconButton press + state */
+  .motion-control {
+    transition:
+      transform var(--motion-press),
+      background-color var(--motion-state),
+      box-shadow var(--motion-state);
+  }
+  .motion-control:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  /* Dialog overlay */
+  .motion-overlay {
+    transition: opacity var(--motion-enter);
+  }
+  .motion-overlay[data-state="open"] {
+    opacity: 1;
+    transition-duration: var(--duration-250);
+    transition-timing-function: var(--ease-out-soft);
+  }
+  .motion-overlay[data-state="closed"] {
+    opacity: 0;
+    transition-duration: var(--duration-150);
+    transition-timing-function: var(--ease-standard);
+  }
+
+  /* Dialog content */
+  .motion-dialog-content {
+    transition:
+      opacity var(--motion-enter),
+      transform var(--motion-enter);
+  }
+  .motion-dialog-content[data-state="open"] {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+    transition-duration: var(--duration-250);
+    transition-timing-function: var(--ease-out-soft);
+  }
+  .motion-dialog-content[data-state="closed"] {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + var(--motion-offset-enter)));
+    transition-duration: var(--duration-150);
+    transition-timing-function: var(--ease-standard);
+  }
+
+  /*
+   * Empty-state enter (fase 2). Stagger via --i on the element.
+   * Reduced motion zeros --duration-* and --motion-offset-enter, so this is a no-op there.
+   */
+  .motion-enter {
+    /* Fade on the slow/standard curve so opacity is visible; rise can stay soft. */
+    animation:
+      motion-enter-fade var(--motion-enter-slow) both,
+      motion-enter-up var(--motion-enter-slow) both;
+    animation-delay: calc(var(--i, 0) * var(--motion-stagger));
+  }
+
+  /*
+   * Progress loop (state-bound). Apply while work is in flight; unmount to stop.
+   * Reduced motion sets --motion-spin to a single 0.01ms tick (no hyper-spin).
+   */
+  .motion-spin {
+    animation: motion-spin var(--motion-spin);
+  }
+
+  /*
+   * Placeholder loop for skeletons. Replaces Tailwind's `animate-pulse`, which hardcodes its own
+   * duration and curve and so cannot be reached by the reduced-motion block above. Reduced motion
+   * settles on the opening keyframe: full opacity, a visible static block.
+   */
+  .motion-pulse {
+    animation: motion-pulse var(--motion-pulse);
+  }
+
+  /*
+   * Sheen for the progress head — a light travelling over the text while work is in flight.
+   * Clipped to the glyphs, so the element must carry transparent text; the reduced-motion block
+   * in semantic.css hands the colour back. Text only: never put this on a surface.
+   *
+   * `will-change` is not decoration here: WebKit does not repaint an animated background-position
+   * through `background-clip: text` unless the layer is promoted, so without it the gradient
+   * renders once and then stands still.
+   */
+  .motion-sheen {
+    background-image: linear-gradient(
+      100deg,
+      var(--color-text-subtle) 34%,
+      var(--color-text) 48%,
+      var(--color-text-subtle) 62%
+    );
+    background-size: 260% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    will-change: background-position;
+    animation: motion-sheen var(--motion-sheen);
+  }
+
+  /*
+   * Writing-step dots. One moving element family with the head sheen: the sheen is on the head,
+   * the dots are on the write step. Stagger via `--i` × `--duration-dot-stagger` so Rule 2 never
+   * sees a literal delay. Reduced motion freezes them at full opacity (one tick).
+   */
+  .motion-dots {
+    animation: motion-dots var(--motion-dots);
+    animation-delay: calc(var(--i, 0) * var(--duration-dot-stagger));
+  }
+}
+
+/*
+ * Every @keyframes lives outside @layer on purpose. Keyframes are not subject to the cascade, so
+ * a layer buys nothing, and WebKit has shipped versions that fail to resolve an animation name
+ * declared inside one — which silently freezes every loop in the design system. Top level costs
+ * nothing and removes a whole class of "the animation just doesn't run" reports. Keep them here;
+ * the classes that use them stay in @layer components above.
+ */
+@keyframes motion-enter-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes motion-enter-up {
+  from {
+    transform: translateY(var(--motion-offset-enter));
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes motion-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes motion-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes motion-sheen {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -60% 0;
+  }
+}
+
+@keyframes motion-dots {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}

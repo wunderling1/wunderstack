@@ -1,4 +1,4 @@
-import { syncLangfuseModelPrices } from "./observability/langfuse-model-prices.js";
+import { syncLangfuseModelPrices } from "./observability/langfuse-model-prices";
 
 /**
  * Sync @wunderstack/ai model list prices into Langfuse so traces show accurate cost.

@@ -1,6 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 
-import { getDb, type Database } from "./client.js";
+import { getDb, type Database } from "./client";
 import {
   appliedMigrationsSql,
   copyChunksSql,
@@ -12,11 +12,11 @@ import {
   publicCorpusTablesSql,
   recordMigrationSql,
   truncateFundTablesSql,
-} from "./fund-ddl.js";
-import { assertFundKey, quoteLiteral } from "./ident.js";
-import { funds } from "./schema/control/funds.js";
-import { withSearchPath } from "./search-path.js";
-import { fundSchemaName } from "./agent-instances.js";
+} from "./fund-ddl";
+import { assertFundKey, quoteLiteral } from "./ident";
+import { funds } from "./schema/control/funds";
+import { withSearchPath } from "./search-path";
+import { assertStoredSchemaName, fundSchemaName } from "./agent-instances";
 
 /**
  * Organizational wrapper: SET LOCAL search_path to this fund's schema for `fn`.
@@ -36,11 +36,15 @@ export interface ActiveFund {
 
 /** Active funds from the control plane. No data-plane rows. */
 export async function listActiveFunds(): Promise<ActiveFund[]> {
-  return getDb()
+  const rows = await getDb()
     .select({ key: funds.key, schemaName: funds.schemaName })
     .from(funds)
     .where(eq(funds.status, "active"))
     .orderBy(funds.key);
+  return rows.map((row) => ({
+    key: row.key,
+    schemaName: assertStoredSchemaName(row.key, row.schemaName),
+  }));
 }
 
 /**

@@ -4,7 +4,7 @@ import {
   CONVERSATION_GAP_MINUTES,
   groupIntoConversations,
   isThreadedChannel,
-} from "./conversation-boundary.js";
+} from "./conversation-boundary";
 
 const NOON = Date.UTC(2026, 8, 1, 12, 0, 0);
 
@@ -12,19 +12,19 @@ function row(
   id: string,
   minutes: number,
   sessionId = "tab-1",
-  agentId = "cao",
+  agentKey = "cao",
   channel: string | null = "playground",
 ): {
   id: string;
   sessionId: string;
-  agentId: string;
+  agentKey: string;
   occurredAt: Date;
   channel: string | null;
 } {
   return {
     id,
     sessionId,
-    agentId,
+    agentKey,
     occurredAt: new Date(NOON + minutes * 60_000),
     channel,
   };
@@ -86,7 +86,7 @@ test("one tab talking to two agents is two conversations", () => {
     row("cao-2", 2, "tab-1", "cao"),
   ]);
   assert.equal(groups.length, 2);
-  const byAgent = new Map(groups.map((group) => [group.agentId, group.questions.length]));
+  const byAgent = new Map(groups.map((group) => [group.agentKey, group.questions.length]));
   assert.equal(byAgent.get("cao"), 2);
   assert.equal(byAgent.get("arbo"), 1);
 });

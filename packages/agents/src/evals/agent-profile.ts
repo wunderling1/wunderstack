@@ -10,15 +10,15 @@
  * type error (same compiler trick as `Record<GateId, …>` in gates.ts).
  */
 
-import type { EvalCheck } from "./harness.js";
-import type { AgentKey } from "../runtime/registry.js";
-import type { HardFactAgentKey } from "../hard-facts.js";
+import type { EvalCheck } from "./harness";
+import type { AgentKey } from "../runtime/registry";
+import type { HardFactAgentKey } from "../hard-facts";
 
 import {
   NOT_IN_CATALOG_MESSAGE,
   OUT_OF_SCOPE_MESSAGE,
   ARBO_SYSTEM_INSTRUCTIONS,
-} from "../arbo/prompt.js";
+} from "../arbo/prompt";
 
 export interface AgentEvalProfile {
   readonly agentKey: HardFactAgentKey;

@@ -1,6 +1,6 @@
 import { jsonb, primaryKey, text } from "drizzle-orm/pg-core";
 
-import { control } from "./schema.js";
+import { control } from "./schema";
 
 /**
  * Per-fund configuration for an agent (tuning knobs only: minScore, starters, corpus version).

@@ -5,7 +5,7 @@ import {
   describeDatabaseTarget,
   describeFailure,
   formatDatabaseTarget,
-} from "./diagnostics.js";
+} from "./diagnostics";
 
 void test("describeFailure — surfaces the driver fields that message hides", () => {
   const error = Object.assign(new Error("write CONNECTION_CLOSED"), {

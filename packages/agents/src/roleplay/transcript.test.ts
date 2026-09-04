@@ -6,8 +6,8 @@ import {
   formatHistoryForPrompt,
   formatTranscriptForReview,
   windowHistory,
-} from "./transcript.js";
-import type { RoleplayMessage } from "./types.js";
+} from "./transcript";
+import type { RoleplayMessage } from "./types";
 
 function transcript(length: number): RoleplayMessage[] {
   return Array.from({ length }, (_, index) => ({

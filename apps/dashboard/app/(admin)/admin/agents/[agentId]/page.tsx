@@ -46,7 +46,7 @@ export default async function AgentDetail({
     listActiveFunds(),
   ]);
 
-  const agentActivity = activity.filter((row) => row.agentId === agentId);
+  const agentActivity = activity.filter((row) => row.agentKey === agentId);
   const total = agentActivity.reduce((sum, row) => sum + row.total, 0);
   const errors = agentActivity.reduce((sum, row) => sum + row.errors, 0);
   const answered = agentActivity.reduce((sum, row) => sum + row.answeredWithCitations, 0);

@@ -14,7 +14,7 @@
  * (roleplay) never reach this module: they make no grounded claims to verify.
  */
 
-import { type GroundedAgentKey, isGroundedAgentKey } from "./runtime/registry.js";
+import { type GroundedAgentKey, isGroundedAgentKey } from "./runtime/registry";
 
 /** @deprecated Prefer {@link GroundedAgentKey}; alias kept for eval/judge call-sites. */
 export type HardFactAgentKey = GroundedAgentKey;

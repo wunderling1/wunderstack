@@ -6,7 +6,7 @@ import {
   fundStatusFromAgents,
   isOnboarding,
   totalQuestions,
-} from "./overview.js";
+} from "./overview";
 
 test("zero events is onboarding, not a 0% rate", () => {
   assert.equal(isOnboarding(0, 0), true);

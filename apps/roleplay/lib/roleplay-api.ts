@@ -9,9 +9,9 @@ import {
   type RoleplayStartResponse,
 } from "@wunderstack/shared/browser";
 
-import { readErrorCode, roleplayErrorMessage } from "./errors.js";
-import { parseNdjsonLine, splitNdjson } from "./ndjson.js";
-import { runtimeApiHeaders } from "./runtime-api.js";
+import { readErrorCode, roleplayErrorMessage } from "./errors";
+import { parseNdjsonLine, splitNdjson } from "./ndjson";
+import { runtimeApiHeaders } from "./runtime-api";
 
 export class RoleplayApiError extends Error {
   readonly code: string;

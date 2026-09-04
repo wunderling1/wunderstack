@@ -4,11 +4,11 @@ import { describe, it } from "node:test";
 import { answeredGrounded, refused } from "@wunderstack/shared";
 import type { RetrievedChunk } from "@wunderstack/rag";
 
-import type { AgentStreamEvent, AgentUsage } from "../types.js";
-import { settledAnswerBody, settledAnswerEvents, verifyAndBuild } from "./agent.js";
-import { CITATIONS_SENTINEL } from "../runtime/generation-schema.js";
-import { NOT_FOUND_MESSAGE, UNVERIFIABLE_MESSAGE } from "./prompt.js";
-import type { RetrievalOutput } from "./tools.js";
+import type { AgentStreamEvent, AgentUsage } from "../types";
+import { settledAnswerBody, settledAnswerEvents, verifyAndBuild } from "./agent";
+import { CITATIONS_SENTINEL } from "../runtime/generation-schema";
+import { NOT_FOUND_MESSAGE, UNVERIFIABLE_MESSAGE } from "./prompt";
+import type { RetrievalOutput } from "./tools";
 
 /**
  * G4 buffer-to-verify contract (Fase 5): the streaming path must never surface an ungrounded hard
@@ -28,6 +28,12 @@ function retrievalWithGrounding(grounding: string): RetrievalOutput {
     timings: { rewriteMs: 0, embedMs: 0, searchMs: 0, rerankMs: 0, totalMs: 0 },
     chunks: [],
     fullChunkContent: [["c1", grounding]],
+    consideredCount: 1,
+    aboveThresholdCount: 0,
+    droppedChunks: [],
+    progressFound: [],
+    progressDropped: [],
+    usedPassageCount: 0,
   };
 }
 
@@ -49,6 +55,12 @@ function retrievalWithChunk(chunkId: string, content: string): RetrievalOutput {
     timings: { rewriteMs: 0, embedMs: 0, searchMs: 0, rerankMs: 0, totalMs: 0 },
     chunks: [chunk],
     fullChunkContent: [[chunkId, content]],
+    consideredCount: 1,
+    aboveThresholdCount: 1,
+    droppedChunks: [],
+    progressFound: [chunk],
+    progressDropped: [],
+    usedPassageCount: 1,
   };
 }
 

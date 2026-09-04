@@ -7,8 +7,8 @@ import {
   personaFloorFailures,
   reviewFloorFailures,
   ROLEPLAY_THRESHOLDS,
-} from "./roleplay-floors.js";
-import type { RoleplayPersonaAggregate, RoleplayReviewAggregate } from "./roleplay-judge.js";
+} from "./roleplay-floors";
+import type { RoleplayPersonaAggregate, RoleplayReviewAggregate } from "./roleplay-judge";
 
 /**
  * The roleplay floors, exercised without spending a model call. Each blocking threshold gets its own

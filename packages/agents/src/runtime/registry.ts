@@ -2,9 +2,9 @@ import {
   isGroundedAgentKey as sharedIsGroundedAgentKey,
   type GroundedAgentKey,
 } from "@wunderstack/shared";
-import { arboProfile } from "../arbo/profile.js";
-import { caoProfile } from "../cao/profile.js";
-import type { AgentRuntimeProfile } from "./profile.js";
+import { arboProfile } from "../arbo/profile";
+import { caoProfile } from "../cao/profile";
+import type { AgentRuntimeProfile } from "./profile";
 
 export type { GroundedAgentKey };
 

@@ -4,14 +4,14 @@ import { describe, it } from "node:test";
 import { ROLEPLAY_TIMEOUT_MS } from "@wunderstack/agents";
 import type { RoleplayEvent } from "@wunderstack/shared";
 
-import { createTurnWorkSignal } from "./ndjson-stream.js";
+import { createTurnWorkSignal } from "./ndjson-stream";
 import {
   DEFAULT_ROLEPLAY_TURN_BUDGET_MS,
   isFinalRoleplayEvent,
   isTerminalRoleplayEvent,
   ROLEPLAY_TIMEOUT_MESSAGE,
   pipeRoleplayNdjsonStream,
-} from "./roleplay-stream.js";
+} from "./roleplay-stream";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();

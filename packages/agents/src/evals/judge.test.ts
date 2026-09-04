@@ -3,9 +3,9 @@ import { describe, it } from "node:test";
 
 import type { ChatMessage } from "@wunderstack/ai";
 
-import { NOT_FOUND_MESSAGE } from "../cao/prompt.js";
+import { NOT_FOUND_MESSAGE } from "../cao/prompt";
 
-import type { GoldenCase, GoldenPassage } from "./golden-set.js";
+import type { GoldenCase, GoldenPassage } from "./golden-set";
 import {
   aggregateScores,
   answerRefuses,
@@ -13,7 +13,7 @@ import {
   runJudgeWithParseRetry,
   scoreCitationVerification,
   type CaseScores,
-} from "./judge.js";
+} from "./judge";
 
 describe("answerRefuses — grounded scope-refusal vs adjacent grant (etd-025 / etd-032)", () => {
   it("still treats the exact NOT_FOUND_MESSAGE as a refusal", () => {

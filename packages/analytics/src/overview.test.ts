@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { sql } from "@wunderstack/db";
 import { test } from "node:test";
 
-import { breakdownCountSelect, breakdownFromRow, emptyOutcomeBreakdown } from "./outcomes.js";
+import { breakdownCountSelect, breakdownFromRow, emptyOutcomeBreakdown } from "./outcomes";
 
 /**
  * `getActivitySnapshot` puts both windows in one select by prefixing two copies of

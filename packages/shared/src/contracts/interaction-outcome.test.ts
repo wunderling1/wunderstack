@@ -9,7 +9,7 @@ import {
   refused,
   turnOutcomeSchema,
   writableTurnOutcomeSchema,
-} from "./interaction-outcome.js";
+} from "./interaction-outcome";
 
 describe("TurnOutcome helpers", () => {
   it("builds answered/grounded", () => {

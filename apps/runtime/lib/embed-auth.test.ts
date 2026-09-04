@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { instanceBelongsToProcess } from "./embed-auth.js";
+import { instanceBelongsToProcess } from "./embed-auth";
 
 describe("instanceBelongsToProcess (D15 wall, track B)", () => {
   it("accepts a key for this process tenant", () => {

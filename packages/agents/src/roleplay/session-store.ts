@@ -16,13 +16,14 @@ import type {
   RoleplayEndReason,
   RoleplayOrigin,
 } from "@wunderstack/shared";
+import { roleplayEndReasonSchema } from "@wunderstack/shared";
 
-import { resolveRubric } from "./rubric.js";
+import { resolveRubric } from "./rubric";
 import {
   parseScenarioSnapshot,
   type RoleplayScenarioSnapshot,
-} from "./snapshot.js";
-import type { RoleplayMessage } from "./types.js";
+} from "./snapshot";
+import type { RoleplayMessage } from "./types";
 
 /**
  * Persistence for roleplay sessions.
@@ -182,7 +183,10 @@ export async function loadSession(
   return {
     id: row.id,
     status: row.status === "ended" ? "ended" : "active",
-    endReason: (row.endReason as RoleplayEndReason | null) ?? null,
+    endReason: (() => {
+      const parsed = roleplayEndReasonSchema.safeParse(row.endReason);
+      return parsed.success ? parsed.data : null;
+    })(),
     turnsUsed: row.turnsUsed,
     maxTurns: row.maxTurns,
     snapshot: parseScenarioSnapshot(row.scenarioSnapshot),

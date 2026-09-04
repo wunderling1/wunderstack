@@ -5,7 +5,7 @@ import { test } from "node:test";
  * The distribution server actions call assertAdmin and throw Error("forbidden") for non-admins.
  * decideAccess is the pure gate; this documents the contract the actions rely on.
  */
-import { decideAccess } from "./authz.js";
+import { decideAccess } from "./authz";
 
 test("non-admin session is denied admin area (distribution actions throw forbidden)", () => {
   const fundSession = { user: { role: "fund" as const, tenantId: "oomt" } };

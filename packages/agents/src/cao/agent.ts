@@ -1,6 +1,6 @@
-import { createGroundedAgent, verifyAndBuild as verifyAndBuildForProfile } from "../runtime/create-agent.js";
-import type { RetrievalOutput } from "../runtime/profile.js";
-import { caoProfile } from "./profile.js";
+import { createGroundedAgent, verifyAndBuild as verifyAndBuildForProfile } from "../runtime/create-agent";
+import type { RetrievalOutput } from "../runtime/profile";
+import { caoProfile } from "./profile";
 
 export { caoProfile };
 export type { RetrievalOutput };
@@ -13,7 +13,7 @@ export function verifyAndBuild(raw: string, retrieval: RetrievalOutput, userSupp
 export {
   settledAnswerBody,
   settledAnswerEvents,
-} from "../runtime/create-agent.js";
+} from "../runtime/create-agent";
 
 /** Factory retained for smoke/latency/catalog call-sites (thin wrapper). */
 export function createCaoAgent() {

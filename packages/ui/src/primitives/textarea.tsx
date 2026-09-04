@@ -1,6 +1,6 @@
 import { cva, type VariantProps } from "class-variance-authority";
 import type { TextareaHTMLAttributes } from "react";
-import { cn } from "../lib/cn.js";
+import { cn } from "../lib/cn";
 
 const textareaVariants = cva(
   [
@@ -27,8 +27,8 @@ export interface TextareaProps
     VariantProps<typeof textareaVariants> {}
 
 /**
- * Multi-line text field. Control-radius (not pill) so it reads as a block input alongside `Field`.
- * Density via `size` (D18); `md` matches the pre-density look.
+ * Multi-line text field. Same control-radius as `Field` so they read as one family.
+ * Density via `size` (D18); `md` is the default density.
  */
 export function Textarea({ className, size, ...props }: TextareaProps) {
   return <textarea className={cn(textareaVariants({ size }), className)} {...props} />;

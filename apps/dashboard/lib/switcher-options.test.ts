@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { decideAccess } from "./authz.js";
-import { ALL_FUNDS_KEY, buildSwitcherOptions } from "./switcher-options.js";
+import { decideAccess } from "./authz";
+import { ALL_FUNDS_KEY, buildSwitcherOptions } from "./switcher-options";
 
 const activeFunds = [
   { key: "oomt", name: "OOMT" },

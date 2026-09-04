@@ -30,8 +30,8 @@
  * ?? heading` — so a list item that still slips through can never overwrite the section it sits in.
  */
 
-import { packSection, type Chunk, type ChunkOptions } from "./chunk.js";
-import { segmentText, serializeTable } from "./parse.js";
+import { packSection, type Chunk, type ChunkOptions } from "./chunk";
+import { segmentText, serializeTable } from "./parse";
 
 const DEFAULT_TARGET_CHARS = 1200;
 const DEFAULT_OVERLAP_CHARS = 200;

@@ -6,8 +6,8 @@ import {
   normalizeReviewOutput,
   roleplayReviewOutputSchema,
   toScore,
-} from "./schemas.js";
-import type { WeightedCriterion } from "./types.js";
+} from "./schemas";
+import type { WeightedCriterion } from "./types";
 
 const criteria: WeightedCriterion[] = [
   { question: "Vraagt de deelnemer door?", description: "", behavioralIndicators: [], weight: 60 },

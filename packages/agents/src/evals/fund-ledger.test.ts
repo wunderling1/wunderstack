@@ -10,8 +10,8 @@ import {
   unrecorded,
   verifyFundRecordsRecorded,
   FUND_LEDGER_SCHEMA_VERSION,
-} from "./fund-ledger.js";
-import type { EvalReport, FundLayerReport, GateReport, GateStatus } from "./report-writer.js";
+} from "./fund-ledger";
+import type { EvalReport, FundLayerReport, GateReport, GateStatus } from "./report-writer";
 
 function fundLayer(key: string, fund: string, corpusVersion: string): FundLayerReport {
   return {

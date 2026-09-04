@@ -1,6 +1,6 @@
 import { generateText } from "@wunderstack/ai";
 
-import type { AgentUsage } from "../types.js";
+import type { AgentUsage } from "../types";
 
 /**
  * Post-answer follow-up suggestions (grounded chips). A cheap Mistral Small call that proposes

@@ -3,11 +3,11 @@ import { describe, it } from "node:test";
 
 import { z } from "zod";
 
-import { getAgent, listAgents, resetAgentCache } from "../catalog.js";
-import { agentQuestionSchema } from "../types.js";
-import { createGroundedAgent } from "./create-agent.js";
-import type { AgentRuntimeProfile, RetrievalOutput } from "./profile.js";
-import { registerTestAgentProfile } from "./registry.js";
+import { getAgent, listAgents, resetAgentCache } from "../catalog";
+import { agentQuestionSchema } from "../types";
+import { createGroundedAgent } from "./create-agent";
+import type { AgentRuntimeProfile, RetrievalOutput } from "./profile";
+import { registerTestAgentProfile } from "./registry";
 
 /**
  * Guards the promise of the shared-runtime series: agent 3 is a profile row, not a third
@@ -21,6 +21,12 @@ const EMPTY_RETRIEVAL: RetrievalOutput = {
   timings: { rewriteMs: 0, embedMs: 0, searchMs: 0, rerankMs: 0, totalMs: 0 },
   chunks: [],
   fullChunkContent: [],
+  consideredCount: 0,
+  aboveThresholdCount: 0,
+  droppedChunks: [],
+  progressFound: [],
+  progressDropped: [],
+  usedPassageCount: 0,
 };
 
 describe("agent-3-is-a-profile-row (not a third agent.ts)", () => {

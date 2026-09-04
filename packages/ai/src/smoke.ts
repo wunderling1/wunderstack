@@ -1,4 +1,4 @@
-import { embed, generateText } from "./index.js";
+import { embed, generateText } from "./index";
 
 /**
  * Manual smoke test for the AI seam. Not run in CI.

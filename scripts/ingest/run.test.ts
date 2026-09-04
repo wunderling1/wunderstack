@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { isCorpusFile, isPruneCandidate } from "./run.js";
+import { isCorpusFile, isPruneCandidate } from "./run";
 
 describe("corpus file selection", () => {
   it("accepts the supported corpus formats", () => {

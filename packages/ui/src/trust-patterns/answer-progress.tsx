@@ -1,5 +1,5 @@
-import { cn } from "../lib/cn.js";
-import type { DensitySize } from "./answer-card.js";
+import { cn } from "../lib/cn";
+import type { DensitySize } from "./answer-card";
 
 export interface AnswerProgressStep {
   /** Stable key for the step (e.g. "searching"). */

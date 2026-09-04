@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { NOT_FOUND_MESSAGE } from "../cao/prompt.js";
-import { CITATIONS_SENTINEL } from "../runtime/generation-schema.js";
+import { NOT_FOUND_MESSAGE } from "../cao/prompt";
+import { CITATIONS_SENTINEL } from "../runtime/generation-schema";
 
 import {
   fundAnswerLayerChecks,
   shouldRunFundAnswerLayer,
   type FundAnswerCaseServed,
-} from "./fund-answer-layer.js";
-import type { GoldenFundCase, GoldenPassage } from "./golden-set.js";
+} from "./fund-answer-layer";
+import type { GoldenFundCase, GoldenPassage } from "./golden-set";
 
 function passage(id: string, content: string): GoldenPassage {
   return { id, source: "test", content, article: "1", chunkType: "text" };

@@ -8,7 +8,38 @@ import {
   exerciseStatusLabel,
   parseConversationFilters,
   parseConversationId,
-} from "./conversations.js";
+} from "./conversations";
+
+test("since=today narrows the window and is not a new period", () => {
+  const filters = parseConversationFilters({ period: "30d", since: "today" }, ["cao"]);
+  assert.equal(filters.period, "30d");
+  assert.equal(filters.sinceToday, true);
+  const ignored = parseConversationFilters({ since: "yesterday" }, ["cao"]);
+  assert.equal(ignored.sinceToday, undefined);
+});
+
+test("since=today survives extras and href round-trip", () => {
+  const filters = parseConversationFilters(
+    { period: "7d", agent: "cao", since: "today" },
+    ["cao"],
+  );
+  assert.equal(filters.sinceToday, true);
+  assert.deepEqual(conversationFilterExtras(filters), {
+    agent: "cao",
+    outcome: undefined,
+    reason: undefined,
+    since: "today",
+  });
+  assert.equal(
+    conversationListHref("/conversations", filters),
+    "/conversations?period=7d&agent=cao&since=today",
+  );
+  const again = parseConversationFilters(
+    { period: "7d", agent: "cao", since: "today" },
+    ["cao"],
+  );
+  assert.equal(again.sinceToday, true);
+});
 
 test("filters live in the URL: parse + href round-trip", () => {
   const filters = parseConversationFilters(
@@ -95,4 +126,13 @@ test("conversation cards switch on profile kind, never on agent key", () => {
     "utf8",
   );
   assert.match(cards, /item\.kind === "exercise"/);
+});
+
+test("filter form keeps since=today when the pulse deep-link is active", () => {
+  const source = readFileSync(
+    new URL("../components/fund/conversation-filters.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /name=["']since["']/);
+  assert.match(source, /filters\.sinceToday/);
 });

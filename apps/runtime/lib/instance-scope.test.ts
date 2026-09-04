@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import type { TenantConfig } from "@wunderstack/db";
 
-import { resolveRequestScope } from "./instance-scope.js";
+import { resolveRequestScope } from "./instance-scope";
 
 function instance(overrides: Partial<TenantConfig> & Pick<TenantConfig, "tenantId" | "agentKey">): TenantConfig {
   return {

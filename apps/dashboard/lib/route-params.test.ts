@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseAgentKey, parseFundKey } from "./route-params.js";
+import { parseAgentKey, parseFundKey } from "./route-params";
 
 test("parseFundKey accepts known fund key shapes", () => {
   assert.equal(parseFundKey("oomt"), "oomt");

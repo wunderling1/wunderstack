@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { caoProfile } from "../cao/profile.js";
+import { caoProfile } from "../cao/profile";
 import { clarifiedOutcome, refused } from "@wunderstack/shared";
-import { createGroundedAgent } from "./create-agent.js";
-import type { AgentRuntimeProfile, RetrievalOutput } from "./profile.js";
+import { createGroundedAgent } from "./create-agent";
+import type { AgentRuntimeProfile, RetrievalOutput } from "./profile";
 
 const EMPTY_RETRIEVAL: RetrievalOutput = {
   context: "",
@@ -13,6 +13,12 @@ const EMPTY_RETRIEVAL: RetrievalOutput = {
   timings: { rewriteMs: 0, embedMs: 0, searchMs: 0, rerankMs: 0, totalMs: 0 },
   chunks: [],
   fullChunkContent: [],
+  consideredCount: 0,
+  aboveThresholdCount: 0,
+  droppedChunks: [],
+  progressFound: [],
+  progressDropped: [],
+  usedPassageCount: 0,
 };
 
 describe("turn outcome classification — pipeline paths", () => {

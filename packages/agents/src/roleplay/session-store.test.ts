@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { nextMessageOrdinals } from "./session-store.js";
+import { nextMessageOrdinals } from "./session-store";
 
 describe("nextMessageOrdinals", () => {
   it("starts after the opening assistant line at ordinal 0", () => {

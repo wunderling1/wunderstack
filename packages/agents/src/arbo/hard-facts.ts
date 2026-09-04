@@ -5,14 +5,14 @@
 export {
   ARBO_HARD_FACT_PATTERNS as HARD_FACT_PATTERNS,
   normalizeFact,
-} from "../hard-facts.js";
+} from "../hard-facts";
 
 import {
   containsHardFact as sharedContains,
   extractHardFacts as sharedExtract,
   findUngroundedFacts as sharedFind,
   hasUngroundedHardFact as sharedHasUngrounded,
-} from "../hard-facts.js";
+} from "../hard-facts";
 
 export function extractHardFacts(text: string): string[] {
   return sharedExtract(text, "arbo");

@@ -1,4 +1,4 @@
-import { retrieveContext } from "./index.js";
+import { retrieveContext } from "./index";
 
 /**
  * Manual smoke test for the retrieval pipeline. Not run in CI.

@@ -215,7 +215,7 @@ export async function POST(request: Request): Promise<Response> {
         try {
           await recordInteractionEvent({
             tenantId,
-            agentId,
+            agentKey: agentId,
             fund,
             sessionId,
             channel,

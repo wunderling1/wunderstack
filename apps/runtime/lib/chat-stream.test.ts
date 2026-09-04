@@ -9,8 +9,8 @@ import {
   isFinalChatEvent,
   isTerminalChatEvent,
   pipeChatNdjsonStream,
-} from "./chat-stream.js";
-import { createTurnWorkSignal } from "./ndjson-stream.js";
+} from "./chat-stream";
+import { createTurnWorkSignal } from "./ndjson-stream";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();

@@ -2,7 +2,7 @@
  * Fetch public tenant config from the runtime (server-side). Playground uses this for status labels
  * and agent identity without importing agent packages (no-playground-to-agents).
  */
-import { tenantPublicConfigSchema, type TenantPublicConfig } from "@wunderstack/shared";
+import { tenantPublicConfigSchema, type TenantPublicConfig } from "@wunderstack/shared/browser";
 
 const RUNTIME_URL = process.env.RUNTIME_URL ?? "http://localhost:3000";
 

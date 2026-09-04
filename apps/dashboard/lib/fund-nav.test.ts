@@ -8,8 +8,8 @@ import {
   fundNavHref,
   parseAdminChromePath,
   switchFundNavHref,
-} from "./fund-nav.js";
-import { ALL_FUNDS_KEY } from "./switcher-options.js";
+} from "./fund-nav";
+import { ALL_FUNDS_KEY } from "./switcher-options";
 
 test("fundNavHref builds fund-face and admin paths", () => {
   assert.equal(fundNavHref("fund", "oomt", ""), "/");
@@ -134,4 +134,13 @@ test("sidebar and agent tabs mark active from the client pathname", () => {
   );
   assert.match(tabs, /"use client"/);
   assert.match(tabs, /usePathname/);
+});
+
+test("sidebar maps admin fund-console overview to ChartLine", () => {
+  const sidebar = readFileSync(
+    join(import.meta.dirname, "../components/chrome/dashboard-sidebar.tsx"),
+    "utf8",
+  );
+  assert.match(sidebar, /startsWith\("\/admin\/funds\/"\)/);
+  assert.match(sidebar, /return ChartLine/);
 });

@@ -1,7 +1,7 @@
 import { eq, interactionEvents, withFundSchema } from "@wunderstack/db";
 import { env } from "@wunderstack/shared";
 
-import { interactionEventInputSchema, type InteractionEventInput } from "./event.js";
+import { interactionEventInputSchema, type InteractionEventInput } from "./event";
 
 /**
  * Write one interaction event to the fund schema. Best-effort: no DATABASE_URL → `{ recorded: false }`.
@@ -23,7 +23,7 @@ export async function recordInteractionEvent(
   const event = interactionEventInputSchema.parse(input);
   const values = {
     tenantId: event.tenantId,
-    agentId: event.agentId,
+    agentKey: event.agentKey,
     fund: event.fund,
     sessionId: event.sessionId,
     userId: event.userId ?? null,

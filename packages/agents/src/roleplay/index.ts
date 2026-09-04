@@ -2,7 +2,7 @@
 // (DECISION-roleplay-agent.md, R6): this agent retrieves nothing, cites nothing, and shares only the
 // model adapter and the Langfuse wiring with `runtime/`.
 
-export { createRoleplayAgent, type CreateRoleplayAgentOptions } from "./agent.js";
+export { createRoleplayAgent, type CreateRoleplayAgentOptions } from "./agent";
 
 export {
   buildOpeningSystemPrompt,
@@ -11,14 +11,14 @@ export {
   buildTurnUserMessage,
   buildReviewSystemPrompt,
   buildReviewUserMessage,
-} from "./prompts.js";
+} from "./prompts";
 
 export {
   normalizeRubricWeights,
   resolveRubric,
   computeWeightedScore,
   didPass,
-} from "./rubric.js";
+} from "./rubric";
 
 export {
   extractJsonObject,
@@ -30,14 +30,14 @@ export {
   type RoleplayOpeningOutput,
   type RoleplayTurnOutput,
   type RoleplayReviewOutput,
-} from "./schemas.js";
+} from "./schemas";
 
 export {
   CONVERSATION_HISTORY_WINDOW,
   formatHistoryForPrompt,
   formatTranscriptForReview,
   windowHistory,
-} from "./transcript.js";
+} from "./transcript";
 
 export {
   ROLEPLAY_PROMPT_VERSION,
@@ -45,9 +45,9 @@ export {
   ROLEPLAY_TIMEOUT_MS,
   type RoleplayBranch,
   type RoleplayModelSettings,
-} from "./version.js";
+} from "./version";
 
-export { resetRoleplayModelCache } from "./model-call.js";
+export { resetRoleplayModelCache } from "./model-call";
 
 export {
   parseScenarioSnapshot,
@@ -55,7 +55,7 @@ export {
   roleplayScenarioSnapshotSchema,
   type RoleplayScenarioSnapshot,
   type RoleplayScenarioDisplay,
-} from "./snapshot.js";
+} from "./snapshot";
 
 // Persistence. Separate from the agent seam above: apps may not reach the fund schema themselves
 // (`no-apps-to-fund-schema`), so the routes come through here.
@@ -78,7 +78,7 @@ export {
   type StartSessionInput,
   type ClaimTurnResult,
   type StoredReview,
-} from "./session-store.js";
+} from "./session-store";
 
 export {
   enqueueResultDelivery,
@@ -88,7 +88,7 @@ export {
   ROLEPLAY_DELIVERY_MAX_ATTEMPTS,
   nextDeliveryAttemptAt,
   type ClaimedDelivery,
-} from "./delivery-store.js";
+} from "./delivery-store";
 
 export type {
   RoleplayAgent,
@@ -105,4 +105,4 @@ export type {
   ResolvedRubric,
   ScoredCriterion,
   WeightedCriterion,
-} from "./types.js";
+} from "./types";

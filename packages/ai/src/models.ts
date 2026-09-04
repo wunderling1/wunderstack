@@ -1,7 +1,7 @@
 import { env } from "@wunderstack/shared";
 import { z } from "zod";
 
-import { ensureHttpKeepAlive, ProviderHttpError } from "./http.js";
+import { ensureHttpKeepAlive, ProviderHttpError } from "./http";
 
 /**
  * The single seam for LLM calls. Everything else in the codebase talks to this,
@@ -84,6 +84,9 @@ interface RegisteredModel {
   /** Provider list price. Kept here so cost lives next to the model definition. */
   pricing: ModelPricing;
 }
+
+/** Test-only overrides — never populated in production. See `withTestModelRegistry`. */
+let testModelOverrides: Record<string, RegisteredModel> | null = null;
 
 /**
  * Only EU-sovereign (Mistral) models are registered. This is the sovereignty guarantee.
@@ -220,22 +223,49 @@ export function listModelPricing(): ModelPriceEntry[] {
 
 /** List price for a single registered model. Throws for unknown or non-sovereign models. */
 export function getModelPricing(model: string): ModelPricing {
-  return resolveModel(model).pricing;
+  return assertSovereignModel(model).pricing;
 }
 
-function resolveModel(model: string): RegisteredModel {
-  const info = MODEL_REGISTRY[model];
-  if (!info) {
+/**
+ * Sovereignty guard on the default path (F1-13). Unknown models and `sovereign: false`
+ * registrations are rejected. Exported so the refusal is unit-testable without a live provider call.
+ */
+export function assertSovereignModel(model: string): RegisteredModel {
+  const resolved = testModelOverrides?.[model] ?? MODEL_REGISTRY[model];
+  if (!resolved) {
     throw new Error(
       `Unknown model "${model}". Register it in @wunderstack/ai before use (keep the default path sovereign).`,
     );
   }
-  if (!info.sovereign) {
+  if (!resolved.sovereign) {
     throw new Error(
       `Model "${model}" is not EU-sovereign and may not be used on the default path.`,
     );
   }
-  return info;
+  return resolved;
+}
+
+/**
+ * Test-only: inject registry entries (e.g. `sovereign: false`) while `NODE_ENV=test`.
+ * Never adds a production non-sovereign model.
+ */
+export async function withTestModelRegistry(
+  entries: Record<string, RegisteredModel>,
+  fn: () => void | Promise<void>,
+): Promise<void> {
+  if (process.env.NODE_ENV !== "test") {
+    throw new Error("withTestModelRegistry requires NODE_ENV=test");
+  }
+  testModelOverrides = entries;
+  try {
+    await fn();
+  } finally {
+    testModelOverrides = null;
+  }
+}
+
+function resolveModel(model: string): RegisteredModel {
+  return assertSovereignModel(model);
 }
 
 export async function generateText(input: GenerateTextInput): Promise<GenerateTextResult> {

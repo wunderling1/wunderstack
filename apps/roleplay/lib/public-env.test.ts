@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { readRoleplayInactivityMs } from "./public-env.js";
+import { readRoleplayInactivityMs } from "./public-env";
 
 describe("readRoleplayInactivityMs", () => {
   it("defaults to 20s when unset", () => {
     const previous = process.env.NEXT_PUBLIC_ROLEPLAY_INACTIVITY_MS;
     delete process.env.NEXT_PUBLIC_ROLEPLAY_INACTIVITY_MS;
     try {
-      assert.equal(readRoleplayInactivityMs(), 20_000);
+      assert.equal(readRoleplayInactivityMs(), 30_000);
     } finally {
       if (previous === undefined) {
         delete process.env.NEXT_PUBLIC_ROLEPLAY_INACTIVITY_MS;
@@ -22,7 +22,7 @@ describe("readRoleplayInactivityMs", () => {
     const previous = process.env.NEXT_PUBLIC_ROLEPLAY_INACTIVITY_MS;
     process.env.NEXT_PUBLIC_ROLEPLAY_INACTIVITY_MS = "soon";
     try {
-      assert.equal(readRoleplayInactivityMs(), 20_000);
+      assert.equal(readRoleplayInactivityMs(), 30_000);
     } finally {
       if (previous === undefined) {
         delete process.env.NEXT_PUBLIC_ROLEPLAY_INACTIVITY_MS;

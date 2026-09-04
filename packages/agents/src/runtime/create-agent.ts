@@ -7,10 +7,10 @@ import {
   refused,
   type WritableTurnOutcome,
 } from "@wunderstack/shared";
-import { createSovereignModel } from "../model/sovereign-model.js";
-import { buildLangfuseObservability } from "../observability/langfuse.js";
-import { recordNumericTraceScore } from "../observability/feedback.js";
-import { startAgentTrace, type AgentTrace } from "../observability/trace.js";
+import { createSovereignModel } from "../model/sovereign-model";
+import { buildLangfuseObservability } from "../observability/langfuse";
+import { recordNumericTraceScore } from "../observability/feedback";
+import { startAgentTrace, type AgentTrace } from "../observability/trace";
 import {
   agentAnswerSchema,
   type GroundedAgent,
@@ -20,15 +20,16 @@ import {
   type AgentQuestion,
   type AgentStreamEvent,
   type AgentUsage,
-} from "../types.js";
-import { containsHardFact, hasUngroundedHardFact, resolveHardFactAgentKey } from "../hard-facts.js";
-import { buildVerifiedCitations, extractCitationMarkers } from "./build-citations.js";
-import { condenseQuery, isElliptical, retrievalQueriesForFollowUp } from "./condense.js";
-import { generateAnswerWithRepair } from "./generate-answer.js";
-import { parseGenerationOutput } from "./parse-generation.js";
-import type { AgentRuntimeProfile, RetrievalOutput } from "./profile.js";
-import { addUsage, FOLLOW_UP_MODEL, suggestFollowUps } from "./suggest-follow-ups.js";
-import { stripFailedMarkers, stripUnverifiedMarkers, verifyCitations } from "./verify-citations.js";
+} from "../types";
+import { containsHardFact, hasUngroundedHardFact, resolveHardFactAgentKey } from "../hard-facts";
+import { buildVerifiedCitations, extractCitationMarkers } from "./build-citations";
+import { condenseQuery, isElliptical, retrievalQueriesForFollowUp } from "./condense";
+import { generateAnswerWithRepair } from "./generate-answer";
+import { parseGenerationOutput } from "./parse-generation";
+import type { AgentRuntimeProfile, RetrievalOutput } from "./profile";
+import { addUsage, FOLLOW_UP_MODEL, suggestFollowUps } from "./suggest-follow-ups";
+import { stripFailedMarkers, stripUnverifiedMarkers, verifyCitations } from "./verify-citations";
+import { buildRetrievalStreamEvent } from "./retrieval-stream-event";
 
 /** Raw retrieval signals for the event-log (strength label derived in analytics). */
 export function retrievalSignalsFromHits(hits: { score: number }[]): {
@@ -90,6 +91,7 @@ async function retrieveTraced(
       query: primary,
       ...(additionalQueries.length === 0 ? {} : { additionalQueries }),
       fund: args.fund,
+      agentKey: profile.agentKey,
       topK: args.topK,
       minScore: args.minScore,
     });
@@ -98,11 +100,22 @@ async function retrieveTraced(
       embeddingDim: EMBEDDING_CONFIG.dim,
       hits: retrieval.hits,
       found: retrieval.hits.length > 0,
+      consideredCount: retrieval.consideredCount,
+      aboveThresholdCount: retrieval.aboveThresholdCount,
+      usedPassageCount: retrieval.usedPassageCount,
       timings: retrieval.timings,
     });
     return retrieval;
   } catch (error) {
-    span.end({ embeddingModel: EMBEDDING_CONFIG.model, embeddingDim: EMBEDDING_CONFIG.dim, hits: [], found: false });
+    span.end({
+      embeddingModel: EMBEDDING_CONFIG.model,
+      embeddingDim: EMBEDDING_CONFIG.dim,
+      hits: [],
+      found: false,
+      consideredCount: 0,
+      aboveThresholdCount: 0,
+      usedPassageCount: 0,
+    });
     throw error;
   }
 }
@@ -648,6 +661,8 @@ export function createGroundedAgent(profile: AgentRuntimeProfile): GroundedAgent
 
         const query = await resolveRetrievalQuestion(parsedInput, options.signal);
         const retrieval = await retrieveTraced(profile, trace, { fund, topK, minScore, ...query });
+
+        yield buildRetrievalStreamEvent(retrieval, query.retrievalQuery, options.corpusVersion);
 
         if (retrieval.hits.length === 0) {
           yield { type: "text", delta: profile.notFoundMessage };

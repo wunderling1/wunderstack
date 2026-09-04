@@ -3,13 +3,13 @@ import { describe, it } from "node:test";
 
 import { answeredGrounded } from "@wunderstack/shared";
 
-import { interactionEventInputSchema } from "./event.js";
+import { interactionEventInputSchema } from "./event";
 
 describe("interaction event contract (Fase 1)", () => {
   it("accepts a minimal answered event and defaults citationCount", () => {
     const parsed = interactionEventInputSchema.parse({
       tenantId: "demo",
-      agentId: "cao",
+      agentKey: "cao",
       fund: "demo",
       sessionId: "s-1",
       turnOutcome: answeredGrounded(),
@@ -25,7 +25,7 @@ describe("interaction event contract (Fase 1)", () => {
   it("rejects an unknown outcome", () => {
     const result = interactionEventInputSchema.safeParse({
       tenantId: "demo",
-      agentId: "cao",
+      agentKey: "cao",
       fund: "demo",
       sessionId: "s-1",
       turnOutcome: { outcome: "maybe", outcomeReason: "grounded" },
@@ -38,7 +38,7 @@ describe("interaction event contract (Fase 1)", () => {
   it("keeps a logged question and citation count", () => {
     const parsed = interactionEventInputSchema.parse({
       tenantId: "oomt",
-      agentId: "cao",
+      agentKey: "cao",
       fund: "elektronische-detailhandel",
       sessionId: "s-2",
       userId: "u-9",
@@ -57,7 +57,7 @@ describe("interaction event contract (Fase 1)", () => {
   it("rejects an exercise agent: a session is not an interaction event", () => {
     const rejected = interactionEventInputSchema.safeParse({
       tenantId: "oomt",
-      agentId: "roleplay",
+      agentKey: "roleplay",
       fund: "oomt",
       sessionId: "s-4",
       turnOutcome: answeredGrounded(),
@@ -71,7 +71,7 @@ describe("interaction event contract (Fase 1)", () => {
   it("accepts an optional channel and rejects unknown values", () => {
     const parsed = interactionEventInputSchema.parse({
       tenantId: "demo",
-      agentId: "cao",
+      agentKey: "cao",
       fund: "demo",
       sessionId: "s-3",
       turnOutcome: answeredGrounded(),
@@ -83,7 +83,7 @@ describe("interaction event contract (Fase 1)", () => {
 
     const rejected = interactionEventInputSchema.safeParse({
       tenantId: "demo",
-      agentId: "cao",
+      agentKey: "cao",
       fund: "demo",
       sessionId: "s-3",
       turnOutcome: answeredGrounded(),

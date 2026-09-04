@@ -1,5 +1,5 @@
-import { auditEvents, type NewAuditEvent } from "./schema/control/audit-events.js";
-import { getWriterDb, type Database } from "./client.js";
+import { auditEvents, type NewAuditEvent } from "./schema/control/audit-events";
+import { getWriterDb, type Database } from "./client";
 
 export const AUDIT_ACTIONS = [
   "fund_created",

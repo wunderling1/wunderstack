@@ -4,8 +4,8 @@
 // the AI SDK types never leak past here, so apps/RAG/API code depends on us, not on the framework
 // (see .cursor/rules/500-agents.mdc). Implemented in Phase 6 (see docs/plans/PLAN.md).
 
-export { createCaoAgent } from "./cao/agent.js";
-export { createArboAgent } from "./arbo/agent.js";
+export { createCaoAgent } from "./cao/agent";
+export { createArboAgent } from "./arbo/agent";
 
 export {
   agentDescriptorSchema,
@@ -13,7 +13,7 @@ export {
   getAgent,
   resetAgentCache,
   type AgentDescriptor,
-} from "./catalog.js";
+} from "./catalog";
 
 export {
   AGENT_PROFILES,
@@ -21,7 +21,7 @@ export {
   listAgentProfiles,
   requireAgentProfile,
   type GroundedAgentKey,
-} from "./runtime/registry.js";
+} from "./runtime/registry";
 
 export {
   recordFeedbackScore,
@@ -31,7 +31,7 @@ export {
   type RecordFeedbackResult,
   type RecordFeedbackOptions,
   type NumericTraceScore,
-} from "./observability/feedback.js";
+} from "./observability/feedback";
 
 export {
   agentQuestionSchema,
@@ -45,15 +45,15 @@ export {
   type AgentCitation,
   type AgentUsage,
   type AgentStreamEvent,
-} from "./types.js";
+} from "./types";
 
-export { arboQuestionSchema } from "./arbo/profile.js";
+export { arboQuestionSchema } from "./arbo/profile";
 
-export { fetchPassage, type PassageInput, type PassageResult } from "./runtime/passage.js";
+export { fetchPassage, type PassageInput, type PassageResult } from "./runtime/passage";
 
-export { orphanSourceRate, extractCitationMarkers } from "./runtime/build-citations.js";
-export { verifyCitations, normalizeWhitespace } from "./runtime/verify-citations.js";
-export { parseGenerationOutput, splitStreamBuffer, CITATIONS_SENTINEL } from "./runtime/parse-generation.js";
+export { orphanSourceRate, extractCitationMarkers } from "./runtime/build-citations";
+export { verifyCitations, normalizeWhitespace } from "./runtime/verify-citations";
+export { parseGenerationOutput, splitStreamBuffer, CITATIONS_SENTINEL } from "./runtime/parse-generation";
 
 // Roleplay: a second agent shape, not a grounded agent. Own sub-barrel (see roleplay/index.ts).
 export {
@@ -106,4 +106,4 @@ export {
   type ResolvedRubric,
   type ScoredCriterion,
   type WeightedCriterion,
-} from "./roleplay/index.js";
+} from "./roleplay/index";

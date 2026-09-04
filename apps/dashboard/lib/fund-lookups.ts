@@ -17,7 +17,7 @@ import {
   FUNDS_INDEX_TAG,
   fundConfigTag,
   instanceConfigTag,
-} from "./config-cache.js";
+} from "./config-cache";
 
 function cached<T>(
   keyParts: string[],

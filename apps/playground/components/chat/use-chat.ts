@@ -2,9 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  createStreamWatchdog,
+  traceItemsFromEvent,
+  type AnswerTraceItem,
+} from "@wunderstack/ui";
+import {
   chatEventSchema,
+  errored,
   type ChatCitation,
-  type ChatStatusPhase,
+  type WritableTurnOutcome,
 } from "@/app/api/chat/contract";
 import { readChatInactivityMs } from "@/lib/public-env";
 import { runtimeApiHeaders } from "@/lib/runtime-api";
@@ -30,6 +36,8 @@ export interface ChatMessage {
   found: boolean | null;
   /** True when the assistant asked a clarifying question instead of answering. */
   needsClarification: boolean;
+  /** Pipeline outcome from the citations event (B5 — same value analytics writes). */
+  turnOutcome: WritableTurnOutcome | null;
   /** Langfuse trace id for this answer (null when tracing is unconfigured); enables feedback. */
   traceId: string | null;
   /** The rating the user gave this answer, once submitted. */
@@ -37,15 +45,25 @@ export interface ChatMessage {
   /** Grounded follow-up question chips (empty until a `followups` event arrives). */
   followUpQuestions: string[];
   streaming: boolean;
-  /** Current progress phase while waiting for the answer; drives the status line + skeleton. */
-  phase: ChatStatusPhase | null;
-  /** Number of retrieved passages (from the `retrieved` phase), for the status label. */
-  retrievedCount: number | null;
+  /**
+   * What the runtime reported doing this turn, in arrival order — the source for `AnswerTrace`.
+   * Only measured events land here; the client adds nothing of its own.
+   */
+  trace: AnswerTraceItem[];
+  /**
+   * Measured retrieval totals for the summary line. Null until a `retrieval` event arrives
+   * (clarify turns never search, so they stay null).
+   */
+  retrieval: {
+    considered: number;
+    aboveThreshold: number;
+    used: number;
+  } | null;
 }
 
 const GENERIC_ERROR = "Er ging iets mis bij het beantwoorden van je vraag. Probeer het opnieuw.";
 const INACTIVITY_ERROR =
-  "Het duurde te lang om je vraag te beantwoorden. Probeer het opnieuw.";
+  "De verbinding met de assistent viel stil. Probeer je vraag opnieuw te stellen.";
 const SESSION_STORAGE_KEY = "wunderstack-session-id";
 
 function newId(): string {
@@ -159,12 +177,13 @@ export function useChat(fund?: string, agent: PlaygroundAgent = "cao") {
           citationVerificationFailed: false,
           found: null,
           needsClarification: false,
+          turnOutcome: null,
           traceId: null,
           feedback: null,
           followUpQuestions: [],
           streaming: false,
-          phase: null,
-          retrievedCount: null,
+          trace: [],
+          retrieval: null,
         },
         {
           id: assistantId,
@@ -174,13 +193,15 @@ export function useChat(fund?: string, agent: PlaygroundAgent = "cao") {
           citationVerificationFailed: false,
           found: null,
           needsClarification: false,
+          turnOutcome: null,
           traceId: null,
           feedback: null,
           followUpQuestions: [],
           streaming: true,
-          // Optimistic first phase so a named status shows <100ms after send, before any server event.
-          phase: "searching",
-          retrievedCount: null,
+          // Empty: the trace only shows measured events. Until the first one lands, the wait UI is
+          // its head line ("Zoeken in de CAO") — true from the moment the question is sent (B1).
+          trace: [],
+          retrieval: null,
         },
       ]);
 
@@ -209,51 +230,60 @@ export function useChat(fund?: string, agent: PlaygroundAgent = "cao") {
         const decoder = new TextDecoder();
         let buffer = "";
 
-        // Inactivity watchdog: reset on every byte (status, heartbeats, text, …). If the stream goes
-        // fully silent (server crash mid-buffer, dropped connection without abort), abort and surface
-        // a retryable error instead of spinning forever on "Bronvermelding controleren…".
-        const inactivityMs = readChatInactivityMs();
-        let inactivityTimer: ReturnType<typeof setTimeout> | null = null;
-        const clearInactivity = () => {
-          if (inactivityTimer !== null) {
-            clearTimeout(inactivityTimer);
-            inactivityTimer = null;
-          }
-        };
-        const armInactivity = () => {
-          clearInactivity();
-          inactivityTimer = setTimeout(() => {
+        // Liveness watchdog: signalled on every byte (status, heartbeats, text, …). If the stream
+        // goes fully silent (server crash mid-buffer, dropped connection without abort), abort and
+        // surface a retryable error instead of spinning forever on "Bronvermelding controleren…".
+        // Time the tab spends hidden or suspended does not count — see createStreamWatchdog.
+        const watchdog = createStreamWatchdog({
+          timeoutMs: readChatInactivityMs(),
+          onTimeout: () => {
             abortedForInactivity = true;
             controller.abort();
-          }, inactivityMs);
-        };
-        armInactivity();
+          },
+        });
 
         const handleLine = (raw: string) => {
           const trimmedLine = raw.trim();
           if (trimmedLine.length === 0) {
             return;
           }
-          const parsed = chatEventSchema.safeParse(JSON.parse(trimmedLine));
+          let json: unknown;
+          try {
+            json = JSON.parse(trimmedLine);
+          } catch {
+            return; /* ignore a partial/garbled line */
+          }
+          const parsed = chatEventSchema.safeParse(json);
           if (!parsed.success) {
             return;
           }
           const event = parsed.data;
-          if (event.type === "status") {
+          if (event.type === "status" || event.type === "retrieval") {
+            const items = traceItemsFromEvent(event);
             patchAssistant(assistantId, (m) => ({
               ...m,
-              phase: event.phase,
-              retrievedCount: event.count ?? m.retrievedCount,
+              ...(items.length > 0 ? { trace: [...m.trace, ...items] } : {}),
+              ...(event.type === "retrieval"
+                ? {
+                    retrieval: {
+                      considered: event.considered,
+                      aboveThreshold: event.aboveThreshold,
+                      used: event.used,
+                    },
+                  }
+                : {}),
             }));
           } else if (event.type === "citations") {
             // Reconcile: replace streamed text with the final answer (failed markers stripped),
             // and attach the verified citations. Stop any pending token flush from re-appending.
+            // Clarify turns also feed the trace here (one "read" step, no search — A2).
             reconciled = true;
             pendingText = "";
             if (rafId !== null) {
               cancelAnimationFrame(rafId);
               rafId = null;
             }
+            const clarifyItems = traceItemsFromEvent(event);
             patchAssistant(assistantId, (m) => ({
               ...m,
               text: event.answer,
@@ -261,6 +291,8 @@ export function useChat(fund?: string, agent: PlaygroundAgent = "cao") {
               citationVerificationFailed: event.citationVerificationFailed,
               found: event.found,
               needsClarification: event.needsClarification,
+              turnOutcome: event.turnOutcome,
+              ...(clarifyItems.length > 0 ? { trace: [...m.trace, ...clarifyItems] } : {}),
             }));
           } else if (event.type === "text") {
             pendingText += event.delta;
@@ -275,7 +307,11 @@ export function useChat(fund?: string, agent: PlaygroundAgent = "cao") {
               cancelAnimationFrame(rafId);
               rafId = null;
             }
-            patchAssistant(assistantId, (m) => ({ ...m, text: event.message }));
+            patchAssistant(assistantId, (m) => ({
+              ...m,
+              text: event.message,
+              turnOutcome: errored("provider_error"),
+            }));
           }
         };
 
@@ -285,7 +321,7 @@ export function useChat(fund?: string, agent: PlaygroundAgent = "cao") {
             if (done) {
               break;
             }
-            armInactivity();
+            watchdog.signal();
             buffer += decoder.decode(value, { stream: true });
             const lines = buffer.split("\n");
             buffer = lines.pop() ?? "";
@@ -298,22 +334,24 @@ export function useChat(fund?: string, agent: PlaygroundAgent = "cao") {
           }
           flushNow();
         } finally {
-          clearInactivity();
+          watchdog.stop();
         }
       } catch {
-        // Inactivity watchdog: show a retryable error. Unmount abort: leave partial answer as-is.
+        // Liveness watchdog: show a retryable error. Unmount abort: leave partial answer as-is.
         // Any other failure: generic error when the bubble is still empty.
         if (abortedForInactivity) {
           flushNow();
           patchAssistant(assistantId, (m) => ({
             ...m,
             text: m.text.length > 0 ? m.text : INACTIVITY_ERROR,
+            turnOutcome: m.turnOutcome ?? errored("timeout"),
           }));
         } else if (!controller.signal.aborted) {
           flushNow();
           patchAssistant(assistantId, (m) => ({
             ...m,
             text: m.text.length > 0 ? m.text : GENERIC_ERROR,
+            turnOutcome: m.turnOutcome ?? errored("provider_error"),
           }));
         } else if (rafId !== null) {
           cancelAnimationFrame(rafId);
@@ -328,7 +366,7 @@ export function useChat(fund?: string, agent: PlaygroundAgent = "cao") {
         }
       }
     },
-    [fund, patchAssistant],
+    [fund, agent, patchAssistant],
   );
 
   const sendFeedback = useCallback(

@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { CITATIONS_SENTINEL } from "./generation-schema.js";
-import { parseGenerationOutput, stripChunkIdsFromProse } from "./parse-generation.js";
+import { CITATIONS_SENTINEL } from "./generation-schema";
+import { parseGenerationOutput, stripChunkIdsFromProse } from "./parse-generation";
 
 function withCitations(prose: string, block: string): string {
   return `${prose}\n${CITATIONS_SENTINEL}\n${block}`;

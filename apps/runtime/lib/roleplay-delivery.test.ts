@@ -3,8 +3,8 @@ import { describe, it } from "node:test";
 
 import { buildRoleplayResultEnvelope, type RoleplayResultEnvelope } from "@wunderstack/shared";
 
-import { deliverWebhookEnvelope, deliveryAttemptsExhausted } from "./roleplay-delivery.js";
-import { signWebhookBody, WEBHOOK_SIGNATURE_HEADER } from "./webhook-sign.js";
+import { deliverWebhookEnvelope, deliveryAttemptsExhausted } from "./roleplay-delivery";
+import { signWebhookBody, WEBHOOK_SIGNATURE_HEADER } from "./webhook-sign";
 
 const SESSION_ID = "3f1a2b4c-5d6e-4f70-8192-a3b4c5d6e7f8";
 

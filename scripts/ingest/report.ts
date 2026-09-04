@@ -23,7 +23,7 @@ import { parseArgs } from "node:util";
 
 import { asc, chunks as chunksTable, closeDb, documents, eq, withFundSchema } from "@wunderstack/db";
 
-import { describeFailure } from "./diagnostics.js";
+import { describeFailure } from "./diagnostics";
 
 const REPORT_DIR = ["docs", "eval", "ingest"];
 

@@ -1,6 +1,6 @@
 import { cva, type VariantProps } from "class-variance-authority";
 import type { HTMLAttributes } from "react";
-import { cn } from "../lib/cn.js";
+import { cn } from "../lib/cn";
 
 const pillVariants = cva(
   "inline-flex items-center gap-1.5 rounded-[var(--radius-pill)] font-medium",

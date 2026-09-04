@@ -1,4 +1,4 @@
-import { createCaoAgent } from "./index.js";
+import { createCaoAgent } from "./index";
 
 /**
  * Manual smoke test for the CAO-agent. Not run in CI.

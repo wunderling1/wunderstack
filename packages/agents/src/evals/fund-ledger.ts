@@ -22,7 +22,7 @@ import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { EvalReport, GateStatus } from "./report-writer.js";
+import type { EvalReport, GateStatus } from "./report-writer";
 
 /**
  * The part of a run artefact the ledger needs. Narrower than `EvalReport` on purpose: a stored

@@ -27,7 +27,7 @@ import { and, chunks as chunksTable, closeDb, documents, ensureFundTables, eq, w
 import { EMBEDDING_CONFIG, EVAL_FIXTURE_FUND, env } from "@wunderstack/shared";
 import { z } from "zod";
 
-import { describeDatabaseTarget, describeFailure, formatDatabaseTarget } from "./diagnostics.js";
+import { describeDatabaseTarget, describeFailure, formatDatabaseTarget } from "./diagnostics";
 
 /** Distinctive source_uri so it can never collide with a real ingested document (globally unique). */
 const SOURCE_URI = `${EVAL_FIXTURE_FUND}://golden-passages.jsonl`;

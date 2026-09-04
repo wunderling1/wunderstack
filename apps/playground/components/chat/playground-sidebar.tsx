@@ -12,7 +12,7 @@ interface PlaygroundSidebarProps {
   activeFund: string;
 }
 
-/** Playground chrome: brand + agent/source pickers. App-local (not a shared UI primitive). */
+/** Playground chrome: brand + fund/agent pickers. App-local (not a shared UI primitive). */
 export function PlaygroundSidebar({ agent, funds, activeFund }: PlaygroundSidebarProps) {
   const [open, setOpen] = useState(false);
 
@@ -66,13 +66,13 @@ function SidebarBody({ agent, funds, activeFund }: PlaygroundSidebarProps) {
     <div className="flex h-full flex-col px-4 py-5">
       <Brand />
       <div className="mt-8 flex flex-col gap-6">
+        <section className="min-w-0">
+          <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-text-subtle">Fonds</p>
+          <FundSelector funds={funds} active={activeFund} />
+        </section>
         <section>
           <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-text-subtle">Agent</p>
           <AgentSelector active={agent} />
-        </section>
-        <section className="min-w-0">
-          <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-text-subtle">Bron</p>
-          <FundSelector funds={funds} active={activeFund} />
         </section>
       </div>
       <p className="mt-auto pt-6 text-xs text-text-subtle">Tenant-zero demo</p>
@@ -82,14 +82,6 @@ function SidebarBody({ agent, funds, activeFund }: PlaygroundSidebarProps) {
 
 function Brand() {
   return (
-    <div className="flex items-center gap-2.5">
-      <div className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-control)] bg-primary text-on-primary">
-        <span className="text-sm font-semibold">W</span>
-      </div>
-      <div className="leading-tight">
-        <p className="text-sm font-semibold text-text">Wunderstack</p>
-        <p className="text-xs text-text-muted">Playground</p>
-      </div>
-    </div>
+    <p className="font-display text-[28px] font-normal leading-none text-text">Wunderstack</p>
   );
 }

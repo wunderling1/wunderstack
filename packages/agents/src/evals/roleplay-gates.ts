@@ -1,11 +1,11 @@
 import { env } from "@wunderstack/shared";
 
-import { createRoleplayAgent } from "../roleplay/agent.js";
-import { ROLEPLAY_PROMPT_VERSION } from "../roleplay/version.js";
-import { isAdvisory, ROLEPLAY_CHECK_KIND, resolveTier } from "./content-policy.js";
-import type { EvalCheck } from "./harness.js";
-import { retryWithBackoff } from "./retry.js";
-import { PERSONA_FLOORS, REVIEW_FLOORS, type RoleplayFloor } from "./roleplay-floors.js";
+import { createRoleplayAgent } from "../roleplay/agent";
+import { ROLEPLAY_PROMPT_VERSION } from "../roleplay/version";
+import { isAdvisory, ROLEPLAY_CHECK_KIND, resolveTier } from "./content-policy";
+import type { EvalCheck } from "./harness";
+import { retryWithBackoff } from "./retry";
+import { PERSONA_FLOORS, REVIEW_FLOORS, type RoleplayFloor } from "./roleplay-floors";
 import {
   roleplayOpeningCases,
   roleplayReviewCases,
@@ -14,7 +14,7 @@ import {
   ROLEPLAY_FIXTURE_HASH,
   ROLEPLAY_SET_VERSION,
   type RoleplayEvalScenario,
-} from "./roleplay-golden-set.js";
+} from "./roleplay-golden-set";
 import {
   aggregateRoleplayReviews,
   aggregateRoleplayTurns,
@@ -23,13 +23,13 @@ import {
   judgeRoleplayReply,
   type RoleplayReviewRun,
   type RoleplayTurnScore,
-} from "./roleplay-judge.js";
+} from "./roleplay-judge";
 import type {
   RoleplayGenerationFailure,
   RoleplayPersonaReport,
   RoleplayReviewFailure,
   RoleplayReviewReport,
-} from "./report-writer.js";
+} from "./report-writer";
 
 /**
  * The two behavioural roleplay gates (Fase 6). G1-roleplay-contract lives in roleplay-contract.ts;

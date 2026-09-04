@@ -6,7 +6,7 @@ import { describe, it } from "node:test";
 
 import { EVAL_FIXTURE_FUND } from "@wunderstack/shared";
 
-import { parseFundSetProfile } from "./fund-set-profile.js";
+import { parseFundSetProfile } from "./fund-set-profile";
 import {
   FUND_SET_PROFILE_SUBDIR,
   goldenCaseSchema,
@@ -17,7 +17,7 @@ import {
   loadFundSetsFrom,
   passageById,
   passagesForCase,
-} from "./golden-set.js";
+} from "./golden-set";
 
 describe("goldenCaseSchema refusal refinement", () => {
   const base = {

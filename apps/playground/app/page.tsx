@@ -49,7 +49,6 @@ export default async function DemoPage({
           starterCategories={starterCategories}
           starterTitle={tenantConfig?.texts.tagline}
           starterIntro={tenantConfig?.texts.intro}
-          statusLabels={tenantConfig?.statusLabels}
         />
       </div>
     </main>

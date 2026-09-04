@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { containsHardFact, extractHardFacts, findUngroundedFacts, hasUngroundedHardFact } from "./hard-facts.js";
+import { containsHardFact, extractHardFacts, findUngroundedFacts, hasUngroundedHardFact } from "./hard-facts";
 
 describe("extractHardFacts", () => {
   it("extracts money, percentages and quantities-with-unit", () => {

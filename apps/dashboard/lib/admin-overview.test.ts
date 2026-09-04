@@ -7,7 +7,7 @@ import {
   fundStatusFromInstancesAndActivity,
   fundStatusLabel,
   statusFromCounts,
-} from "./admin-overview.js";
+} from "./admin-overview";
 
 const empty = { answered: 0, refused: 0, clarified: 0, error: 0, unknown: 0 };
 
@@ -28,8 +28,8 @@ test("one degraded agent makes the fund degraded (S12)", () => {
     fundStatusFromInstancesAndActivity(
       ["cao", "arbo"],
       [
-        { agentId: "cao", byOutcome: { answered: 10, refused: 0, clarified: 0, error: 0, unknown: 0 } },
-        { agentId: "arbo", byOutcome: { answered: 7, refused: 0, clarified: 0, error: 3, unknown: 0 } },
+        { agentKey: "cao", byOutcome: { answered: 10, refused: 0, clarified: 0, error: 0, unknown: 0 } },
+        { agentKey: "arbo", byOutcome: { answered: 7, refused: 0, clarified: 0, error: 3, unknown: 0 } },
       ],
     ),
     "degraded",
@@ -40,7 +40,7 @@ test("events without instances still count as live", () => {
   assert.equal(
     fundStatusFromInstancesAndActivity(
       [],
-      [{ agentId: "cao", byOutcome: { answered: 5, refused: 0, clarified: 0, error: 0, unknown: 0 } }],
+      [{ agentKey: "cao", byOutcome: { answered: 5, refused: 0, clarified: 0, error: 0, unknown: 0 } }],
     ),
     "operational",
   );

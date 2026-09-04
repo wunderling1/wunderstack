@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { emptyRoleplayScenarioDraft } from "@wunderstack/shared";
-import { parseRoleplayForm } from "./roleplay-form.js";
+import { parseRoleplayForm } from "./roleplay-form";
 
 function form(fields: Record<string, string>): FormData {
   const data = new FormData();

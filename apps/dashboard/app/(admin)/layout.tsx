@@ -33,7 +33,6 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       view="admin"
       fundKey={chrome.switcherKey}
       switcherOptions={switcherOptions}
-      brandSubtitle="Beheer"
     >
       {children}
     </DashboardChrome>

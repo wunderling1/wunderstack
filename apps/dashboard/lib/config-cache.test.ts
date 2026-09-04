@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { FUNDS_INDEX_TAG, fundConfigTag, instanceConfigTag } from "./config-cache.js";
+import { FUNDS_INDEX_TAG, fundConfigTag, instanceConfigTag } from "./config-cache";
 
 test("config cache tags are scoped and stable", () => {
   assert.equal(FUNDS_INDEX_TAG, "dashboard-funds-index");

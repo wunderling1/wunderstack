@@ -1,7 +1,7 @@
 import { text, timestamp, uuid } from "drizzle-orm/pg-core";
 
-import { lti11Consumers } from "./lti11-consumers.js";
-import { control } from "./schema.js";
+import { lti11Consumers } from "./lti11-consumers";
+import { control } from "./schema";
 
 /**
  * Pending LTI 1.1 launch. The signed session token points here (`lid`); the row is the authority.

@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { validateSignature } from "./oauth.js";
+import { validateSignature } from "./oauth";
 import {
   buildOutcomesAuthHeader,
   buildReplaceResultXml,
   lti11OutcomeAccepted,
   oauthBaseUri,
-} from "./outcomes.js";
+} from "./outcomes";
 
 describe("buildReplaceResultXml", () => {
   it("clamps the score to 0-1, escapes the sourcedId, and uses a point decimal", () => {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { findUngroundedFacts, hasUngroundedHardFact } from "./hard-facts.js";
+import { findUngroundedFacts, hasUngroundedHardFact } from "./hard-facts";
 
 describe("findUngroundedFacts (arbo)", () => {
   const catalog = "Jongeren onder de 18 jaar zijn per definitie leek en mogen alleen onder toezicht werken.";

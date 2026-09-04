@@ -3,11 +3,12 @@
 
 import { requireRerankConfig } from "@wunderstack/shared";
 
-import { assemble, type AssembledContext, type RetrievalTimings } from "./assemble.js";
-import { mergeRetrievedChunks } from "./merge-chunks.js";
-import { rerank } from "./rerank.js";
-import { retrieveInputSchema, retrieveValidatedTimed, type RetrieveInput } from "./retrieve.js";
-import { rewriteQuery, type QueryExpansion } from "./rewrite.js";
+import { assemble, type AssembledContext, type RetrievalTimings } from "./assemble";
+import { uniqueByPassageLabel, uniquePassageWindow } from "./heading";
+import { consideredChunkCount, excludeKeptChunks, mergeRetrievedChunks } from "./merge-chunks";
+import { rerank } from "./rerank";
+import { retrieveInputSchema, retrieveValidatedTimed, type RetrieveInput } from "./retrieve";
+import { rewriteQuery, type QueryExpansion } from "./rewrite";
 
 type RetrieveContextInput = RetrieveInput & { queryExpansions?: QueryExpansion[] };
 
@@ -65,10 +66,24 @@ export async function retrieveContext(input: RetrieveContextInput): Promise<Asse
       ? (retrieveLists[0]?.chunks ?? [])
       : mergeRetrievedChunks(retrieveLists.map((result) => result.chunks));
 
+  const consideredCount = consideredChunkCount(retrieveLists);
+  const mergedDropped =
+    retrieveLists.length === 1
+      ? (retrieveLists[0]?.droppedChunks ?? [])
+      : mergeRetrievedChunks(retrieveLists.map((result) => result.droppedChunks));
+  // Dual-query: a chunk can clear the floor for one rewrite and miss it for another — keep wins.
+  const droppedChunks = excludeKeptChunks(mergedDropped, retrieved);
+  const aboveThresholdCount = retrieved.length;
+  const { found: progressFound, dropped: progressDropped } = uniquePassageWindow(
+    retrieved,
+    droppedChunks,
+  );
+
   const embedMs = Math.max(...retrieveLists.map((result) => result.timings.embedMs));
   const searchMs = Math.max(...retrieveLists.map((result) => result.timings.searchMs));
 
   const { chunks: reranked, rerankMs } = await rerank({ query: primaryRewritten, chunks: retrieved, topK });
+  const usedPassageCount = uniqueByPassageLabel(reranked).length;
 
   const timings: RetrievalTimings = {
     rewriteMs,
@@ -78,7 +93,15 @@ export async function retrieveContext(input: RetrieveContextInput): Promise<Asse
     totalMs: performance.now() - totalStart,
   };
 
-  return assemble(reranked, timings);
+  return {
+    ...assemble(reranked, timings),
+    consideredCount,
+    aboveThresholdCount,
+    droppedChunks,
+    progressFound,
+    progressDropped,
+    usedPassageCount,
+  };
 }
 
 export {
@@ -92,11 +115,18 @@ export {
   type RetrievedChunk,
   type RetrievedChunkSource,
   type RetrievedChunkStructure,
-} from "./retrieve.js";
-export { mergeRetrievedChunks } from "./merge-chunks.js";
-export { rerank, type RerankInput, type RerankResult, type RerankStatus } from "./rerank.js";
-export { rewriteQuery, type RewriteResult, type QueryExpansion } from "./rewrite.js";
-export { assemble, type AssembledContext, type RetrievalTimings } from "./assemble.js";
+} from "./retrieve";
+export { consideredChunkCount, excludeKeptChunks, mergeRetrievedChunks } from "./merge-chunks";
+export { rerank, type RerankInput, type RerankResult, type RerankStatus } from "./rerank";
+export { rewriteQuery, type RewriteResult, type QueryExpansion } from "./rewrite";
+export { assemble, type AssembledContext, type RetrievalTimings } from "./assemble";
+export {
+  deriveChunkHeading,
+  passageLabel,
+  passageUniquenessKey,
+  uniqueByPassageLabel,
+  uniquePassageWindow,
+} from "./heading";
 export {
   fetchParentPassage,
   listCorpora,
@@ -109,7 +139,7 @@ export {
   type PassageInput,
   type PassageResult,
   type StructuralRefs,
-} from "./passage.js";
+} from "./passage";
 // Re-exported so short-lived callers (the eval run) can close the DB pool and exit cleanly without
 // depending on @wunderstack/db directly. Long-lived servers keep the pool and never call this.
 export { closeDb } from "@wunderstack/db";

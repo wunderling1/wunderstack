@@ -19,8 +19,9 @@ agents die je één keer bouwt en per fonds via configuratie uitrolt.
 - **Soeverein-by-default.** Het standaard request-pad blijft EU-soeverein. Fondsdata gaat
   nooit by default naar een niet-EU-model.
 - **Airlock voor niet-soevereine bronnen.** Facebook, US-SaaS en andere niet-EU-bronnen
-  koppelen via één geclassificeerde adapter per bron (`packages/connectors`). Downstream
-  van die grens blijft alles EU-soeverein; de bron zelf niet. Zie `600-connectors.mdc`.
+  koppelen via één geclassificeerde adapter per bron (gepland als `packages/connectors` —
+  **nog niet gebouwd** in v1). Downstream van die grens blijft alles EU-soeverein; de bron zelf
+  niet. Zie `.cursor/rules/600-connectors.mdc`.
 - **Alle code in het Engels** (identifiers, comments, bestandsnamen, commits; packages onder
   `@wunderstack/*`). Nederlands alleen in docs en user-facing tekst.
 
@@ -30,12 +31,36 @@ shadcn/ui · Mastra (achter een naad) · AI SDK (via Mastra's versie) · Mistral
 managed Postgres + pgvector · Scaleway embeddings · Drizzle · Zod · Langfuse EU · Auth.js.
 Volledige lijst + versiebeleid: `.cursor/rules/100-stack.mdc`.
 
+## Bundler (CI-afgedwongen)
+`next dev` draait op **Turbopack** (geen `--webpack`-vlag); `next build` draait op **webpack**
+(`--webpack` verplicht). Die asymmetrie is bewust.
+
+Voorwaarde voor beide: **relatieve imports zonder bestandsextensie**. Turbopack kan `.js`-
+specifiers niet naar `.ts` hermappen (vercel/next.js#82945) en Next 16.3.4 heeft geen
+`resolveExtensionAlias`. Daarom staat de repo op `moduleResolution: "bundler"` en niet op
+NodeNext. Zet je een `.js`-suffix terug op een relatieve import, dan breekt `next dev`.
+
+Wissel **nooit** van bundler om een fout te omzeilen — repareer de code of de config.
+`scripts/check-bundler.sh` faalt de build op elke afwijking.
+
 ## Repo-structuur
 `apps/runtime` (Next.js API-only: agent-API, webhook, hardening) · `apps/playground` (publieke
 tenant-zero-demo-UI) · `apps/roleplay` (leerling-UI rollenspel, HTTP-only) · `packages/ai` (model-naad) · `packages/agents`
-(agent-defs, Mastra erin) · `packages/rag` · `packages/connectors` (airlock naar niet-EU-bronnen)
-· `packages/db` (Drizzle) · `packages/shared`.
+(agent-defs, Mastra erin) · `packages/rag` · `packages/db` (Drizzle) · `packages/shared` ·
+`packages/analytics` · `packages/tenant` · `packages/ui` · `packages/embed`.
+(`packages/connectors` is gepland, nog geen map in de tree.)
 Pijl-regel: apps importeren uit packages, nooit andersom (CI-afgedwongen).
+Chat-scroll woont in `@wunderstack/ui` (`createScrollAnchor` + `useScrollAnchor`); playground,
+roleplay en embed importeren die hook en schrijven hem niet over.
+
+## Commando's (root)
+- `pnpm test` — `turbo run test:unit` (snelle unit-tests; **geen** eval-gates).
+- `pnpm turbo run test` — eval-suite (`@wunderstack/agents`); zonder keys: `Eval INCOMPLETE`.
+- `pnpm build` — volledige Next/embed-productiebuild (lokaal/release). **Niet** in CI in v1:
+  de verify-job draait typecheck, lint, depcruise, unit tests en eval — geen `next build`
+  (duur; productiebuild blijft een deploy/release-stap). `pnpm dev` bestaat niet in de root:
+  start per app (`pnpm --filter runtime dev`, enz.).
+- `pnpm check-docs` — markdown-links in `docs/**` en `**/AGENTS.md` moeten bestaande paden zijn.
 
 ## Repo-indeling (CI-afgedwongen)
 De root is allowlist-only: entry-docs, tooling-config en de code-/meta-mappen, verder niets.

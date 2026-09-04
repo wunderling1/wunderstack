@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { envSchema } from "./env.js";
+import { envSchema } from "./env";
 
 describe("envSchema ingest chunker vars", () => {
   it("coerces a numeric string to a positive integer", () => {

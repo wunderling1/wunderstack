@@ -1,12 +1,15 @@
 "use client";
 
-import { AnswerCard } from "@wunderstack/ui";
-import { Check, ListChecks, Loader2, type LucideIcon, Search, ShieldCheck } from "lucide-react";
+import {
+  AnswerCard,
+  AnswerTrace,
+  accumulateTraceItems,
+  traceSummaryLabel,
+  usePacedTrace,
+} from "@wunderstack/ui";
 import { memo, useMemo, useState } from "react";
-import type { ChatStatusPhase } from "@/app/api/chat/contract";
-import type { TenantPublicConfig } from "@wunderstack/shared";
 import type { PlaygroundAgent } from "@/lib/runtime-config";
-import { cn } from "@/lib/utils";
+import { isRefusedTurn } from "@/lib/turn-outcome";
 import { Citations } from "./citation";
 import { Feedback } from "./feedback";
 import { FollowUps } from "./follow-ups";
@@ -20,6 +23,18 @@ const AGENT_SUB_LABEL: Record<PlaygroundAgent, string> = {
   arbo: "Arbocatalogus",
 };
 
+/** Head line of the progress trace — what the agent is doing, before any event has landed. */
+const AGENT_TRACE_HEAD: Record<PlaygroundAgent, string> = {
+  cao: "Zoeken in de CAO",
+  arbo: "Zoeken in de Arbocatalogus",
+};
+
+/** Corpus wording for the finished summary line ("Gezocht in de CAO · …"). */
+const AGENT_SEARCHED_LABEL: Record<PlaygroundAgent, string> = {
+  cao: "Gezocht in de CAO",
+  arbo: "Gezocht in de Arbocatalogus",
+};
+
 interface MessageListProps {
   messages: ChatMessage[];
   fund?: string;
@@ -28,7 +43,6 @@ interface MessageListProps {
   onFollowUp: (question: string) => void;
   /** True while a turn is in flight — disables follow-up chips so they don't double-send. */
   followUpsDisabled?: boolean;
-  statusLabels?: TenantPublicConfig["statusLabels"];
 }
 
 /** Renders the conversation: user/assistant bubbles, streaming caret, citations and feedback. */
@@ -39,12 +53,15 @@ export function MessageList({
   onFeedback,
   onFollowUp,
   followUpsDisabled = false,
-  statusLabels,
 }: MessageListProps) {
   return (
-    <div className="flex flex-col gap-6">
-      {messages.map((message) => (
-        <div key={message.id} data-message-id={message.id}>
+    <div className="flex flex-col gap-6" data-message-list>
+      {messages.map((message, index) => (
+        <div
+          key={message.id}
+          data-message-id={message.id}
+          className={index === messages.length - 1 ? "min-h-[var(--turn-min-height,0px)]" : undefined}
+        >
           <MessageBubble
             message={message}
             fund={fund}
@@ -52,91 +69,9 @@ export function MessageList({
             onFeedback={onFeedback}
             onFollowUp={onFollowUp}
             followUpsDisabled={followUpsDisabled}
-            statusLabels={statusLabels ?? DEFAULT_PROGRESS_STEPS}
           />
         </div>
       ))}
-    </div>
-  );
-}
-
-// Ordered checklist steps, mapped onto the server's progress phases.
-const DEFAULT_PROGRESS_STEPS: TenantPublicConfig["statusLabels"] = {
-  searching: "CAO doorzoeken",
-  retrieved: "Passages beoordelen",
-  generating: "Bronvermelding controleren",
-};
-
-function progressSteps(labels: TenantPublicConfig["statusLabels"]): {
-  phase: ChatStatusPhase;
-  label: string;
-  icon: LucideIcon;
-}[] {
-  return [
-    { phase: "searching", label: labels.searching, icon: Search },
-    { phase: "retrieved", label: labels.retrieved, icon: ListChecks },
-    { phase: "generating", label: labels.generating, icon: ShieldCheck },
-  ];
-}
-
-/** Index of the currently active step; defaults to the first (optimistic "searching"). */
-function activeStepIndex(phase: ChatStatusPhase | null, steps: ReturnType<typeof progressSteps>): number {
-  const i = steps.findIndex((s) => s.phase === phase);
-  return i === -1 ? 0 : i;
-}
-
-/**
- * Vertical timeline showing retrieval/answer progress.
- * Done = green circle (state-verified), active = spinning primary, pending = muted icon in sunk circle.
- */
-function AnswerSkeleton({
-  phase,
-  statusLabels,
-}: {
-  phase: ChatStatusPhase | null;
-  statusLabels: TenantPublicConfig["statusLabels"];
-}) {
-  const steps = progressSteps(statusLabels);
-  const current = activeStepIndex(phase, steps);
-
-  return (
-    <div className="flex flex-col gap-5">
-      {steps.map((step, index) => {
-        const state = index < current ? "done" : index === current ? "active" : "pending";
-        const StepIcon = step.icon;
-
-        return (
-          <div key={step.phase} className="flex items-center gap-3">
-            <span
-              className={cn(
-                "flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
-                state === "done" && "bg-state-verified-bg",
-                state === "active" && "bg-primary-tint",
-                state === "pending" && "bg-surface-sunk",
-              )}
-              {...(state === "active" ? { "aria-live": "polite" as const } : {})}
-            >
-              {state === "done" ? (
-                <Check className="h-4 w-4 text-state-verified-fg" />
-              ) : state === "active" ? (
-                <Loader2 className="motion-spin h-4 w-4 text-primary" aria-hidden />
-              ) : (
-                <StepIcon className="h-4 w-4 text-text-subtle" />
-              )}
-            </span>
-
-            <p
-              className={cn(
-                "text-base",
-                state === "pending" ? "text-text-subtle" : "text-text",
-              )}
-            >
-              {step.label}
-              {state === "active" ? "…" : ""}
-            </p>
-          </div>
-        );
-      })}
     </div>
   );
 }
@@ -149,7 +84,6 @@ const MessageBubble = memo(function MessageBubble({
   onFeedback,
   onFollowUp,
   followUpsDisabled,
-  statusLabels,
 }: {
   message: ChatMessage;
   fund?: string;
@@ -157,10 +91,30 @@ const MessageBubble = memo(function MessageBubble({
   onFeedback: (messageId: string, rating: FeedbackRating, reason?: string) => void;
   onFollowUp: (question: string) => void;
   followUpsDisabled: boolean;
-  statusLabels: TenantPublicConfig["statusLabels"];
 }) {
   const isUser = message.role === "user";
-  const waiting = message.streaming && message.text.length === 0;
+  // Buffer-to-verify emits text before the citations event that carries the outcome. Keep the live
+  // trace up until that outcome lands, so the summary and the card appear together above the fold.
+  const waiting = message.streaming && message.turnOutcome === null;
+  // Paced here rather than in `useChat`: the rhythm is a property of the view, and a message that
+  // is re-mounted (scrolled back into view) should not replay its trace.
+  const pacedTrace = usePacedTrace(message.trace);
+  const traceSteps = useMemo(() => accumulateTraceItems(pacedTrace), [pacedTrace]);
+  // Once the verdict is in the trace is history, so it is shown whole rather than at the paced
+  // tempo — the reader opens it to check what happened, not to watch it happen again.
+  const finishedSteps = useMemo(() => accumulateTraceItems(message.trace), [message.trace]);
+  const summary = useMemo(() => {
+    if (message.turnOutcome === null) {
+      return null;
+    }
+    return traceSummaryLabel({
+      outcome: message.turnOutcome.outcome,
+      searchedLabel: AGENT_SEARCHED_LABEL[agent],
+      considered: message.retrieval?.considered ?? 0,
+      aboveThreshold: message.retrieval?.aboveThreshold ?? 0,
+      used: message.retrieval?.used ?? 0,
+    });
+  }, [message.turnOutcome, message.retrieval, agent]);
   const showFeedback = !isUser && !message.streaming && message.traceId !== null;
   const showFollowUps =
     !isUser &&
@@ -186,64 +140,86 @@ const MessageBubble = memo(function MessageBubble({
     );
   }
 
-  // Agent turn — refused: same card chrome as a regular answer, no chip (grounding bar comes later)
-  if (message.found === false && !message.streaming) {
+  /*
+   * A2: the timeline and the summary live in the same slot above the answer card, so nothing
+   * jumps under the reader's eye when the turn settles. While waiting there is no card chrome.
+   */
+  const traceBlock = waiting ? (
+    <AnswerTrace head={AGENT_TRACE_HEAD[agent]} steps={traceSteps} inFlight />
+  ) : summary !== null && finishedSteps.length > 0 ? (
+    <AnswerTrace
+      head={AGENT_TRACE_HEAD[agent]}
+      steps={finishedSteps}
+      inFlight={false}
+      summary={summary}
+      className="mb-3"
+    />
+  ) : null;
+
+  if (waiting) {
+    return traceBlock;
+  }
+
+  // Agent turn — refused only. Clarify (`found: false`, outcome clarified) uses the answer path.
+  if (isRefusedTurn(message.turnOutcome ?? undefined)) {
     return (
+      <div className="flex flex-col">
+        {traceBlock}
+        <AnswerCard
+          role="agent"
+          agentLabel={AGENT_LABEL}
+          agentSubLabel={AGENT_SUB_LABEL[agent]}
+          footer={
+            showFeedback ? (
+              <Feedback
+                submitted={message.feedback}
+                onSubmit={(rating, reason) => onFeedback(message.id, rating, reason)}
+              />
+            ) : undefined
+          }
+        >
+          {message.text}
+        </AnswerCard>
+      </div>
+    );
+  }
+
+  // Agent turn — answer (including while streaming text after the wait)
+  return (
+    <div className="flex flex-col">
+      {traceBlock}
       <AnswerCard
         role="agent"
         agentLabel={AGENT_LABEL}
         agentSubLabel={AGENT_SUB_LABEL[agent]}
         footer={
-          showFeedback ? (
-            <Feedback
-              submitted={message.feedback}
-              onSubmit={(rating, reason) => onFeedback(message.id, rating, reason)}
+          <>
+            <Citations
+              citations={message.citations}
+              messageId={message.id}
+              {...(fund ? { fund } : {})}
+              agent={agent}
+              activeRef={activeRef}
+              candidate={false}
             />
-          ) : undefined
+            {showFollowUps ? (
+              <FollowUps
+                questions={message.followUpQuestions}
+                onPick={onFollowUp}
+                disabled={followUpsDisabled}
+              />
+            ) : null}
+            {showFeedback ? (
+              <Feedback
+                submitted={message.feedback}
+                onSubmit={(rating, reason) => onFeedback(message.id, rating, reason)}
+              />
+            ) : null}
+          </>
         }
       >
-        {message.text}
-      </AnswerCard>
-    );
-  }
-
-  // Agent turn — answer (including while streaming)
-  return (
-    <AnswerCard
-      role="agent"
-      agentLabel={AGENT_LABEL}
-      agentSubLabel={AGENT_SUB_LABEL[agent]}
-      footer={
-        <>
-          <Citations
-            citations={message.citations}
-            messageId={message.id}
-            {...(fund ? { fund } : {})}
-            agent={agent}
-            activeRef={activeRef}
-            candidate={waiting}
-          />
-          {showFollowUps ? (
-            <FollowUps
-              questions={message.followUpQuestions}
-              onPick={onFollowUp}
-              disabled={followUpsDisabled}
-            />
-          ) : null}
-          {showFeedback ? (
-            <Feedback
-              submitted={message.feedback}
-              onSubmit={(rating, reason) => onFeedback(message.id, rating, reason)}
-            />
-          ) : null}
-        </>
-      }
-    >
-      {waiting ? (
-        <AnswerSkeleton phase={message.phase} statusLabels={statusLabels} />
-      ) : (
         <Markdown citationMarkers={citationMarkers}>{message.text}</Markdown>
-      )}
-    </AnswerCard>
+      </AnswerCard>
+    </div>
   );
 });

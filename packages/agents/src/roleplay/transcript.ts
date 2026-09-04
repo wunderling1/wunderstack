@@ -1,4 +1,4 @@
-import type { RoleplayMessage } from "./types.js";
+import type { RoleplayMessage } from "./types";
 
 /**
  * How the transcript reaches the model.

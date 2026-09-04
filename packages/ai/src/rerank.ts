@@ -1,7 +1,7 @@
 import { env } from "@wunderstack/shared";
 import { z } from "zod";
 
-import { ensureHttpKeepAlive, fetchWithRetry, ProviderHttpError } from "./http.js";
+import { ensureHttpKeepAlive, fetchWithRetry, ProviderHttpError } from "./http";
 
 /**
  * The single seam for reranking, via Scaleway Generative APIs (EU).

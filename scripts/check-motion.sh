@@ -5,6 +5,7 @@
 # Rule 2: no transition/animation shorthand with a literal time value (e.g. 150ms) outside the token files.
 # Rule 3: no transition of layout properties (height, width, top, left, right, bottom, margin, padding) anywhere.
 # Rule 4: no Tailwind motion utilities (transition-*, animate-*) or @keyframes in apps/**.
+# Rule 5: every Tailwind entry must reach the motion layer (directly, or via styles.css).
 #
 # Allowlist: scripts/motion-allowlist.txt (one file path per line; # comments ignored).
 # Add entries there when a violation must be grandfathered — include a TODO(fase-1) comment.
@@ -118,6 +119,27 @@ if [[ -n "$APP_MOTION" ]]; then
     echo "$filtered"
     echo "  ok (all allowlisted)"
   fi
+else
+  echo "  ok"
+fi
+
+# Rule 5: a Tailwind entry that omits the motion layer ships the --motion-* tokens and the
+# reduced-motion overrides without the .motion-* classes or their keyframes. Nothing errors; the
+# animations are simply dead. The embed shipped that way, so this is now a gate.
+echo "Rule 5: Tailwind entries reach the motion layer..."
+MOTION_LAYER_MISSING=""
+while IFS= read -r entry; do
+  if ! grep -qE '(motion|styles)\.css' "$entry"; then
+    MOTION_LAYER_MISSING+="$entry"$'\n'
+  fi
+done < <(rg --no-heading -l '@import "tailwindcss"' --glob '*.css' . 2>/dev/null || true)
+if [[ -n "$MOTION_LAYER_MISSING" ]]; then
+  count=$(echo "$MOTION_LAYER_MISSING" | grep -c . || true)
+  echo "FAIL: Tailwind entry without the motion layer (Rule 5)"
+  echo "$MOTION_LAYER_MISSING" | while IFS= read -r hit; do
+    [[ -n "$hit" ]] && echo "  $hit — add @import of packages/ui/src/motion.css (or styles.css)"
+  done
+  failures=$((failures + count))
 else
   echo "  ok"
 fi

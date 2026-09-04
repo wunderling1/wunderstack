@@ -39,7 +39,7 @@ export function isThreadedChannel(channel: string | null): boolean {
 export interface ConversationBoundaryRow {
   id: string;
   sessionId: string;
-  agentId: string;
+  agentKey: string;
   occurredAt: Date;
   channel: string | null;
 }
@@ -52,14 +52,14 @@ export interface ConversationGroup<T> {
    */
   id: string;
   sessionId: string;
-  agentId: string;
+  agentKey: string;
   /** Chronological, oldest first. Typed non-empty so reading the first question needs no assertion. */
   questions: [T, ...T[]];
 }
 
 function compareRows(a: ConversationBoundaryRow, b: ConversationBoundaryRow): number {
   if (a.sessionId !== b.sessionId) return a.sessionId < b.sessionId ? -1 : 1;
-  if (a.agentId !== b.agentId) return a.agentId < b.agentId ? -1 : 1;
+  if (a.agentKey !== b.agentKey) return a.agentKey < b.agentKey ? -1 : 1;
   const byTime = a.occurredAt.getTime() - b.occurredAt.getTime();
   if (byTime !== 0) return byTime;
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
@@ -90,7 +90,7 @@ export function groupIntoConversations<T extends ConversationBoundaryRow>(
       rowThreaded &&
       isThreadedChannel(current.questions[0].channel) &&
       current.sessionId === row.sessionId &&
-      current.agentId === row.agentId &&
+      current.agentKey === row.agentKey &&
       at - previousAt <= gapMs;
 
     if (current !== undefined && continues) {
@@ -99,7 +99,7 @@ export function groupIntoConversations<T extends ConversationBoundaryRow>(
       current = {
         id: row.id,
         sessionId: row.sessionId,
-        agentId: row.agentId,
+        agentKey: row.agentKey,
         questions: [row],
       };
       groups.push(current);

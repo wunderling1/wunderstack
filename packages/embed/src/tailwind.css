@@ -6,6 +6,12 @@
  * (D17): the embed carries its own tokens; the tenant theme overrides them at runtime.
  */
 @import "tailwindcss";
+/*
+ * The motion layer comes from the same file the apps use. Without it the shadow tree got the
+ * --motion-* tokens and the reduced-motion overrides but none of the .motion-* classes or their
+ * keyframes, so every animation in the embed was silently dead.
+ */
+@import "../../ui/src/motion.css";
 @source ".";
 @source "../../ui/src";
 

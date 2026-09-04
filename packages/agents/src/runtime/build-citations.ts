@@ -1,8 +1,10 @@
 import type { Citation, ModelCitation } from "@wunderstack/shared";
 
 import type { RetrievedChunk } from "@wunderstack/rag";
-import { buildQuoteSnippet } from "./snippet.js";
-import type { VerifiedCitation } from "./verify-citations.js";
+
+import { deriveChunkHeading } from "@wunderstack/rag";
+import { buildQuoteSnippet } from "./snippet";
+import type { VerifiedCitation } from "./verify-citations";
 
 /**
  * Merge verified model citations with retrieval chunk metadata into UI-ready citations.
@@ -46,52 +48,10 @@ export function buildVerifiedCitations(
         article: chunk.structure.article,
         lid: chunk.structure.lid,
         sourceRef: chunk.structure.sourceRef,
-        heading: deriveHeading(chunk),
+        heading: deriveChunkHeading(chunk),
         snippet: buildQuoteSnippet(chunk.content, modelCitation.quote),
       };
     });
-}
-
-const HEADING_REGEX = /(?:Artikel|Hoofdstuk|Bijlage|Paragraaf)\s+[\w.]+(?:\s*[—–:-]\s*[^\n.;]{2,80})?/i;
-
-/**
- * Card heading for a source. Prefers structure metadata (Fase 10), then a regex over the chunk's
- * opening text (pre-Fase-10 fallback, plan Fase C step 2), then the structural anchor. Returns null
- * when no article-level heading can be derived, so the UI falls back to the document title.
- */
-function deriveHeading(chunk: RetrievedChunk): string | null {
-  const { article, lid, sourceRef } = chunk.structure;
-
-  // Best case: structured article/lid plus an article title if we can find one in the content.
-  if (article) {
-    const title = extractArticleTitle(chunk.content);
-    const base = `Artikel ${article}`;
-    const withLid = lid ? `${base}, lid ${lid}` : base;
-    return title ? `${withLid} — ${title}` : withLid;
-  }
-
-  // Pre-Fase-10 fallback: a leading "Artikel X — Titel" / "Hoofdstuk ..." line in the chunk text.
-  const head = chunk.content.slice(0, 160);
-  const match = HEADING_REGEX.exec(head);
-  if (match) {
-    return match[0].replace(/\s+/g, " ").trim();
-  }
-
-  return sourceRef;
-}
-
-/** Pull the article title ("Vakantie") out of a "... — Vakantie" / "(Vakantie)" opening, if present. */
-function extractArticleTitle(content: string): string | null {
-  const head = content.slice(0, 160);
-  const dash = /(?:Artikel|Bijlage)\s+[\w.]+\s*[—–:-]\s*([^\n.;]{2,80})/i.exec(head);
-  if (dash?.[1]) {
-    return dash[1].replace(/\s+/g, " ").trim();
-  }
-  const paren = /(?:Artikel|Bijlage)\s+[\w.]+\s*\(([^)]{2,80})\)/i.exec(head);
-  if (paren?.[1]) {
-    return paren[1].replace(/\s+/g, " ").trim();
-  }
-  return null;
 }
 
 /** Extract markers referenced in the answer text. */

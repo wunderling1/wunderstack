@@ -5,7 +5,7 @@
 import { bindClaimsToInstance, instanceFromRow, listActiveFunds, pickUnkeyedInstance, retrievalScope } from "@wunderstack/db";
 import { listCorpora, retrieveContext, retrieveInputSchema } from "@wunderstack/rag";
 
-import type { EvalCheck } from "./harness.js";
+import type { EvalCheck } from "./harness";
 
 export function corpusIsolationContractChecks(): EvalCheck[] {
   const noFund = retrieveInputSchema.safeParse({ query: "vakantiedagen" });

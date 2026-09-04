@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { isElliptical, buildFallbackRetrievalQuery, isDegenerateCondensation, retrievalQueriesForFollowUp } from "./condense.js";
+import { isElliptical, buildFallbackRetrievalQuery, isDegenerateCondensation, retrievalQueriesForFollowUp } from "./condense";
 
 const history = [
   { role: "user" as const, content: "Krijgen oudere werknemers extra vakantiedagen?" },

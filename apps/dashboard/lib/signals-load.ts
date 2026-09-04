@@ -11,8 +11,14 @@ export interface SignalsModel {
   filters: SignalsFilters;
   agents: string[];
   measurementStartedAt: Date | null;
+  windowSince: Date;
   knowledgeGaps: QuestionSignal[];
   knowledgeGapsTotal: number;
+  previousKnowledgeGapsTotal: number;
+  knowledgeGapsGroupTotal: number;
+  topKnowledgeGaps: QuestionSignal[];
+  questionsAsked: number;
+  questionsAnswered: number;
   suspiciousRefusals: QuestionSignal[];
   exerciseAdoption: ExerciseAdoptionRow[];
 }
@@ -28,15 +34,13 @@ export async function loadSignalsModel(
   const filters = parseSignalsFilters(search, agents);
   const window = currentWindow(filters.period, now);
 
-  // One transaction. The gap total and the measurement start used to be two more reads; both come
-  // out of the ranking `listSignals` already builds, so asking for them separately was the same
-  // query twice plus a BEGIN/COMMIT each.
   const signals = await listSignals({
     fundKey,
     since: window.since,
     until: window.until,
-    agentId: filters.agentId,
+    agentKey: filters.agentId,
     includeSuspicious: options.includeSuspicious,
+    page: filters.page,
     now,
   });
 
@@ -44,8 +48,14 @@ export async function loadSignalsModel(
     filters,
     agents,
     measurementStartedAt: signals.measurementStartedAt,
+    windowSince: window.since,
     knowledgeGaps: signals.knowledgeGaps,
     knowledgeGapsTotal: signals.knowledgeGapsTotal,
+    previousKnowledgeGapsTotal: signals.previousKnowledgeGapsTotal,
+    knowledgeGapsGroupTotal: signals.knowledgeGapsGroupTotal,
+    topKnowledgeGaps: signals.topKnowledgeGaps,
+    questionsAsked: signals.questionsAsked,
+    questionsAnswered: signals.questionsAnswered,
     suspiciousRefusals: options.includeSuspicious ? signals.suspiciousRefusals : [],
     exerciseAdoption: signals.exerciseAdoption,
   };

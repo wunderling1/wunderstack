@@ -5,9 +5,24 @@ import {
   grantOwnerOnFundSchemaSql,
   grantReaderOnControlSql,
   grantReaderOnFundSchemaSql,
-} from "./grants.js";
-import { buildFundEnvironmentStatements } from "./fund-environment.js";
-import { provisionDdl, recordMigrationSql, revokePublicFundSchemaSql } from "./fund-ddl.js";
+} from "./grants";
+import { buildFundEnvironmentStatements } from "./fund-environment";
+import { provisionDdl, recordMigrationSql, revokePublicFundSchemaSql } from "./fund-ddl";
+import { assertStoredSchemaName, fundSchemaName } from "./agent-instances";
+
+describe("fundSchemaName / assertStoredSchemaName (F1-07)", () => {
+  it("is the only assembler for fund_<key>", () => {
+    assert.equal(fundSchemaName("oomt"), "fund_oomt");
+    assert.equal(assertStoredSchemaName("oomt", "fund_oomt"), "fund_oomt");
+  });
+
+  it("rejects a drifted stored schema_name", () => {
+    assert.throws(
+      () => assertStoredSchemaName("oomt", "fund_elektronische-detailhandel"),
+      /does not match/,
+    );
+  });
+});
 
 describe("grantReaderOnControlSql / grantReaderOnFundSchemaSql", () => {
   it("matches the statements grant-reader used to inline", () => {

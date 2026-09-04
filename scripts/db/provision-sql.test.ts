@@ -11,7 +11,7 @@ import {
   createEventsLikeSql,
   createSchemaSql,
   truncateFundTablesSql,
-} from "./provision-sql.js";
+} from "./provision-sql";
 
 const ALL_SQL = [
   createSchemaSql("fund_elektronische-detailhandel"),
