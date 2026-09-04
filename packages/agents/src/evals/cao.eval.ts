@@ -516,6 +516,9 @@ function retrievalOutputFromPassages(passages: GoldenPassage[]): RetrievalOutput
     consideredCount: assembled.consideredCount,
     aboveThresholdCount: assembled.aboveThresholdCount,
     droppedChunks: assembled.droppedChunks,
+    progressFound: assembled.progressFound,
+    progressDropped: assembled.progressDropped,
+    usedPassageCount: assembled.usedPassageCount,
   };
 }
 
