@@ -3,7 +3,7 @@
  * growth only while it overflows that space, then freeze once readable text is on
  * screen — or the moment the reader takes over.
  *
- * Pure decision logic, no React, no DOM, no timers. `measure` / `now` are injected so
+ * Pure decision logic, no React, no DOM, no timers. `measure` is injected so
  * tests run without a browser; the adapter in the consuming app applies the commands.
  */
 

@@ -122,7 +122,6 @@ describe("createScrollAnchor", () => {
     let inset = 80;
     const anchor = createScrollAnchor({
       measure: () => VIEW,
-      now: () => 0,
       bottomInset: () => inset,
     });
     inset = 200;
