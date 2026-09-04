@@ -45,6 +45,8 @@ function navIconForHref(href: string): LucideIcon | undefined {
   if (href.endsWith("/signals")) return Activity;
   if (href.endsWith("/settings")) return Settings;
   if (href.includes("/agents")) return Bot;
+  // Fund-console overview: `/admin/funds/{fundKey}` (platform `/admin` is exact-matched above).
+  if (href.startsWith("/admin/funds/")) return ChartLine;
   return undefined;
 }
 
@@ -52,12 +54,10 @@ export function DashboardSidebar({
   view,
   fundKey,
   switcherOptions,
-  brandSubtitle,
 }: {
   view: FundNavView;
   fundKey: string;
   switcherOptions: SwitcherOption[];
-  brandSubtitle: string;
 }) {
   const [open, setOpen] = useState(false);
   const menuButtonId = useId();
@@ -72,7 +72,7 @@ export function DashboardSidebar({
   return (
     <>
       <div className="flex items-center justify-between border-b border-border bg-surface px-4 py-3 md:hidden">
-        <Brand subtitle={brandSubtitle} />
+        <Brand />
         <Button
           id={menuButtonId}
           type="button"
@@ -96,7 +96,6 @@ export function DashboardSidebar({
             view={view}
             fundKey={fundKey}
             switcherOptions={switcherOptions}
-            brandSubtitle={brandSubtitle}
             footer={<SignOutForm />}
             onNavigate={() => setOpen(false)}
           />
@@ -108,7 +107,6 @@ export function DashboardSidebar({
           view={view}
           fundKey={fundKey}
           switcherOptions={switcherOptions}
-          brandSubtitle={brandSubtitle}
           footer={<SignOutForm />}
         />
       </aside>
@@ -120,14 +118,12 @@ function SidebarBody({
   view,
   fundKey,
   switcherOptions,
-  brandSubtitle,
   footer,
   onNavigate,
 }: {
   view: FundNavView;
   fundKey: string;
   switcherOptions: SwitcherOption[];
-  brandSubtitle: string;
   footer: ReactNode;
   onNavigate?: () => void;
 }) {
@@ -144,7 +140,7 @@ function SidebarBody({
 
   return (
     <div className="flex h-full flex-col px-4 py-5">
-      <Brand subtitle={brandSubtitle} />
+      <Brand />
       <div className="mt-8 flex min-h-0 flex-1 flex-col gap-6">
         {showSwitcher ? (
           <section className="min-w-0">
@@ -194,16 +190,8 @@ function NavIcon({ href }: { href: string }) {
   return <Icon icon={icon} />;
 }
 
-function Brand({ subtitle }: { subtitle: string }) {
+function Brand() {
   return (
-    <div className="flex items-center gap-2.5">
-      <div className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-control)] bg-primary text-on-primary">
-        <span className="text-sm font-semibold">W</span>
-      </div>
-      <div className="leading-tight">
-        <p className="text-sm font-semibold text-text">Wunderstack</p>
-        <p className="text-xs text-text-muted">{subtitle}</p>
-      </div>
-    </div>
+    <p className="font-display text-[28px] font-normal leading-none text-text">Wunderstack</p>
   );
 }

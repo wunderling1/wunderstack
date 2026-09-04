@@ -25,7 +25,6 @@ import {
   listOutcomeActivity,
   listSignals,
   measurementStartedAt,
-  SIGNAL_MIN_OCCURRENCES,
 } from "./index";
 import { recordInteractionEvent } from "./record";
 
@@ -110,7 +109,7 @@ describe("fund environment ↔ analytics seam", { skip: !ready }, () => {
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const recordedDemo = await recordInteractionEvent({
       tenantId: "demo",
-      agentId: "cao",
+      agentKey: "cao",
       fund: fundKey,
       sessionId: `sess-demo-${fundKey}`,
       turnOutcome: answeredGrounded(),
@@ -121,7 +120,7 @@ describe("fund environment ↔ analytics seam", { skip: !ready }, () => {
     });
     const recordedOwn = await recordInteractionEvent({
       tenantId: fundKey,
-      agentId: "cao",
+      agentKey: "cao",
       fund: fundKey,
       sessionId: `sess-own-${fundKey}`,
       turnOutcome: answeredGrounded(),
@@ -153,13 +152,13 @@ describe("fund environment ↔ analytics seam", { skip: !ready }, () => {
     const outcomes = await listOutcomeActivity(since);
     const outcomeRows = outcomes.filter((row) => row.fundKey === fundKey);
     assert.equal(outcomeRows.length, 1);
-    assert.equal(outcomeRows[0]?.agentId, "cao");
+    assert.equal(outcomeRows[0]?.agentKey, "cao");
     assert.equal(outcomeRows[0]?.byOutcome.answered, 2);
     assert.ok(outcomeRows[0]?.lastOccurredAt instanceof Date);
 
     // Agent-page KPIs use the same source as the fund overview: sum over agents == fund total.
-    const cao = await getKpiSummary({ fundKey, agentId: "cao", since });
-    const arbo = await getKpiSummary({ fundKey, agentId: "arbo", since });
+    const cao = await getKpiSummary({ fundKey, agentKey: "cao", since });
+    const arbo = await getKpiSummary({ fundKey, agentKey: "arbo", since });
     assert.equal(cao.total + arbo.total, summary.total);
   });
 
@@ -195,11 +194,11 @@ describe("fund environment ↔ analytics seam", { skip: !ready }, () => {
     assert.equal(breakdown.byOutcome.answered, 2);
   });
 
-  it("a knowledge gap is a repeated question, not a refused turn (S11a)", async () => {
+  it("knowledge gaps count unanswered questions; the tile matches the list (headline = questions)", async () => {
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const refusals = [
       "wat staat er over de reiskostenregeling",
-      "wat staat er over de reiskostenregeling",
+      "Wat staat er over de reiskostenregeling?",
       "wat staat er over de reiskostenregeling",
       "geldt de toeslag ook op zaterdag",
       "hoe lang duurt de proeftijd",
@@ -207,7 +206,7 @@ describe("fund environment ↔ analytics seam", { skip: !ready }, () => {
     for (const [index, question] of refusals.entries()) {
       const recorded = await recordInteractionEvent({
         tenantId: fundKey,
-        agentId: "cao",
+        agentKey: "cao",
         fund: fundKey,
         sessionId: `sess-gap-${index}-${fundKey}`,
         turnOutcome: refused("no_coverage"),
@@ -219,37 +218,153 @@ describe("fund environment ↔ analytics seam", { skip: !ready }, () => {
       assert.equal(recorded.recorded, true);
     }
 
-    // Five refused turns without retrieval, but only one question came back three times.
+    // Five refused turns without retrieval — every one is an unanswered question on the page.
     const breakdown = await getOutcomeBreakdown({ fundKey, since });
     const justified = breakdown.rates.refusedJustified;
     assert.ok(!("kind" in justified));
     assert.equal(justified.numerator, 5);
 
     const gaps = await countKnowledgeGaps({ fundKey, since });
-    assert.equal(gaps, 1);
+    assert.equal(gaps, 5);
 
-    // And the count is the length of the list it links to — the same groups, not a parallel rule.
     const signals = await listSignals({ fundKey, since });
-    assert.equal(signals.knowledgeGaps.length, gaps);
-    assert.equal(signals.knowledgeGaps[0]?.occurrenceCount, 3);
-    assert.equal(signals.knowledgeGaps[0]?.question, refusals[0]);
+    assert.equal(signals.knowledgeGapsTotal, gaps);
+    // Near-literal collapse: three wordings of reiskosten → one group of 3.
+    const reiskosten = signals.knowledgeGaps.find((row) =>
+      row.question.toLowerCase().includes("reiskosten"),
+    );
+    assert.equal(reiskosten?.occurrenceCount, 3);
+    assert.equal(reiskosten?.corpusHint, "none");
+    assert.ok(signals.knowledgeGaps.some((row) => row.question === "hoe lang duurt de proeftijd"));
   });
 
-  it("S18: narrowing below the threshold empties the list, it never ungroups (real query)", async () => {
+  it("R1: strong retrieval refusals stay off the knowledge-gap list; weak and none land", async () => {
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    // The three copies were recorded on cao. Narrowed to arbo, the same window holds none of them:
-    // the group must vanish, not fall apart into three loose rows.
-    const narrowed = await listSignals({ fundKey, since, agentId: "arbo" });
-    assert.deepEqual(narrowed.knowledgeGaps, []);
-    assert.equal(await countKnowledgeGaps({ fundKey, since, agentId: "arbo" }), 0);
+    const strongQ = `sterke weigering ${fundKey}`;
+    const noneQ = `geen bron ${fundKey}`;
+    const weakQ = `te dun ${fundKey}`;
 
-    // And a question below the threshold stays out even unnarrowed.
-    const wide = await listSignals({ fundKey, since });
-    assert.ok(wide.knowledgeGaps.every((row) => row.occurrenceCount >= SIGNAL_MIN_OCCURRENCES));
-    assert.ok(
-      wide.knowledgeGaps.every((row) => row.question !== "hoe lang duurt de proeftijd"),
-      "a single refusal is not a knowledge gap",
+    assert.equal(
+      (
+        await recordInteractionEvent({
+          tenantId: fundKey,
+          agentKey: "cao",
+          fund: fundKey,
+          sessionId: `sess-strong-${fundKey}`,
+          turnOutcome: refused("guard_hard_fact"),
+          citationCount: 0,
+          retrievedCount: 5,
+          topScore: 0.81,
+          question: strongQ,
+        })
+      ).recorded,
+      true,
     );
+    assert.equal(
+      (
+        await recordInteractionEvent({
+          tenantId: fundKey,
+          agentKey: "cao",
+          fund: fundKey,
+          sessionId: `sess-none-${fundKey}`,
+          turnOutcome: refused("no_coverage"),
+          citationCount: 0,
+          retrievedCount: 0,
+          topScore: null,
+          question: noneQ,
+        })
+      ).recorded,
+      true,
+    );
+    assert.equal(
+      (
+        await recordInteractionEvent({
+          tenantId: fundKey,
+          agentKey: "cao",
+          fund: fundKey,
+          sessionId: `sess-weak-${fundKey}`,
+          turnOutcome: refused("no_coverage"),
+          citationCount: 0,
+          retrievedCount: 3,
+          topScore: 0.41,
+          question: weakQ,
+        })
+      ).recorded,
+      true,
+    );
+
+    const signals = await listSignals({ fundKey, since });
+    assert.ok(
+      signals.knowledgeGaps.every((row) => row.question !== strongQ),
+      "strong retrieval refusal is not a knowledge gap",
+    );
+    const noneRow = signals.knowledgeGaps.find((row) => row.question === noneQ);
+    assert.equal(noneRow?.corpusHint, "none");
+    const weakRow = signals.knowledgeGaps.find((row) => row.question === weakQ);
+    assert.equal(weakRow?.corpusHint, "thin");
+
+    const withSuspicious = await listSignals({ fundKey, since, includeSuspicious: true });
+    assert.ok(withSuspicious.suspiciousRefusals.some((row) => row.question === strongQ));
+  });
+
+  it("R3: distinct actors count sessions on threaded channels and events on mcp/api", async () => {
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const sameSessionQ = `zelfde sessie ${fundKey}`;
+    const mcpQ = `mcp los ${fundKey}`;
+
+    for (let index = 0; index < 5; index += 1) {
+      assert.equal(
+        (
+          await recordInteractionEvent({
+            tenantId: fundKey,
+            agentKey: "cao",
+            fund: fundKey,
+            sessionId: `sess-repeat-${fundKey}`,
+            channel: "playground",
+            turnOutcome: refused("no_coverage"),
+            citationCount: 0,
+            retrievedCount: 0,
+            topScore: null,
+            question: sameSessionQ,
+          })
+        ).recorded,
+        true,
+      );
+    }
+    for (let index = 0; index < 3; index += 1) {
+      assert.equal(
+        (
+          await recordInteractionEvent({
+            tenantId: fundKey,
+            agentKey: "cao",
+            fund: fundKey,
+            sessionId: `sess-mcp-${index}-${fundKey}`,
+            channel: "mcp",
+            turnOutcome: refused("no_coverage"),
+            citationCount: 0,
+            retrievedCount: 0,
+            topScore: null,
+            question: mcpQ,
+          })
+        ).recorded,
+        true,
+      );
+    }
+
+    const signals = await listSignals({ fundKey, since });
+    const sameSession = signals.knowledgeGaps.find((row) => row.question === sameSessionQ);
+    assert.equal(sameSession?.occurrenceCount, 5);
+    assert.equal(sameSession?.distinctActors, 1);
+    const mcp = signals.knowledgeGaps.find((row) => row.question === mcpQ);
+    assert.equal(mcp?.occurrenceCount, 3);
+    assert.equal(mcp?.distinctActors, 3);
+  });
+
+  it("narrowing to another agent empties that agent's gap list (real query)", async () => {
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const narrowed = await listSignals({ fundKey, since, agentKey: "arbo" });
+    assert.deepEqual(narrowed.knowledgeGaps, []);
+    assert.equal(await countKnowledgeGaps({ fundKey, since, agentKey: "arbo" }), 0);
   });
 
   it("a filter on the list counts the same as the breakdown it came from (real query)", async () => {

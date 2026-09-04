@@ -41,13 +41,13 @@ export interface KpiWindow {
   /** Only count events at or after this instant. */
   since: Date;
   /** When set, scope KPIs to a single agent instance. */
-  agentId?: string;
+  agentKey?: string;
 }
 
 function windowScope(window: KpiWindow) {
   const parts = [gte(interactionEvents.occurredAt, window.since)];
-  if (window.agentId !== undefined) {
-    parts.push(eq(interactionEvents.agentId, window.agentId));
+  if (window.agentKey !== undefined) {
+    parts.push(eq(interactionEvents.agentKey, window.agentKey));
   }
   return and(...parts);
 }
@@ -275,7 +275,7 @@ export interface AgentActivityRow {
   fundKey: string;
   /** Deployment provenance (which runtime wrote the event). Not fund identity. */
   tenantId: string;
-  agentId: string;
+  agentKey: string;
   fund: string;
   total: number;
   answeredWithCitations: number;
@@ -312,7 +312,7 @@ export async function getAgentActivity(since: Date): Promise<AgentActivityRow[]>
       db
         .select({
           tenantId: interactionEvents.tenantId,
-          agentId: interactionEvents.agentId,
+          agentKey: interactionEvents.agentKey,
           fund: interactionEvents.fund,
           total: sql<number>`count(*)`,
           answeredWithCitations: sql<number>`count(*) filter (where ${interactionEvents.outcome} = 'answered' and ${interactionEvents.citationCount} > 0)`,
@@ -323,12 +323,12 @@ export async function getAgentActivity(since: Date): Promise<AgentActivityRow[]>
         })
         .from(interactionEvents)
         .where(gte(interactionEvents.occurredAt, since))
-        .groupBy(interactionEvents.tenantId, interactionEvents.agentId, interactionEvents.fund),
+        .groupBy(interactionEvents.tenantId, interactionEvents.agentKey, interactionEvents.fund),
     );
     return rows.map((row) => ({
       fundKey: fund.key,
       tenantId: row.tenantId,
-      agentId: row.agentId,
+      agentKey: row.agentKey,
       fund: row.fund,
       total: toNumber(row.total),
       answeredWithCitations: toNumber(row.answeredWithCitations),

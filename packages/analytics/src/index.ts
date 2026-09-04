@@ -92,6 +92,20 @@ export {
 } from "./overview";
 
 export {
+  FUND_DISPLAY_TIMEZONE,
+  PULSE_WINDOW_MS,
+  PULSE_TICK_CAP,
+  civilDateInZone,
+  addCivilDays,
+  fillDailySeries,
+  zonedStartOfDay,
+  capPulseTicks,
+  type DayCount,
+  type PulseTick,
+  type PulseResult,
+} from "./activity-series";
+
+export {
   CONVERSATION_GAP_MINUTES,
   UNTHREADED_CHANNELS,
   groupIntoConversations,
@@ -128,15 +142,15 @@ export {
 export {
   listSignals,
   countKnowledgeGaps,
-  groupsAtOccurrenceThreshold,
-  frequencyRecencyScore,
-  sortByFrequencyRecency,
+  corpusHintFromGroup,
+  normalizeQuestionKey,
+  sortByFrequencyThenRecency,
   mapQuestionSignal,
   includeExerciseAdoption,
-  SIGNAL_MIN_OCCURRENCES,
   SIGNAL_LIST_LIMIT,
   type SignalsQuery,
   type QuestionSignal,
+  type CorpusHint,
   type ExerciseAdoptionRow,
   type SignalsResult,
 } from "./signals";

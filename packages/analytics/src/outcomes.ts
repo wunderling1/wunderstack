@@ -23,7 +23,7 @@ export interface OutcomeWindow {
   /** When set, only count events strictly before this instant. */
   until?: Date;
   /** When set, scope to a single agent instance. */
-  agentId?: string;
+  agentKey?: string;
 }
 
 export type AgentOperationalStatus = "operational" | "degraded" | "offline";
@@ -65,8 +65,8 @@ function windowScope(window: OutcomeWindow) {
   if (window.until !== undefined) {
     parts.push(lt(interactionEvents.occurredAt, window.until));
   }
-  if (window.agentId !== undefined) {
-    parts.push(eq(interactionEvents.agentId, window.agentId));
+  if (window.agentKey !== undefined) {
+    parts.push(eq(interactionEvents.agentKey, window.agentKey));
   }
   return and(...parts);
 }

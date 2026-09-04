@@ -2,107 +2,127 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
-  frequencyRecencyScore,
-  groupsAtOccurrenceThreshold,
+  corpusHintFromGroup,
   includeExerciseAdoption,
   mapQuestionSignal,
+  normalizeQuestionKey,
   questionSignalsFrom,
   SIGNAL_LIST_LIMIT,
-  SIGNAL_MIN_OCCURRENCES,
-  sortByFrequencyRecency,
+  sortByFrequencyThenRecency,
 } from "./signals";
 
 const SOURCE = readFileSync(new URL("./signals.ts", import.meta.url), "utf8");
 
-// S18 (the threshold sits in the query, and narrowing cannot ungroup) is asserted against a real
-// schema in fund-environment.integration.test.ts. What follows tests the pure grouping helpers.
-test("S18: the threshold value the query and the UI copy share", () => {
-  assert.equal(SIGNAL_MIN_OCCURRENCES, 3);
-});
-
-test("S18: narrowing below the threshold yields empty groups, not loose event rows", () => {
-  const unfiltered = [
-    {
-      question: "Hoeveel vakantiedagen?",
-      occurrenceCount: 4,
-      latestEventId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-    },
-  ];
-  assert.equal(groupsAtOccurrenceThreshold(unfiltered).length, 1);
-
-  // Same question after agent + 7d + theme: only 2 copies remain — below the HAVING.
-  const narrowed = [
-    {
-      question: "Hoeveel vakantiedagen?",
-      occurrenceCount: SIGNAL_MIN_OCCURRENCES - 1,
-      latestEventId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-    },
-  ];
-  const shown = groupsAtOccurrenceThreshold(narrowed);
-  assert.deepEqual(shown, []);
-  // Forbidden: ungroup into occurrenceCount individual rows.
-  assert.notEqual(shown.length, narrowed[0]?.occurrenceCount);
+test("near-literal normalisation collapses case, punctuation and whitespace", () => {
+  assert.equal(
+    normalizeQuestionKey("Hoeveel vakantiedagen heb ik?"),
+    normalizeQuestionKey("hoeveel  vakantiedagen heb ik"),
+  );
+  assert.notEqual(
+    normalizeQuestionKey("Hoeveel vakantiedagen heb ik?"),
+    normalizeQuestionKey("Hoeveel ziektedagen heb ik?"),
+  );
 });
 
 test("mapped rows keep the literal question — no generated theme or summary", () => {
   const row = mapQuestionSignal({
     question: "Hoeveel vakantiedagen heb ik?",
     occurrenceCount: 5,
+    distinctActors: 4,
+    agentKey: "cao",
+    noneCount: 5,
     lastOccurredAt: new Date("2026-09-01T10:00:00.000Z"),
     latestEventId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
   });
   assert.equal(row?.question, "Hoeveel vakantiedagen heb ik?");
   assert.equal(row?.latestEventId, "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
-  // Not a behaviour claim but a guard on this file: no summariser may be introduced here later.
+  assert.equal(row?.agentKey, "cao");
+  assert.equal(row?.distinctActors, 4);
+  assert.equal(row?.corpusHint, "none");
   assert.doesNotMatch(SOURCE, /openai|summariz|cluster|generateTheme|themeLabel/i);
 });
 
-test("frequency × recency ranks a recent group above a stale larger group", () => {
-  const now = new Date("2026-09-01T12:00:00.000Z");
-  const recent = frequencyRecencyScore(3, new Date("2026-08-31T12:00:00.000Z"), now);
-  const stale = frequencyRecencyScore(10, new Date("2026-06-01T12:00:00.000Z"), now);
-  assert.ok(recent > stale);
+test("corpus hint is none only when every turn had zero hits", () => {
+  assert.equal(corpusHintFromGroup(5, 5), "none");
+  assert.equal(corpusHintFromGroup(3, 5), "thin");
+  assert.equal(corpusHintFromGroup(0, 5), "thin");
+});
 
-  const sorted = sortByFrequencyRecency(
-    [
-      {
-        question: "stale",
-        occurrenceCount: 10,
-        lastOccurredAt: new Date("2026-06-01T12:00:00.000Z"),
-      },
-      {
-        question: "recent",
-        occurrenceCount: 3,
-        lastOccurredAt: new Date("2026-08-31T12:00:00.000Z"),
-      },
-    ],
-    now,
-  );
-  assert.equal(sorted[0]?.question, "recent");
+test("frequency then recency ranks a larger group above a smaller recent one", () => {
+  const sorted = sortByFrequencyThenRecency([
+    {
+      question: "recent-small",
+      occurrenceCount: 3,
+      lastOccurredAt: new Date("2026-08-31T12:00:00.000Z"),
+    },
+    {
+      question: "stale-large",
+      occurrenceCount: 10,
+      lastOccurredAt: new Date("2026-06-01T12:00:00.000Z"),
+    },
+  ]);
+  assert.equal(sorted[0]?.question, "stale-large");
+  assert.equal(sorted[1]?.question, "recent-small");
+});
+
+test("equal frequency breaks ties on recency", () => {
+  const sorted = sortByFrequencyThenRecency([
+    {
+      question: "older",
+      occurrenceCount: 5,
+      lastOccurredAt: new Date("2026-08-01T12:00:00.000Z"),
+    },
+    {
+      question: "newer",
+      occurrenceCount: 5,
+      lastOccurredAt: new Date("2026-08-31T12:00:00.000Z"),
+    },
+  ]);
+  assert.equal(sorted[0]?.question, "newer");
 });
 
 test("exercise adoption is outside the knowledge-gap query and drops on a grounded agent filter", () => {
   assert.equal(includeExerciseAdoption({ fundKey: "demo", since: new Date() }), true);
   assert.equal(
-    includeExerciseAdoption({ fundKey: "demo", since: new Date(), agentId: "roleplay" }),
+    includeExerciseAdoption({ fundKey: "demo", since: new Date(), agentKey: "roleplay" }),
     true,
   );
   assert.equal(
-    includeExerciseAdoption({ fundKey: "demo", since: new Date(), agentId: "cao" }),
+    includeExerciseAdoption({ fundKey: "demo", since: new Date(), agentKey: "cao" }),
     false,
   );
 });
 
-test("knowledge gap total is uncapped while the list stops at SIGNAL_LIST_LIMIT", () => {
+test("knowledge gap list pages at SIGNAL_LIST_LIMIT while the uncapped group set stays intact", () => {
   const now = new Date("2026-09-01T12:00:00.000Z");
   const rows = Array.from({ length: 51 }, (_, index) => ({
     question: `Vraag ${index}`,
-    occurrenceCount: SIGNAL_MIN_OCCURRENCES,
+    occurrenceCount: 1,
+    distinctActors: 1,
+    agentKey: "cao",
+    noneCount: 1,
     lastOccurredAt: now,
     latestEventId: `${String(index).padStart(8, "0")}-aaaa-4aaa-8aaa-aaaaaaaaaaaa`,
   }));
-  const all = questionSignalsFrom(rows, now);
+  const all = questionSignalsFrom(rows);
   const listed = all.slice(0, SIGNAL_LIST_LIMIT);
   assert.equal(all.length, 51);
   assert.equal(listed.length, 50);
+});
+
+test("listSignals pages groups in SQL (D10) — not by slicing a full ranking in JS", () => {
+  assert.match(SOURCE, /\.limit\(bounds\.limit\)/);
+  assert.match(SOURCE, /\.offset\(bounds\.offset\)/);
+  assert.match(SOURCE, /loadQuestionGroupCount/);
+  assert.match(SOURCE, /limit: SIGNAL_LIST_LIMIT,\s*\n\s*offset,/);
+  assert.match(SOURCE, /limit: 3/);
+  assert.doesNotMatch(SOURCE, /ranked\.slice\(offset/);
+  assert.doesNotMatch(SOURCE, /knowledgeGapsGroupTotal: ranked\.length/);
+});
+
+test("gap filter is the negation of strong retrieval — one shared predicate", () => {
+  assert.match(SOURCE, /function isStrongRetrieval/);
+  assert.match(SOURCE, /not\(isStrongRetrieval\(\)\)/);
+  assert.doesNotMatch(SOURCE, /theme\?:/);
+  assert.doesNotMatch(SOURCE, /SIGNAL_MIN_OCCURRENCES/);
 });

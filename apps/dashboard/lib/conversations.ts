@@ -41,6 +41,8 @@ export interface ConversationFilters {
   agentId?: AgentKey;
   outcome?: TurnOutcomeValue;
   reason?: RefusedReason;
+  /** When true, `since` is start of today rather than the period start. Pulse deep-link. */
+  sinceToday?: boolean;
 }
 
 export interface ConversationSearchParams {
@@ -48,6 +50,8 @@ export interface ConversationSearchParams {
   agent?: string | string[];
   outcome?: string | string[];
   reason?: string | string[];
+  /** `today` narrows the window to the start of the civil day in the fund zone. */
+  since?: string | string[];
 }
 
 function first(raw: string | string[] | undefined): string | undefined {
@@ -80,6 +84,7 @@ export function parseConversationFilters(
   allowedAgents: readonly string[],
 ): ConversationFilters {
   const period = parsePeriod(search.period);
+  const sinceToday = first(search.since) === "today";
   const agentId = parseAgent(first(search.agent), allowedAgents);
   let outcome = parseOutcome(first(search.outcome));
   let reason = parseReason(first(search.reason));
@@ -89,7 +94,9 @@ export function parseConversationFilters(
   if (reason !== undefined && outcome !== undefined && outcome !== "refused") {
     reason = undefined;
   }
-  return { period, agentId, outcome, reason };
+  return sinceToday
+    ? { period, agentId, outcome, reason, sinceToday: true }
+    : { period, agentId, outcome, reason };
 }
 
 export function conversationFilterExtras(filters: ConversationFilters): Record<string, string | undefined> {
@@ -97,6 +104,7 @@ export function conversationFilterExtras(filters: ConversationFilters): Record<s
     agent: filters.agentId,
     outcome: filters.outcome,
     reason: filters.reason,
+    since: filters.sinceToday ? "today" : undefined,
   };
 }
 
@@ -109,6 +117,7 @@ export function conversationListHref(
   if (filters.agentId) params.set("agent", filters.agentId);
   if (filters.outcome) params.set("outcome", filters.outcome);
   if (filters.reason) params.set("reason", filters.reason);
+  if (filters.sinceToday) params.set("since", "today");
   return `${pathname}?${params.toString()}`;
 }
 

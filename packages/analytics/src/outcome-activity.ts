@@ -19,7 +19,7 @@ const FUND_SCHEMA_READ_CONCURRENCY = 3;
 export interface OutcomeActivityRow {
   /** Schema the row was read from — the fund this activity belongs to. */
   fundKey: string;
-  agentId: string;
+  agentKey: string;
   byOutcome: OutcomeCounts;
   lastOccurredAt: Date | null;
 }
@@ -57,17 +57,17 @@ export async function listOutcomeActivity(since: Date): Promise<OutcomeActivityR
     const rows = await withFundSchema(fund.key, (db) =>
       db
         .select({
-          agentId: interactionEvents.agentId,
+          agentKey: interactionEvents.agentKey,
           ...outcomeCountSelect(),
           lastOccurredAt: sql<Date | string | null>`max(${interactionEvents.occurredAt})`,
         })
         .from(interactionEvents)
         .where(gte(interactionEvents.occurredAt, since))
-        .groupBy(interactionEvents.agentId),
+        .groupBy(interactionEvents.agentKey),
     );
     return rows.map((row) => ({
       fundKey: fund.key,
-      agentId: row.agentId,
+      agentKey: row.agentKey,
       byOutcome: countsFromRow(row),
       lastOccurredAt: asDate(row.lastOccurredAt),
     }));

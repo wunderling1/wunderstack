@@ -5,15 +5,22 @@ import { conversationPermalink } from "./conversations";
 import { parseSignalsFilters, signalsFilterExtras } from "./signals";
 
 test("filters live in the URL: parse + extras round-trip", () => {
-  const filters = parseSignalsFilters({ period: "7d", agent: "cao" }, ["cao", "roleplay"]);
-  assert.deepEqual(filters, { period: "7d", agentId: "cao" });
-  assert.deepEqual(signalsFilterExtras(filters), { agent: "cao" });
+  const filters = parseSignalsFilters({ period: "7d", agent: "cao", page: "2" }, ["cao", "roleplay"]);
+  assert.deepEqual(filters, { period: "7d", agentId: "cao", page: 2 });
+  assert.deepEqual(signalsFilterExtras(filters), { agent: "cao", page: "2" });
+});
+
+test("page 1 is omitted from extras; invalid page falls back to 1", () => {
+  const filters = parseSignalsFilters({ page: "0" }, ["cao"]);
+  assert.equal(filters.page, 1);
+  assert.equal(signalsFilterExtras(filters).page, undefined);
 });
 
 test("unknown agent is dropped, period defaults to 30d", () => {
   const filters = parseSignalsFilters({ agent: "nope", period: "nope" }, ["cao"]);
   assert.equal(filters.agentId, undefined);
   assert.equal(filters.period, "30d");
+  assert.equal(filters.page, 1);
 });
 
 test("each signal row permalinks to the conversation, independent of list filters", () => {
@@ -34,6 +41,8 @@ test("Signalen UI has no generated labels and every question row links through",
   assert.match(view, /latestAbandonedId \?\? row\.latestSessionId/);
   assert.match(view, /row\.question/);
   assert.match(view, /showSuspicious/);
+  assert.match(view, /onbeantwoorde vragen/);
+  assert.doesNotMatch(view, /SIGNAL_MIN_OCCURRENCES/);
 });
 
 test("fund Signalen does not load suspicious refusals; admin does", () => {
@@ -54,11 +63,11 @@ test("fund Signalen does not load suspicious refusals; admin does", () => {
   assert.match(admin, /showSuspicious/);
 });
 
-test("load path puts the threshold in analytics, not in the dashboard UI", () => {
+test("load path pages via analytics; dashboard does not re-threshold", () => {
   const load = readFileSync(new URL("./signals-load.ts", import.meta.url), "utf8");
   const view = readFileSync(new URL("../components/fund/signals.tsx", import.meta.url), "utf8");
   assert.match(load, /listSignals\(/);
+  assert.match(load, /page: filters\.page/);
   assert.doesNotMatch(load, /occurrenceCount\s*>=/);
   assert.doesNotMatch(view, /occurrenceCount\s*>=/);
-  assert.match(view, /SIGNAL_MIN_OCCURRENCES/);
 });

@@ -32,7 +32,7 @@ export async function AgentOverviewPanel({
   // and all of it in one fund-schema transaction rather than three.
   const { breakdown, recent, exercise } = await getAgentPanelSnapshot({
     fundKey,
-    agentId: agentKey,
+    agentKey,
     since,
     includeExercise: !quality,
   });

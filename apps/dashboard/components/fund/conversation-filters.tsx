@@ -26,6 +26,7 @@ export function ConversationFiltersForm({
       <PeriodPicker pathname={pathname} period={filters.period} extras={extras} />
       <form method="get" className="flex flex-wrap items-end gap-3">
         <input type="hidden" name="period" value={filters.period} />
+        {filters.sinceToday ? <input type="hidden" name="since" value="today" /> : null}
         <label className="flex min-w-40 flex-1 flex-col gap-1 text-sm">
           <span className="text-text-muted">Agent</span>
           <Select name="agent" defaultValue={filters.agentId ?? ""}>

@@ -37,7 +37,7 @@ interface AdminRow {
 function rowFromActivity(row: OutcomeActivityRow): AdminRow {
   return {
     fundKey: row.fundKey,
-    agentId: row.agentId,
+    agentId: row.agentKey,
     total: totalQuestions(row.byOutcome),
     answered: answerRate(row.byOutcome),
     status: statusFromCounts(row.byOutcome),
@@ -49,7 +49,7 @@ export default async function AdminOverview() {
   const activity = await listOutcomeActivity(sinceDaysAgo(WINDOW_DAYS));
   const rows = activity.map(rowFromActivity);
 
-  const seen = new Set(activity.map((row) => row.agentId));
+  const seen = new Set(activity.map((row) => row.agentKey));
   const missing: AdminRow[] = KNOWN_AGENTS.filter((agent) => !seen.has(agent.id)).map((agent) => ({
     fundKey: "—",
     agentId: agent.id,

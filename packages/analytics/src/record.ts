@@ -23,7 +23,7 @@ export async function recordInteractionEvent(
   const event = interactionEventInputSchema.parse(input);
   const values = {
     tenantId: event.tenantId,
-    agentId: event.agentId,
+    agentKey: event.agentKey,
     fund: event.fund,
     sessionId: event.sessionId,
     userId: event.userId ?? null,

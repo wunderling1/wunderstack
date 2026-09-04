@@ -26,6 +26,17 @@ test("every split that shows a rate also shows when measurement started (D6)", (
   }
 });
 
+test("the activity snapshot carries a daily series and a pulse, not a KpiTile", () => {
+  const view = readFileSync(join(import.meta.dirname, "../components/fund/overview.tsx"), "utf8");
+  assert.match(view, /ActivityCard/);
+  assert.doesNotMatch(view, /KpiTile/);
+  const loader = readFileSync(join(import.meta.dirname, "./overview-load.ts"), "utf8");
+  assert.match(loader, /dailySeries: snapshot\.dailySeries/);
+  assert.match(loader, /pulse: snapshot\.pulse/);
+  // Sessions are Mix, not the conversation count on Activiteit.
+  assert.doesNotMatch(loader, /volume\.current\.conversations \+ snapshot\.exercise/);
+});
+
 test("overview loader uses one parsed period for current and previous windows", () => {
   const source = readFileSync(join(import.meta.dirname, "./overview-load.ts"), "utf8");
   assert.match(source, /currentWindow\(period/);

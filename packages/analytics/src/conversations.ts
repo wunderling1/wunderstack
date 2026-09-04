@@ -13,11 +13,14 @@ import {
 import {
   isGroundedAgentKey,
   refusedReasons,
+  turnOutcomes,
   type RefusedReason,
   type RoleplayEndReason,
   type RoleplaySessionStatus,
-  type TurnOutcomeValue,
 } from "@wunderstack/shared";
+import { z } from "zod";
+
+const turnOutcomeValueSchema = z.enum(turnOutcomes);
 
 import {
   groupIntoConversations,
@@ -45,7 +48,7 @@ export interface ConversationQuery {
   fundKey: string;
   since: Date;
   until?: Date;
-  agentId?: string;
+  agentKey?: string;
   outcome?: string;
   outcomeReason?: string;
 }
@@ -72,7 +75,7 @@ export type GroundedConversation = {
   kind: "grounded";
   /** First question's event id. Window-dependent; see ConversationGroup.id. */
   id: string;
-  agentId: string;
+  agentKey: string;
   startedAt: Date;
   /** Last question — the list sorts on this. */
   occurredAt: Date;
@@ -124,7 +127,7 @@ export interface ConversationVolume {
 const questionColumns = {
   id: interactionEvents.id,
   sessionId: interactionEvents.sessionId,
-  agentId: interactionEvents.agentId,
+  agentKey: interactionEvents.agentKey,
   occurredAt: interactionEvents.occurredAt,
   question: interactionEvents.question,
   outcome: interactionEvents.outcome,
@@ -136,7 +139,7 @@ const questionColumns = {
 type TurnRow = {
   id: string;
   sessionId: string;
-  agentId: string;
+  agentKey: string;
   occurredAt: Date;
   question: string | null;
   outcome: string;
@@ -146,13 +149,13 @@ type TurnRow = {
 };
 
 /** Window + agent scope only. The outcome filter is applied after grouping, never here. */
-function scopeParts(query: { since: Date; until?: Date; agentId?: string }) {
+function scopeParts(query: { since: Date; until?: Date; agentKey?: string }) {
   const parts = [gte(interactionEvents.occurredAt, query.since)];
   if (query.until !== undefined) {
     parts.push(lt(interactionEvents.occurredAt, query.until));
   }
-  if (query.agentId !== undefined) {
-    parts.push(eq(interactionEvents.agentId, query.agentId));
+  if (query.agentKey !== undefined) {
+    parts.push(eq(interactionEvents.agentKey, query.agentKey));
   }
   return and(...parts);
 }
@@ -191,7 +194,7 @@ function asEndReason(value: string | null): RoleplayEndReason | null {
 }
 
 export function includeGroundedTurns(query: ConversationQuery): boolean {
-  return query.agentId === undefined || isGroundedAgentKey(query.agentId);
+  return query.agentKey === undefined || isGroundedAgentKey(query.agentKey);
 }
 
 /**
@@ -200,7 +203,7 @@ export function includeGroundedTurns(query: ConversationQuery): boolean {
  */
 export function includeExerciseSessions(query: ConversationQuery): boolean {
   if (query.outcome !== undefined || query.outcomeReason !== undefined) return false;
-  return query.agentId === undefined || !isGroundedAgentKey(query.agentId);
+  return query.agentKey === undefined || !isGroundedAgentKey(query.agentKey);
 }
 
 export function hasOutcomeFilter(query: {
@@ -282,7 +285,7 @@ export function toGroundedConversation(
   return {
     kind: "grounded",
     id: group.id,
-    agentId: group.agentId,
+    agentKey: group.agentKey,
     startedAt: first.occurredAt,
     occurredAt,
     // Some, not every: one measured session mixes a pre-channel null with playground.
@@ -308,15 +311,18 @@ export function breakdownCountForFilter(
     return null;
   }
   if (filter.outcome !== undefined) {
-    const outcome = filter.outcome as TurnOutcomeValue;
-    if (outcome in breakdown.byOutcome) {
-      return breakdown.byOutcome[outcome];
+    const parsed = turnOutcomeValueSchema.safeParse(filter.outcome);
+    if (!parsed.success) {
+      return null;
+    }
+    if (parsed.data in breakdown.byOutcome) {
+      return breakdown.byOutcome[parsed.data];
     }
   }
   return null;
 }
 
-function scanWindow(db: Database, query: { since: Date; until?: Date; agentId?: string }) {
+function scanWindow(db: Database, query: { since: Date; until?: Date; agentKey?: string }) {
   return db
     .select(questionColumns)
     .from(interactionEvents)
@@ -333,7 +339,7 @@ function scanWindow(db: Database, query: { since: Date; until?: Date; agentId?: 
 export const boundaryColumns = {
   id: interactionEvents.id,
   sessionId: interactionEvents.sessionId,
-  agentId: interactionEvents.agentId,
+  agentKey: interactionEvents.agentKey,
   occurredAt: interactionEvents.occurredAt,
   channel: interactionEvents.channel,
 };
@@ -341,7 +347,7 @@ export const boundaryColumns = {
 export type BoundaryRow = {
   id: string;
   sessionId: string;
-  agentId: string;
+  agentKey: string;
   occurredAt: Date;
   channel: string | null;
 };
@@ -349,7 +355,7 @@ export type BoundaryRow = {
 /** Boundary-column scan over one window, newest first, capped at `limit`. */
 export function scanBoundaryWindow(
   db: Database,
-  query: { since: Date; until?: Date; agentId?: string },
+  query: { since: Date; until?: Date; agentKey?: string },
   limit: number = CONVERSATION_TURN_SCAN_CAP,
 ) {
   return db
@@ -453,7 +459,7 @@ async function loadConversationList(
     fundKey: query.fundKey,
     since: query.since,
     until: query.until,
-    agentId: query.agentId,
+    agentKey: query.agentKey,
   });
 
   return {
@@ -479,7 +485,7 @@ export async function getConversationVolume(window: {
   fundKey: string;
   since: Date;
   until?: Date;
-  agentId?: string;
+  agentKey?: string;
 }): Promise<ConversationVolume> {
   return withFundSchema(window.fundKey, async (db) => {
     const rows = await scanBoundaryWindow(db, window);
@@ -540,7 +546,7 @@ async function loadConversationByQuestionId(
   const [anchor] = await db
     .select({
       sessionId: interactionEvents.sessionId,
-      agentId: interactionEvents.agentId,
+      agentKey: interactionEvents.agentKey,
     })
     .from(interactionEvents)
     .where(eq(interactionEvents.id, id))
@@ -553,7 +559,7 @@ async function loadConversationByQuestionId(
     .where(
       and(
         eq(interactionEvents.sessionId, anchor.sessionId),
-        eq(interactionEvents.agentId, anchor.agentId),
+        eq(interactionEvents.agentKey, anchor.agentKey),
       ),
     )
     .orderBy(desc(interactionEvents.occurredAt))
