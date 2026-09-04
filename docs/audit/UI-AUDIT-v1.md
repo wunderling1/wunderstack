@@ -48,7 +48,8 @@
 - **Markdown-rendering:** `react-markdown` + `remark-gfm` (`apps/demo/components/chat/markdown.tsx:4-5`).
 - **State management:** géén externe library. Alleen React-hooks; alle chat-state leeft in één
   custom hook `useChat` (`apps/demo/components/chat/use-chat.ts:57-275`).
-- **Build:** `next build --webpack` (`apps/demo/package.json:7`) — expliciet Webpack, niet Turbopack;
+- **Build:** `next build --webpack` (`apps/demo/package.json:7`) — expliciet Webpack voor de
+  *build*; `next dev` draait wel op Turbopack (zie `.cursor/rules/100-stack.mdc`, "Bundler");
   workspace-packages worden getranspileerd (`apps/demo/next.config.mjs`, `transpilePackages`).
 - **Deploy-target binnen Scalingo:** `OPEN` — zie OPEN-lijst #1.
 
