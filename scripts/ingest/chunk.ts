@@ -8,7 +8,7 @@
  * as `table` chunks so "wat verdient functiegroep X, trede Y" stays answerable.
  */
 
-import { segmentText, serializeTable } from "./parse.js";
+import { segmentText, serializeTable } from "./parse";
 
 export type ChunkType = "text" | "table";
 

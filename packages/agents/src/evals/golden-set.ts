@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import type { RetrievedChunk } from "@wunderstack/rag";
 import { z } from "zod";
 
-import { assertKnownAgentKey, parseFundSetProfile, type FundSetProfile } from "./fund-set-profile.js";
+import { assertKnownAgentKey, parseFundSetProfile, type FundSetProfile } from "./fund-set-profile";
 
 const defaultFixturesDir = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 export const FUND_SET_PROFILE_SUBDIR = "fund-sets";

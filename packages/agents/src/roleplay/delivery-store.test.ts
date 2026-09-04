@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { nextDeliveryAttemptAt, ROLEPLAY_DELIVERY_MAX_ATTEMPTS } from "./delivery-store.js";
+import { nextDeliveryAttemptAt, ROLEPLAY_DELIVERY_MAX_ATTEMPTS } from "./delivery-store";
 
 describe("nextDeliveryAttemptAt", () => {
   const now = new Date("2026-08-25T16:00:00.000Z");

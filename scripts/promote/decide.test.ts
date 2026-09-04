@@ -3,8 +3,8 @@ import { describe, it } from "node:test";
 
 import type { FundGateRecord } from "@wunderstack/agents/evals/fund-ledger";
 
-import { parseLastIngest, parseReportTimestamp } from "./check.js";
-import { decide, sameCommit, type PromoteRequest, type StructureReportRef } from "./decide.js";
+import { parseLastIngest, parseReportTimestamp } from "./check";
+import { decide, sameCommit, type PromoteRequest, type StructureReportRef } from "./decide";
 
 const COMMIT = "28b1911c0ffee1234567890abcdefabcdef01234";
 

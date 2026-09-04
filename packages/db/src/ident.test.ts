@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { assertFundKey, quoteIdent, quoteLiteral } from "./ident.js";
+import { assertFundKey, quoteIdent, quoteLiteral } from "./ident";
 
 describe("assertFundKey", () => {
   it("accepts hyphenated fund keys", () => {

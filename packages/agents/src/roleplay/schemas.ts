@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import type { ScoredCriterion, WeightedCriterion } from "./types.js";
+import type { ScoredCriterion, WeightedCriterion } from "./types";
 
 /**
  * What the model is asked to emit, and how we survive it not quite doing so.

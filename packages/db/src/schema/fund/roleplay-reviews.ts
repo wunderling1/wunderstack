@@ -12,7 +12,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-import { roleplaySessions } from "./roleplay-sessions.js";
+import { roleplaySessions } from "./roleplay-sessions";
 
 /**
  * The rubric outcome for one session. Unique per session: a re-review replaces the row rather than

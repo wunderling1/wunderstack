@@ -13,8 +13,8 @@ import {
   type GroundedAgentKey,
 } from "@wunderstack/shared";
 
-import { resolveAgentIdFromConfig } from "./agent.js";
-import { resolveFundScope } from "./fund-scope.js";
+import { resolveAgentIdFromConfig } from "./agent";
+import { resolveFundScope } from "./fund-scope";
 
 /**
  * Request-scoped fund + agent from the resolved instance (keyed) or the process allowlist (unkeyed).

@@ -19,6 +19,41 @@ zonder dit bestand bij te werken.
 - Next.js 16 · React · Tailwind · shadcn/ui
 - Next.js is UI + API-gateway + streaming. GEEN agent-/businesslogica in route-handlers.
 
+## Bundler (vastgelegd)
+
+De splitsing is bewust asymmetrisch. Verander hem niet.
+
+- `next dev` draait op **Turbopack** — de Next 16-default, dus **geen `--webpack`-vlag**.
+- `next build` draait op **webpack** — `--webpack` is **verplicht**.
+
+Waarom dit werkt, en wat de voorwaarde is: onze workspace-packages exporteren **rauwe
+TypeScript** (`exports` wijst naar `./src/*.ts`) en importeren relatief **zonder extensie**.
+Dat laatste is geen stijlkeuze maar een harde eis. Turbopack kan een `.js`-specifier niet naar
+een `.ts`-bestand hermappen (vercel/next.js#82945), en Next 16.3.4 biedt daar geen knop voor:
+`TurbopackOptions` heeft alleen `resolveAlias` en `resolveExtensions`, en geen van beide kan
+een extensie hermappen. `resolveExtensionAlias` bestaat niet in stable. Zolang de imports
+extensieloos zijn, resolven Turbopack én webpack ze zonder configuratie.
+
+Daarom staat `tsconfig.base.json` op `module: "esnext"` + `moduleResolution: "bundler"` en
+niet op NodeNext — NodeNext zou die `.js`-suffixen juist afdwingen. Dat mag omdat niets die
+packages via kale `node` laadt: consumers zijn Next (bundler), `tsx` (tests en `scripts/*`)
+en drizzle-kit/esbuild.
+
+Elke config declareert daarnaast expliciet `turbopack: {}` — dat dooft Next's waarschuwing
+"webpack is configured while Turbopack is not", precies de waarschuwing die uitnodigt om dev
+"even" op webpack te zetten.
+
+**Historie (2 september 2026).** Commit 538e441 verplaatste dev naar Turbopack op de aanname
+dat Turbopack `.js` -> `.ts` zelf oploste. Dat is empirisch weerlegd: zelfde code, verse cache,
+Turbopack gaf HTTP 500 met 59× "Module not found", webpack HTTP 200. De aanname stond ook in
+dit bestand en in `check-bundler.sh`. Het beleid is niet gewijzigd — de oorzaak is weggenomen
+door de `.js`-suffixen uit alle relatieve imports te halen (715 stuks, 307 bestanden).
+
+**Wissel nooit van bundler om een fout te omzeilen.** Een falende dev-server repareer je in de
+code of de config, niet door `--webpack` aan een dev-script te plakken. `scripts/check-bundler.sh`
+(pnpm `check-bundler`, draait in CI) faalt op elke afwijking. Beleid echt wijzigen betekent: dit
+bestand, dat script én alle `next.config.mjs` in dezelfde PR.
+
 ## Brein
 - Mastra `@mastra/core` 1.47.x — orkestratie, achter een eigen naad (zie 500-agents).
 - Vercel AI SDK (`ai`) — **via de versie die Mastra ondersteunt**, niet zelfstandig upgraden.

@@ -12,8 +12,8 @@ import {
   type Database,
 } from "@wunderstack/db";
 
-import { mapPool } from "./map-pool.js";
-import { asDate } from "./outcome-activity.js";
+import { mapPool } from "./map-pool";
+import { asDate } from "./outcome-activity";
 
 /**
  * KPI queries the dashboard consumes (Fase 3 reads these via the read-only `analytics_reader` role).

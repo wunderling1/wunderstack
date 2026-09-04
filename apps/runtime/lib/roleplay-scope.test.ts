@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import type { TenantConfig } from "@wunderstack/db";
 
-import { resolveRoleplayFund } from "./roleplay-scope.js";
+import { resolveRoleplayFund } from "./roleplay-scope";
 
 const ALLOW = ["opleidingsfonds", "bouwfonds"];
 

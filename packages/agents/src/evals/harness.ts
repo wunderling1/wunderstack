@@ -5,8 +5,8 @@
  */
 import { env } from "@wunderstack/shared";
 
-import type { GateRequirement, GateSpec } from "./gates.js";
-import type { GateReport } from "./report-writer.js";
+import type { GateRequirement, GateSpec } from "./gates";
+import type { GateReport } from "./report-writer";
 
 export interface EvalCheck {
   name: string;

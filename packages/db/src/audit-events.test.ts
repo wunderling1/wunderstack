@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { AUDIT_ACTIONS } from "./audit-events.js";
+import { AUDIT_ACTIONS } from "./audit-events";
 
 describe("audit_events", () => {
   it("only records fund lifecycle actions, not corpus text", () => {

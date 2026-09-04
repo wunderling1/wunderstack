@@ -13,8 +13,8 @@ import { after, describe, it } from "node:test";
 
 import type { FundGateRecord } from "@wunderstack/agents/evals/fund-ledger";
 
-import { findStructureReports, loadLedger } from "./check.js";
-import { decide } from "./decide.js";
+import { findStructureReports, loadLedger } from "./check";
+import { decide } from "./decide";
 
 const COMMIT = "1234567890abcdef1234567890abcdef12345678";
 const RUN_AT = "2026-07-30T20:32:11.776Z";

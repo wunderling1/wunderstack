@@ -1,7 +1,7 @@
 import { rerankDocuments } from "@wunderstack/ai";
 import { requireRerankConfig } from "@wunderstack/shared";
 
-import type { RetrievedChunk } from "./retrieve.js";
+import type { RetrievedChunk } from "./retrieve";
 
 /**
  * Rerank step of the RAG pipeline — reorders retrieval candidates by relevance.

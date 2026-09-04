@@ -1,4 +1,4 @@
-import type { RoleplayScenarioDraft } from "./roleplay-scenario.js";
+import type { RoleplayScenarioDraft } from "./roleplay-scenario";
 
 /**
  * Reasons a scenario cannot leave draft. Empty list means `status = published` is allowed.

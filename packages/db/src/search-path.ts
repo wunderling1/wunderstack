@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 
-import { getDb, type Database } from "./client.js";
-import { quoteIdent } from "./ident.js";
+import { getDb, type Database } from "./client";
+import { quoteIdent } from "./ident";
 
 /**
  * Run `fn` inside a transaction with `SET LOCAL search_path` to one physical schema.

@@ -9,9 +9,9 @@ import {
 } from "@wunderstack/agents";
 import { env, type RoleplayResultEnvelope } from "@wunderstack/shared";
 
-import { assertSafeDeliveryUrl, type DnsLookup } from "./safe-delivery-url.js";
-import { webhookSignatureHeaders } from "./webhook-sign.js";
-import { deliverLti11Outcome } from "./lti11/outcomes.js";
+import { assertSafeDeliveryUrl, type DnsLookup } from "./safe-delivery-url";
+import { webhookSignatureHeaders } from "./webhook-sign";
+import { deliverLti11Outcome } from "./lti11/outcomes";
 
 /**
  * Outbox processor: take due rows, POST them through the matching adapter, record the outcome.

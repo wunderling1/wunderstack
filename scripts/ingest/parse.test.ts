@@ -3,8 +3,8 @@ import { describe, it } from "node:test";
 
 import type { StructuredTextItem } from "unpdf";
 
-import { chunk } from "./chunk.js";
-import { dropRunningLines, findEmptyPages, itemsToLines, normalizeText, pdfItemsToText } from "./parse.js";
+import { chunk } from "./chunk";
+import { dropRunningLines, findEmptyPages, itemsToLines, normalizeText, pdfItemsToText } from "./parse";
 
 /**
  * Fragments as pdf.js hands them over. Geometry mirrors what was measured on

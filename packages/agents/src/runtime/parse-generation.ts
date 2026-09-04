@@ -1,7 +1,7 @@
 import { type ModelCitation } from "@wunderstack/shared";
 import { z } from "zod";
 
-import { CITATIONS_SENTINEL } from "./generation-schema.js";
+import { CITATIONS_SENTINEL } from "./generation-schema";
 
 /**
  * The model emits snake_case JSON (`chunk_id`) as instructed in the prompt; map it to the camelCase

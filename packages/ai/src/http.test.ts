@@ -5,7 +5,7 @@ import {
   isRateLimited,
   isTransientProviderError,
   ProviderHttpError,
-} from "./http.js";
+} from "./http";
 
 describe("isRateLimited / isTransientProviderError", () => {
   it("isRateLimited is only 429", () => {

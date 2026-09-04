@@ -3,14 +3,14 @@ import { describe, it } from "node:test";
 
 import type { ChatMessage } from "@wunderstack/ai";
 
-import { CITATIONS_SENTINEL } from "./generation-schema.js";
-import { NOT_FOUND_MESSAGE } from "../cao/prompt.js";
+import { CITATIONS_SENTINEL } from "./generation-schema";
+import { NOT_FOUND_MESSAGE } from "../cao/prompt";
 import {
   assessCitationContract,
   GenerationAbortedError,
   generateAnswerWithRepair,
   isProRataViolation,
-} from "./generate-answer.js";
+} from "./generate-answer";
 
 const chunks = new Map<string, string>([
   ["adv", "De werknemer heeft recht op 104 roostervrije uren per jaar."],

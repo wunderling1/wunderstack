@@ -1,11 +1,11 @@
 import { randomBytes } from "node:crypto";
 import { and, eq, gt, sql } from "drizzle-orm";
 
-import { getDb, getWriterDb } from "./client.js";
-import { assertFundKey } from "./ident.js";
-import { lti11Consumers, type Lti11Consumer } from "./schema/control/lti11-consumers.js";
-import { lti11Launches, type Lti11Launch } from "./schema/control/lti11-launches.js";
-import { lti11Nonces } from "./schema/control/lti11-nonces.js";
+import { getDb, getWriterDb } from "./client";
+import { assertFundKey } from "./ident";
+import { lti11Consumers, type Lti11Consumer } from "./schema/control/lti11-consumers";
+import { lti11Launches, type Lti11Launch } from "./schema/control/lti11-launches";
+import { lti11Nonces } from "./schema/control/lti11-nonces";
 
 /**
  * LTI 1.1 data-access (control plane). Consumers are admin-written via the tenant-config writer;

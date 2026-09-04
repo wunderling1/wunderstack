@@ -3,7 +3,7 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import type { ComponentPropsWithoutRef, HTMLAttributes } from "react";
-import { cn } from "../lib/cn.js";
+import { cn } from "../lib/cn";
 
 /** Radix-based modal (shadcn-style copy-in). Focus-trap, escape and portal come from Radix. */
 export const Dialog = DialogPrimitive.Root;

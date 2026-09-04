@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { ANSWER_THRESHOLDS, answerFloorFailures } from "./answer-floors.js";
-import type { AggregateScores } from "./judge.js";
+import { ANSWER_THRESHOLDS, answerFloorFailures } from "./answer-floors";
+import type { AggregateScores } from "./judge";
 
 /** A run that clears every absolute floor with headroom — the guard must record its baseline. */
 function passingAggregate(): AggregateScores {

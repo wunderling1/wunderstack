@@ -11,7 +11,7 @@ import {
   corpusVersionsFromCitations,
   renderAskCaoText,
   toAskCaoOutput,
-} from "./mcp-ask-cao.js";
+} from "./mcp-ask-cao";
 
 function sampleAnswer(overrides: Partial<AgentAnswer> = {}): AgentAnswer {
   return {

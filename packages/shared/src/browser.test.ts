@@ -15,7 +15,7 @@ describe("@wunderstack/shared/browser", () => {
   });
 
   it("exports roleplay contracts without loading the env module", async () => {
-    const browser = await import("./browser.js");
+    const browser = await import("./browser");
     assert.equal(typeof browser.roleplayDifficultySchema.parse, "function");
     assert.equal(typeof browser.roleplayEventSchema.parse, "function");
     assert.equal("env" in browser, false);

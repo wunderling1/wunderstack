@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { mergeRetrievedChunks } from "./merge-chunks.js";
-import type { RetrievedChunk } from "./retrieve.js";
+import { mergeRetrievedChunks } from "./merge-chunks";
+import type { RetrievedChunk } from "./retrieve";
 
 function chunk(id: string, score: number): RetrievedChunk {
   return {

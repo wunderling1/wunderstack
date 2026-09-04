@@ -26,8 +26,8 @@ import {
   listSignals,
   measurementStartedAt,
   SIGNAL_MIN_OCCURRENCES,
-} from "./index.js";
-import { recordInteractionEvent } from "./record.js";
+} from "./index";
+import { recordInteractionEvent } from "./record";
 
 /**
  * Requires PROVISIONER_DATABASE_URL + DATABASE_URL at process start (shared env parse).

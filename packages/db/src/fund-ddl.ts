@@ -5,7 +5,7 @@
 
 import { EMBEDDING_CONFIG } from "@wunderstack/shared";
 
-import { quoteIdent, quoteLiteral } from "./ident.js";
+import { quoteIdent, quoteLiteral } from "./ident";
 
 const CHUNK_FK = "chunks_document_id_documents_id_fk";
 const FUND_CHECK = "documents_fund_matches_key";

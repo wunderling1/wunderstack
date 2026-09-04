@@ -14,8 +14,8 @@ import {
 } from "@wunderstack/db";
 import { isGroundedAgentKey } from "@wunderstack/shared";
 
-import { loadMeasurementStartedAt } from "./outcomes.js";
-import { RETRIEVAL_STRONG_MIN_SCORE } from "./retrieval-strength.js";
+import { loadMeasurementStartedAt } from "./outcomes";
+import { RETRIEVAL_STRONG_MIN_SCORE } from "./retrieval-strength";
 
 /**
  * S18: identical literal questions only surface as a signal group when they occur at least

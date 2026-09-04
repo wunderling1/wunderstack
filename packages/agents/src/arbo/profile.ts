@@ -1,14 +1,14 @@
 import { z } from "zod";
 
-import type { AgentRuntimeProfile } from "../runtime/profile.js";
-import { agentQuestionSchema } from "../types.js";
+import type { AgentRuntimeProfile } from "../runtime/profile";
+import { agentQuestionSchema } from "../types";
 import {
   ARBO_SYSTEM_INSTRUCTIONS,
   NOT_IN_CATALOG_MESSAGE,
   UNVERIFIABLE_MESSAGE,
   buildAnswerPrompt,
-} from "./prompt.js";
-import { runRetrieval } from "./tools.js";
+} from "./prompt";
+import { runRetrieval } from "./tools";
 
 /**
  * Arbo question schema — same seam as the shared question schema with a lower minScore default

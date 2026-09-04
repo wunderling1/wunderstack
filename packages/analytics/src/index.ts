@@ -7,20 +7,20 @@ export {
   interactionEventInputSchema,
   type InteractionEventInput,
   type ParsedInteractionEvent,
-} from "./event.js";
+} from "./event";
 
 export {
   recordInteractionEvent,
   attachFeedbackByTrace,
   type RecordEventResult,
   type FeedbackSignal,
-} from "./record.js";
+} from "./record";
 
 export {
   deriveRetrievalStrength,
   RETRIEVAL_STRONG_MIN_SCORE,
   type RetrievalStrength,
-} from "./retrieval-strength.js";
+} from "./retrieval-strength";
 
 export {
   getKpiSummary,
@@ -39,7 +39,7 @@ export {
   type FundOverviewLimits,
   type AgentOverview,
   type AgentActivityRow,
-} from "./kpi.js";
+} from "./kpi";
 
 export {
   getCorpusOverview,
@@ -48,7 +48,7 @@ export {
   corpusFingerprintMatchesPinned,
   CORPUS_FINGERPRINT_LENGTH,
   type CorpusDocRow,
-} from "./corpus.js";
+} from "./corpus";
 
 export {
   getOutcomeBreakdown,
@@ -73,9 +73,9 @@ export {
   type RefusedStrengthCounts,
   type Rate,
   type AgentOperationalStatus,
-} from "./outcomes.js";
+} from "./outcomes";
 
-export { listOutcomeActivity, type OutcomeActivityRow } from "./outcome-activity.js";
+export { listOutcomeActivity, type OutcomeActivityRow } from "./outcome-activity";
 
 // The overview's reads, grouped per page section — one fund-schema transaction each.
 export {
@@ -89,7 +89,7 @@ export {
   type Pair,
   type TimeWindow,
   type WindowPair,
-} from "./overview.js";
+} from "./overview";
 
 export {
   CONVERSATION_GAP_MINUTES,
@@ -98,7 +98,7 @@ export {
   isThreadedChannel,
   type ConversationBoundaryRow,
   type ConversationGroup,
-} from "./conversation-boundary.js";
+} from "./conversation-boundary";
 
 export {
   listConversations,
@@ -123,7 +123,7 @@ export {
   type GroundedConversation,
   type ExerciseConversation,
   type ExerciseActivity,
-} from "./conversations.js";
+} from "./conversations";
 
 export {
   listSignals,
@@ -139,4 +139,4 @@ export {
   type QuestionSignal,
   type ExerciseAdoptionRow,
   type SignalsResult,
-} from "./signals.js";
+} from "./signals";

@@ -17,10 +17,10 @@ import {
   type BoundaryRow,
   type ConversationVolume,
   type ExerciseActivity,
-} from "./conversations.js";
-import { loadCorpusOverview, type CorpusDocRow } from "./corpus.js";
-import { loadRecentInteractions, type InteractionLogRow } from "./kpi.js";
-import { asDate } from "./outcome-activity.js";
+} from "./conversations";
+import { loadCorpusOverview, type CorpusDocRow } from "./corpus";
+import { loadRecentInteractions, type InteractionLogRow } from "./kpi";
+import { asDate } from "./outcome-activity";
 import {
   breakdownCountSelect,
   breakdownFromRow,
@@ -28,8 +28,8 @@ import {
   loadOutcomeBreakdown,
   type BreakdownRow,
   type OutcomeBreakdown,
-} from "./outcomes.js";
-import { loadKnowledgeGapCount } from "./signals.js";
+} from "./outcomes";
+import { loadKnowledgeGapCount } from "./signals";
 
 /**
  * The overview's reads, grouped the way the page renders them.

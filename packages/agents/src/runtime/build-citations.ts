@@ -1,8 +1,8 @@
 import type { Citation, ModelCitation } from "@wunderstack/shared";
 
 import type { RetrievedChunk } from "@wunderstack/rag";
-import { buildQuoteSnippet } from "./snippet.js";
-import type { VerifiedCitation } from "./verify-citations.js";
+import { buildQuoteSnippet } from "./snippet";
+import type { VerifiedCitation } from "./verify-citations";
 
 /**
  * Merge verified model citations with retrieval chunk metadata into UI-ready citations.

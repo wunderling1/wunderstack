@@ -1,4 +1,4 @@
-import { ALL_FUNDS_KEY } from "./switcher-options.js";
+import { ALL_FUNDS_KEY } from "./switcher-options";
 
 /** Sidebar segments for the fund and admin fund-console shells (PR-1). Routes English (S7); labels Dutch. */
 export const FUND_NAV_ITEMS = [

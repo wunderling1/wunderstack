@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { parseAllowedOrigins, roleplayFrameAncestors } from "./frame-ancestors.js";
+import { parseAllowedOrigins, roleplayFrameAncestors } from "./frame-ancestors";
 
 describe("parseAllowedOrigins", () => {
   it("accepts a comma-separated list of http(s) origins", () => {

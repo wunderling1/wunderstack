@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { roleplayDifficultySchema, roleplayEndReasonSchema, roleplayExternalRefSchema, roleplayOriginSchema, roleplayWebhookTargetSchema } from "./roleplay-scenario.js";
+import { roleplayDifficultySchema, roleplayEndReasonSchema, roleplayExternalRefSchema, roleplayOriginSchema, roleplayWebhookTargetSchema } from "./roleplay-scenario";
 
 /**
  * Roleplay API contract: the three requests, the NDJSON turn stream, and the review shape.

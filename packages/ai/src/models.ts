@@ -1,7 +1,7 @@
 import { env } from "@wunderstack/shared";
 import { z } from "zod";
 
-import { ensureHttpKeepAlive, ProviderHttpError } from "./http.js";
+import { ensureHttpKeepAlive, ProviderHttpError } from "./http";
 
 /**
  * The single seam for LLM calls. Everything else in the codebase talks to this,

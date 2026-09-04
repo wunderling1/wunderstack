@@ -1,8 +1,8 @@
 import { and, eq } from "drizzle-orm";
 
-import type { Database } from "./client.js";
-import { getDb, getProvisionerDb } from "./client.js";
-import { users, type User } from "./schema/control/users.js";
+import type { Database } from "./client";
+import { getDb, getProvisionerDb } from "./client";
+import { users, type User } from "./schema/control/users";
 
 export class UserExistsError extends Error {
   readonly email: string;

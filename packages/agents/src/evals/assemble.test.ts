@@ -3,8 +3,8 @@ import { describe, it } from "node:test";
 
 import { assemble, type RetrievalTimings } from "@wunderstack/rag";
 
-import { assembleEvalContext } from "./judge.js";
-import { passageToHit, type GoldenPassage } from "./golden-set.js";
+import { assembleEvalContext } from "./judge";
+import { passageToHit, type GoldenPassage } from "./golden-set";
 
 const NO_TIMINGS: RetrievalTimings = {
   rewriteMs: 0,

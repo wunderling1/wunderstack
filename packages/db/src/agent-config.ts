@@ -1,8 +1,8 @@
 import { agentConfigDataSchema } from "@wunderstack/shared";
 import { and, eq } from "drizzle-orm";
 
-import { getDb } from "./client.js";
-import { agentConfig, type AgentConfig } from "./schema/control/agent-config.js";
+import { getDb } from "./client";
+import { agentConfig, type AgentConfig } from "./schema/control/agent-config";
 
 /** Read per-fund agent tuning knobs from `agent_config.config` jsonb. */
 export async function getAgentConfig(agentKey: string, fundKey: string): Promise<AgentConfig | null> {

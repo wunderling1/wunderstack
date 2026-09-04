@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import { getAgent } from "@wunderstack/agents";
 
-import { getAgentById, resolveAgentIdFromConfig } from "./agent.js";
+import { getAgentById, resolveAgentIdFromConfig } from "./agent";
 
 describe("resolveAgentIdFromConfig", () => {
   it("returns null when config is missing and unconfigured agent is unset", () => {

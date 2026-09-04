@@ -1,7 +1,7 @@
 import { EMBEDDING_CONFIG } from "@wunderstack/shared";
 import { index, integer, jsonb, pgTable, text, uniqueIndex, uuid, vector } from "drizzle-orm/pg-core";
 
-import { documents } from "./documents.js";
+import { documents } from "./documents";
 
 /**
  * Chunks of a document with their embedding vector.

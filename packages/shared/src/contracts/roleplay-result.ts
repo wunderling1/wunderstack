@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-import { roleplayCriterionScoreSchema } from "./roleplay.js";
-import { roleplayEndReasonSchema, roleplayOriginSchema } from "./roleplay-scenario.js";
+import { roleplayCriterionScoreSchema } from "./roleplay";
+import { roleplayEndReasonSchema, roleplayOriginSchema } from "./roleplay-scenario";
 
 /**
  * The body we POST to the customer's system when a review is ready.

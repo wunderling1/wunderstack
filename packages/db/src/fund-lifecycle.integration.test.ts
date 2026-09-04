@@ -10,8 +10,8 @@ import {
   funds,
   getDb,
   sql,
-} from "./index.js";
-import { createFundEnvironment } from "./fund-environment.js";
+} from "./index";
+import { createFundEnvironment } from "./fund-environment";
 
 const provisionerSet = Boolean(process.env.PROVISIONER_DATABASE_URL);
 const hasDb = Boolean(process.env.DATABASE_URL);

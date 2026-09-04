@@ -2,10 +2,10 @@ import { Mastra } from "@mastra/core";
 import { Agent } from "@mastra/core/agent";
 import { env } from "@wunderstack/shared";
 
-import { createSovereignModel } from "../model/sovereign-model.js";
-import { buildLangfuseObservability } from "../observability/langfuse.js";
-import type { RoleplayModelCall } from "./types.js";
-import { ROLEPLAY_MODEL_SETTINGS, ROLEPLAY_PROMPT_VERSION, ROLEPLAY_TIMEOUT_MS } from "./version.js";
+import { createSovereignModel } from "../model/sovereign-model";
+import { buildLangfuseObservability } from "../observability/langfuse";
+import type { RoleplayModelCall } from "./types";
+import { ROLEPLAY_MODEL_SETTINGS, ROLEPLAY_PROMPT_VERSION, ROLEPLAY_TIMEOUT_MS } from "./version";
 
 /**
  * The default model call for the roleplay agent: Mastra for tracing, our own sovereign adapter for

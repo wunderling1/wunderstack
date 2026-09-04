@@ -3,8 +3,8 @@ import { describe, it } from "node:test";
 
 import type { RubricCriterion } from "@wunderstack/shared";
 
-import { computeWeightedScore, didPass, normalizeRubricWeights } from "./rubric.js";
-import type { ScoredCriterion } from "./types.js";
+import { computeWeightedScore, didPass, normalizeRubricWeights } from "./rubric";
+import type { ScoredCriterion } from "./types";
 
 function criterion(question: string, weight: number): RubricCriterion {
   return { question, description: "", behavioralIndicators: [], weight };

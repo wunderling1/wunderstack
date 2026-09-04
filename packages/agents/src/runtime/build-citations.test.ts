@@ -3,8 +3,8 @@ import { describe, it } from "node:test";
 
 import type { RetrievedChunk } from "@wunderstack/rag";
 
-import { buildVerifiedCitations } from "./build-citations.js";
-import type { VerifiedCitation } from "./verify-citations.js";
+import { buildVerifiedCitations } from "./build-citations";
+import type { VerifiedCitation } from "./verify-citations";
 
 function chunk(chunkId: string, content: string): RetrievedChunk {
   return {

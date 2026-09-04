@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { addUsage, parseFollowUpQuestions } from "./suggest-follow-ups.js";
+import { addUsage, parseFollowUpQuestions } from "./suggest-follow-ups";
 
 describe("parseFollowUpQuestions", () => {
   it("parses a JSON array of questions", () => {

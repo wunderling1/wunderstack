@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { appendLtiToken, ltiAuthHeaders, LTI_TOKEN_HEADER } from "./lti-token.js";
+import { appendLtiToken, ltiAuthHeaders, LTI_TOKEN_HEADER } from "./lti-token";
 
 describe("appendLtiToken", () => {
   it("is a no-op without a token and preserves a hash", () => {

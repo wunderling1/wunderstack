@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { agentTabHref, agentTabs } from "./agent-tabs.js";
-import { agentShowsQualityColumns, buildCorpusDecision } from "./agent-profile.js";
+import { agentTabHref, agentTabs } from "./agent-tabs";
+import { agentShowsQualityColumns, buildCorpusDecision } from "./agent-profile";
 
 test("grounded agents show Corpus, not Scenario's", () => {
   const labels = agentTabs("cao").map((tab) => tab.label);

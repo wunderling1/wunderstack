@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { closeDb, resolveProvisionerUrl } from "./client.js";
-import { FundExistsError } from "./fund-environment.js";
-import { UserExistsError } from "./dashboard-users.js";
+import { closeDb, resolveProvisionerUrl } from "./client";
+import { FundExistsError } from "./fund-environment";
+import { UserExistsError } from "./dashboard-users";
 
 describe("FundExistsError / UserExistsError", () => {
   it("FundExistsError carries fundKey and a stable name", () => {

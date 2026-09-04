@@ -1,9 +1,9 @@
 import type { RoleplayCriterionScore, RoleplayEndReason } from "@wunderstack/shared";
 import type { z } from "zod";
 
-import type { AgentUsage } from "../types.js";
-import type { roleplayScenarioPromptSchema } from "./snapshot.js";
-import type { RoleplayBranch } from "./version.js";
+import type { AgentUsage } from "../types";
+import type { roleplayScenarioPromptSchema } from "./snapshot";
+import type { RoleplayBranch } from "./version";
 
 /**
  * The roleplay seam. Deliberately not `GroundedAgent`: this agent retrieves nothing and cites

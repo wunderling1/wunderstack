@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import type { GateSpec } from "./gates.js";
-import { createEvalHarness, skipReason } from "./harness.js";
+import type { GateSpec } from "./gates";
+import { createEvalHarness, skipReason } from "./harness";
 
 const SPEC: GateSpec = {
   id: "G2-answer",

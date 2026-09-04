@@ -10,7 +10,7 @@ import {
   SIGNAL_LIST_LIMIT,
   SIGNAL_MIN_OCCURRENCES,
   sortByFrequencyRecency,
-} from "./signals.js";
+} from "./signals";
 
 const SOURCE = readFileSync(new URL("./signals.ts", import.meta.url), "utf8");
 

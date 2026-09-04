@@ -1,4 +1,4 @@
-import type { RoleplayScenarioPrompt } from "./types.js";
+import type { RoleplayScenarioPrompt } from "./types";
 
 /**
  * Test-only scenario builder. Not exported from the package barrel — nothing in production should

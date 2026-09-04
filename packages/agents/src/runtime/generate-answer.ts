@@ -1,14 +1,14 @@
 import type { ChatMessage, TokenUsage } from "@wunderstack/ai";
 
-import { extractCitationMarkers } from "./build-citations.js";
+import { extractCitationMarkers } from "./build-citations";
 import {
   containsHardFact,
   findUngroundedFacts,
   type HardFactAgentKey,
-} from "../hard-facts.js";
-import { parseGenerationOutput } from "./parse-generation.js";
-import { NOT_FOUND_MESSAGE as CAO_NOT_FOUND_MESSAGE } from "../cao/prompt.js";
-import { verifyCitations } from "./verify-citations.js";
+} from "../hard-facts";
+import { parseGenerationOutput } from "./parse-generation";
+import { NOT_FOUND_MESSAGE as CAO_NOT_FOUND_MESSAGE } from "../cao/prompt";
+import { verifyCitations } from "./verify-citations";
 
 /**
  * Generation with a single citation-contract repair retry — the seam that stabilises Gate C.

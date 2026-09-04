@@ -8,7 +8,7 @@ import {
   verifyMcpBearerWithTokens,
   verifyMcpHostAgainstAllowlist,
   verifyMcpSignatureWithSecrets,
-} from "./mcp-auth.js";
+} from "./mcp-auth";
 
 describe("mcp-auth", () => {
   const CURRENT = "current-secret-value-abcdefghijklmnopqrstuvwxyz";

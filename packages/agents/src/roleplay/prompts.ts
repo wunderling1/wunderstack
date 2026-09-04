@@ -1,6 +1,6 @@
 import type { RoleplayEndReason } from "@wunderstack/shared";
 
-import type { RoleplayScenarioPrompt } from "./types.js";
+import type { RoleplayScenarioPrompt } from "./types";
 
 /**
  * Roleplay prompts, ported from Qonvo (`src/lib/mastra/prompts.ts`), which in turn descend from its

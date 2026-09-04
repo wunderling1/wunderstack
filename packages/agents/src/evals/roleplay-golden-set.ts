@@ -6,9 +6,9 @@ import { fileURLToPath } from "node:url";
 import { roleplayEndReasonSchema, roleplayRubricSchema } from "@wunderstack/shared";
 import { z } from "zod";
 
-import { resolveRubric } from "../roleplay/rubric.js";
-import { roleplayScenarioPromptSchema } from "../roleplay/snapshot.js";
-import type { RoleplayScenarioPrompt } from "../roleplay/types.js";
+import { resolveRubric } from "../roleplay/rubric";
+import { roleplayScenarioPromptSchema } from "../roleplay/snapshot";
+import type { RoleplayScenarioPrompt } from "../roleplay/types";
 
 /**
  * The roleplay golden set (Fase 6) — fixtures for G1-roleplay-contract, G2-roleplay-persona and

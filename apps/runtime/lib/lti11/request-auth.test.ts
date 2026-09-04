@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { LTI_TOKEN_HEADER, readLtiToken } from "./request-auth.js";
+import { LTI_TOKEN_HEADER, readLtiToken } from "./request-auth";
 
 describe("readLtiToken", () => {
   it("prefers the header over the query so a stripped URL still authenticates fetches", () => {

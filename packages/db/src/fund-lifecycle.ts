@@ -5,13 +5,13 @@ import { PassThrough, type Readable } from "node:stream";
 import { agentKeySchema, env, type AgentKey } from "@wunderstack/shared";
 import { and, count, desc, eq, sql } from "drizzle-orm";
 
-import { createAgentInstance, getInstance } from "./agent-instances.js";
-import { recordAuditEvent } from "./audit-events.js";
-import { getDb, getProvisionerDb, resolveProvisionerUrl, type Database } from "./client.js";
-import { SCHEMA_NAME_RE, assertFundKey } from "./ident.js";
-import { agentInstances } from "./schema/control/agent-instances.js";
-import { auditEvents } from "./schema/control/audit-events.js";
-import { funds, type Fund } from "./schema/control/funds.js";
+import { createAgentInstance, getInstance } from "./agent-instances";
+import { recordAuditEvent } from "./audit-events";
+import { getDb, getProvisionerDb, resolveProvisionerUrl, type Database } from "./client";
+import { SCHEMA_NAME_RE, assertFundKey } from "./ident";
+import { agentInstances } from "./schema/control/agent-instances";
+import { auditEvents } from "./schema/control/audit-events";
+import { funds, type Fund } from "./schema/control/funds";
 
 export class FundNotFoundError extends Error {
   readonly fundKey: string;

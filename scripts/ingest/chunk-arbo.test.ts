@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { chunkArbo } from "./chunk-arbo.js";
+import { chunkArbo } from "./chunk-arbo";
 
 describe("chunkArbo", () => {
   it("anchors numbered EV-catalog sections as sourceRef", () => {

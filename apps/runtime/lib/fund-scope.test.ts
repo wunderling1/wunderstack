@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { instanceFund, resolveFundScope } from "./fund-scope.js";
+import { instanceFund, resolveFundScope } from "./fund-scope";
 
 describe("instanceFund", () => {
   it("uses the tenant fallback when the allowlist is empty", () => {

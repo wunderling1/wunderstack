@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { defaultFund, getTenantId, resolveTenant, tenantFund } from "./index.js";
+import { defaultFund, getTenantId, resolveTenant, tenantFund } from "./index";
 
 describe("tenant context (D15)", () => {
   it("falls back to the dev default tenant when TENANT is unset", () => {

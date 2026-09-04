@@ -1,7 +1,7 @@
 import { eq, interactionEvents, withFundSchema } from "@wunderstack/db";
 import { env } from "@wunderstack/shared";
 
-import { interactionEventInputSchema, type InteractionEventInput } from "./event.js";
+import { interactionEventInputSchema, type InteractionEventInput } from "./event";
 
 /**
  * Write one interaction event to the fund schema. Best-effort: no DATABASE_URL → `{ recorded: false }`.

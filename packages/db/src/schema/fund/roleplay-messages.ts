@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { check, index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
-import { roleplaySessions } from "./roleplay-sessions.js";
+import { roleplaySessions } from "./roleplay-sessions";
 
 /**
  * The transcript, one row per turn half. `ordinal` is the position in the conversation, so the

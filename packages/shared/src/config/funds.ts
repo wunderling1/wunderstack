@@ -1,4 +1,4 @@
-import { env } from "../env.js";
+import { env } from "../env";
 
 /**
  * Parse the comma-separated CAO_FUNDS allowlist. Returns an empty array when unset (local/dev).

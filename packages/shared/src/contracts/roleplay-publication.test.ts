@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { publicationIssues } from "./roleplay-publication.js";
-import { emptyRoleplayScenarioDraft, type RoleplayScenarioDraft } from "./roleplay-scenario.js";
+import { publicationIssues } from "./roleplay-publication";
+import { emptyRoleplayScenarioDraft, type RoleplayScenarioDraft } from "./roleplay-scenario";
 
 function publishable(): RoleplayScenarioDraft {
   return {

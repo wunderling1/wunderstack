@@ -1,6 +1,6 @@
 import { jsonb, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
-import { control } from "./schema.js";
+import { control } from "./schema";
 
 /**
  * Thin control-plane audit log for fund lifecycle runbooks. No corpus text.

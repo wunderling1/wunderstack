@@ -2,7 +2,7 @@ import type { RoleplayDifficultyMap, RoleplayRubric } from "@wunderstack/shared"
 import { sql } from "drizzle-orm";
 import { check, integer, jsonb, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
 
-import { control } from "./schema.js";
+import { control } from "./schema";
 
 /**
  * One authored roleplay scenario per (fund_key, slug). Control plane, not fund schema: a scenario is

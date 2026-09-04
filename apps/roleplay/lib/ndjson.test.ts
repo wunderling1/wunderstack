@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { parseNdjsonLine, splitNdjson } from "./ndjson.js";
+import { parseNdjsonLine, splitNdjson } from "./ndjson";
 
 describe("splitNdjson", () => {
   it("returns complete lines and keeps the unfinished tail", () => {

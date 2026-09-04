@@ -12,12 +12,12 @@ import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { AggregateScores, CaseScores } from "./judge.js";
+import type { AggregateScores, CaseScores } from "./judge";
 import type {
   RoleplayPersonaAggregate,
   RoleplayReviewAggregate,
   RoleplayTurnScore,
-} from "./roleplay-judge.js";
+} from "./roleplay-judge";
 
 const reportPath = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "eval-report.json");
 

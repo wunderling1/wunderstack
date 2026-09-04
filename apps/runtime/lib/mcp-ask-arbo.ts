@@ -8,7 +8,7 @@ import {
   toAskCaoCitation,
   type AskCaoInput,
   type AskCaoOutput,
-} from "./mcp-ask-cao.js";
+} from "./mcp-ask-cao";
 
 export const ASK_ARBO_TOOL_NAME = "ask_arbo";
 

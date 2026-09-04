@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { FUND_KEY_RE } from "./ident.js";
+import { FUND_KEY_RE } from "./ident";
 import {
   AgentInstanceExistsError,
   ConfirmationMismatchError,
@@ -11,7 +11,7 @@ import {
   assertDeactivateAllowed,
   buildPgDumpArgs,
   redactSecrets,
-} from "./fund-lifecycle.js";
+} from "./fund-lifecycle";
 
 describe("buildPgDumpArgs", () => {
   it("dumps one schema without --clean (no DROP SCHEMA in the dump)", () => {

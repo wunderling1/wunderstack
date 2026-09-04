@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { ANSWER_THRESHOLDS } from "./answer-floors.js";
+import { ANSWER_THRESHOLDS } from "./answer-floors";
 import {
   ANSWER_CHECK_KIND,
   contentGatesBlocking,
@@ -12,8 +12,8 @@ import {
   pathScopeAllowed,
   resolveTier,
   ROLEPLAY_CHECK_KIND,
-} from "./content-policy.js";
-import { ROLEPLAY_THRESHOLDS } from "./roleplay-floors.js";
+} from "./content-policy";
+import { ROLEPLAY_THRESHOLDS } from "./roleplay-floors";
 
 /** Grounded mechanism thresholds — hardcoded so a silent reclassification fails this test. */
 const GROUNDED_MECHANISM = [

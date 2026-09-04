@@ -30,6 +30,18 @@ shadcn/ui · Mastra (achter een naad) · AI SDK (via Mastra's versie) · Mistral
 managed Postgres + pgvector · Scaleway embeddings · Drizzle · Zod · Langfuse EU · Auth.js.
 Volledige lijst + versiebeleid: `.cursor/rules/100-stack.mdc`.
 
+## Bundler (CI-afgedwongen)
+`next dev` draait op **Turbopack** (geen `--webpack`-vlag); `next build` draait op **webpack**
+(`--webpack` verplicht). Die asymmetrie is bewust.
+
+Voorwaarde voor beide: **relatieve imports zonder bestandsextensie**. Turbopack kan `.js`-
+specifiers niet naar `.ts` hermappen (vercel/next.js#82945) en Next 16.3.4 heeft geen
+`resolveExtensionAlias`. Daarom staat de repo op `moduleResolution: "bundler"` en niet op
+NodeNext. Zet je een `.js`-suffix terug op een relatieve import, dan breekt `next dev`.
+
+Wissel **nooit** van bundler om een fout te omzeilen — repareer de code of de config.
+`scripts/check-bundler.sh` faalt de build op elke afwijking.
+
 ## Repo-structuur
 `apps/runtime` (Next.js API-only: agent-API, webhook, hardening) · `apps/playground` (publieke
 tenant-zero-demo-UI) · `apps/roleplay` (leerling-UI rollenspel, HTTP-only) · `packages/ai` (model-naad) · `packages/agents`

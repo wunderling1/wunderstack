@@ -1,6 +1,6 @@
-import { createGroundedAgent, verifyAndBuild as verifyAndBuildForProfile } from "../runtime/create-agent.js";
-import type { RetrievalOutput } from "../runtime/profile.js";
-import { arboProfile, arboQuestionSchema } from "./profile.js";
+import { createGroundedAgent, verifyAndBuild as verifyAndBuildForProfile } from "../runtime/create-agent";
+import type { RetrievalOutput } from "../runtime/profile";
+import { arboProfile, arboQuestionSchema } from "./profile";
 
 export { arboProfile, arboQuestionSchema };
 export type { RetrievalOutput };
@@ -12,7 +12,7 @@ export function verifyAndBuild(raw: string, retrieval: RetrievalOutput, userSupp
 export {
   settledAnswerBody,
   settledAnswerEvents,
-} from "../runtime/create-agent.js";
+} from "../runtime/create-agent";
 
 export function createArboAgent() {
   return createGroundedAgent(arboProfile);

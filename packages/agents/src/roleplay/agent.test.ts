@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { createRoleplayAgent } from "./agent.js";
-import { scenarioFixture } from "./scenario-fixture.js";
-import type { RoleplayMessage, RoleplayModelCall } from "./types.js";
-import { ROLEPLAY_PROMPT_VERSION } from "./version.js";
+import { createRoleplayAgent } from "./agent";
+import { scenarioFixture } from "./scenario-fixture";
+import type { RoleplayMessage, RoleplayModelCall } from "./types";
+import { ROLEPLAY_PROMPT_VERSION } from "./version";
 
 interface Captured {
   branch: string;

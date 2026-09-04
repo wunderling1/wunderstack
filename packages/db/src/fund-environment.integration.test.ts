@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { inspect } from "node:util";
 import { after, describe, it } from "node:test";
 
-import { closeDb, eq, funds, getDb, sql, users } from "./index.js";
-import { createFundEnvironment, FundExistsError } from "./fund-environment.js";
-import { UserExistsError } from "./dashboard-users.js";
+import { closeDb, eq, funds, getDb, sql, users } from "./index";
+import { createFundEnvironment, FundExistsError } from "./fund-environment";
+import { UserExistsError } from "./dashboard-users";
 
 /**
  * Requires PROVISIONER_DATABASE_URL (and DATABASE_URL for cleanup reads) at process start —

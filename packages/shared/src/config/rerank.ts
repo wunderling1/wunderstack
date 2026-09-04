@@ -1,4 +1,4 @@
-import { env } from "../env.js";
+import { env } from "../env";
 
 /**
  * The single, pinned rerank configuration for the RAG pipeline.

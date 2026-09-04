@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import { emptyRoleplayScenarioDraft, type RoleplayScenarioDraft } from "@wunderstack/shared";
 
-import { nextScenarioVersion, scenarioContentFingerprint } from "./roleplay-scenarios.js";
+import { nextScenarioVersion, scenarioContentFingerprint } from "./roleplay-scenarios";
 
 function sample(overrides: Partial<RoleplayScenarioDraft> = {}): RoleplayScenarioDraft {
   return {

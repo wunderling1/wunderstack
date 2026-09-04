@@ -8,7 +8,7 @@ import {
   exerciseStatusLabel,
   parseConversationFilters,
   parseConversationId,
-} from "./conversations.js";
+} from "./conversations";
 
 test("filters live in the URL: parse + href round-trip", () => {
   const filters = parseConversationFilters(

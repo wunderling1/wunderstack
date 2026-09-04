@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { scoreHardHallucination } from "./judge.js";
+import { scoreHardHallucination } from "./judge";
 
 describe("scoreHardHallucination — per-agent patterns", () => {
   it("cao patterns flag ungrounded labour-law euros; arbo patterns do not", () => {

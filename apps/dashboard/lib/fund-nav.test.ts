@@ -8,8 +8,8 @@ import {
   fundNavHref,
   parseAdminChromePath,
   switchFundNavHref,
-} from "./fund-nav.js";
-import { ALL_FUNDS_KEY } from "./switcher-options.js";
+} from "./fund-nav";
+import { ALL_FUNDS_KEY } from "./switcher-options";
 
 test("fundNavHref builds fund-face and admin paths", () => {
   assert.equal(fundNavHref("fund", "oomt", ""), "/");

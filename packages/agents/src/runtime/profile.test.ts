@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { arboProfile } from "../arbo/profile.js";
-import { caoProfile } from "../cao/profile.js";
-import { NOT_FOUND_MESSAGE } from "../cao/prompt.js";
-import { NOT_IN_CATALOG_MESSAGE } from "../arbo/prompt.js";
+import { arboProfile } from "../arbo/profile";
+import { caoProfile } from "../cao/profile";
+import { NOT_FOUND_MESSAGE } from "../cao/prompt";
+import { NOT_IN_CATALOG_MESSAGE } from "../arbo/prompt";
 
 describe("agent runtime profiles — specialisation snapshot", () => {
   it("locks cao profile fields that specialise the shared pipeline", () => {

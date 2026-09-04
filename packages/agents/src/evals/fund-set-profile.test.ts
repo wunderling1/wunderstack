@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { ZodError } from "zod";
 
-import { parseFundSetProfile } from "./fund-set-profile.js";
+import { parseFundSetProfile } from "./fund-set-profile";
 
 describe("parseFundSetProfile", () => {
   it("rejects unknown fields (strict schema)", () => {

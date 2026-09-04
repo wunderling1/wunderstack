@@ -111,8 +111,14 @@ jobs:
       - name: Depcruise (arrow rule)
         run: pnpm depcruise
 
+      - name: Bundler flags (dev=Turbopack, build=webpack)
+        run: pnpm check-bundler
+
       - name: Repo root allowlist
         run: pnpm check-root
+
+      - name: Docs markdown links
+        run: pnpm check-docs
 
       - name: UI boundaries
         run: pnpm check-ui-boundaries

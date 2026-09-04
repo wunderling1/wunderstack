@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { conversationPermalink } from "./conversations.js";
-import { parseSignalsFilters, signalsFilterExtras } from "./signals.js";
+import { conversationPermalink } from "./conversations";
+import { parseSignalsFilters, signalsFilterExtras } from "./signals";
 
 test("filters live in the URL: parse + extras round-trip", () => {
   const filters = parseSignalsFilters({ period: "7d", agent: "cao" }, ["cao", "roleplay"]);

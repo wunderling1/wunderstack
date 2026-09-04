@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { boolean, check, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
-import { control } from "./schema.js";
+import { control } from "./schema";
 
 /**
  * One LMS (LTI 1.1 consumer) per row, keyed to a fund. Control plane: this is configuration an

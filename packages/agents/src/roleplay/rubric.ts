@@ -1,6 +1,6 @@
 import { percentagesFromRatings, type RoleplayRubric, type RubricCriterion } from "@wunderstack/shared";
 
-import type { ResolvedRubric, ScoredCriterion, WeightedCriterion } from "./types.js";
+import type { ResolvedRubric, ScoredCriterion, WeightedCriterion } from "./types";
 
 /**
  * Rubric weighting and scoring.

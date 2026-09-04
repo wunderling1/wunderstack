@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { decideAccess } from "./authz.js";
+import { decideAccess } from "./authz";
 
 test("landing: already logged in on /login redirects fund to / and admin to /admin", () => {
   const fund = { user: { role: "fund" as const, tenantId: "oomt" } };

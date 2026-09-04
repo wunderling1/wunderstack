@@ -26,7 +26,7 @@
  *      turns one flaky draw into a red gate.
  */
 
-import type { RoleplayPersonaAggregate, RoleplayReviewAggregate } from "./roleplay-judge.js";
+import type { RoleplayPersonaAggregate, RoleplayReviewAggregate } from "./roleplay-judge";
 
 /**
  * Threshold sources, using the labels from docs/eval/GATE-ARCHITECTURE.md §3:

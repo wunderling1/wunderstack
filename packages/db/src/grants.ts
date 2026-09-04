@@ -1,4 +1,4 @@
-import { quoteIdent } from "./ident.js";
+import { quoteIdent } from "./ident";
 
 const ROLE_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 

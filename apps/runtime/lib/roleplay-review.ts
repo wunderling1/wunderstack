@@ -9,7 +9,7 @@ import {
 } from "@wunderstack/agents";
 import type { RoleplayEndReason, RoleplayReviewPayload } from "@wunderstack/shared";
 
-import { enqueueAndProcessDeliveries } from "./roleplay-delivery.js";
+import { enqueueAndProcessDeliveries } from "./roleplay-delivery";
 
 /**
  * Running and storing the rubric review.

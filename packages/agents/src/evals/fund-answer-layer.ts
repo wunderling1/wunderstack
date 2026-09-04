@@ -5,15 +5,15 @@
 
 import type { RetrievedChunk } from "@wunderstack/rag";
 
-import { resolveHardFactAgentKey } from "../hard-facts.js";
+import { resolveHardFactAgentKey } from "../hard-facts";
 
-import type { GoldenCase, GoldenFundCase, GoldenPassage } from "./golden-set.js";
+import type { GoldenCase, GoldenFundCase, GoldenPassage } from "./golden-set";
 import {
   answerRefuses,
   scoreCitationVerification,
   scoreHardHallucination,
-} from "./judge.js";
-import type { ReportCheck } from "./report-writer.js";
+} from "./judge";
+import type { ReportCheck } from "./report-writer";
 
 export interface FundAnswerCaseServed {
   testCase: GoldenFundCase;
