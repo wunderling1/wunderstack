@@ -1,10 +1,10 @@
 import { agentKeySchema, env, type AgentKey } from "@wunderstack/shared";
 import { eq, sql } from "drizzle-orm";
 
-import { generateTenantKey, fundSchemaName } from "./agent-instances.js";
-import { recordAuditEvent } from "./audit-events.js";
-import { getProvisionerDb, type Database } from "./client.js";
-import { createFundUser } from "./dashboard-users.js";
+import { generateTenantKey, fundSchemaName } from "./agent-instances";
+import { recordAuditEvent } from "./audit-events";
+import { getProvisionerDb, type Database } from "./client";
+import { createFundUser } from "./dashboard-users";
 import {
   FUND_MIGRATION_PROVISION,
   FUND_MIGRATION_ROLEPLAY,
@@ -12,14 +12,14 @@ import {
   provisionDdl,
   recordMigrationSql,
   revokePublicFundSchemaSql,
-} from "./fund-ddl.js";
+} from "./fund-ddl";
 import {
   grantOwnerOnFundSchemaSql,
   grantReaderOnFundSchemaSql,
-} from "./grants.js";
-import { assertFundKey } from "./ident.js";
-import { agentInstances } from "./schema/control/agent-instances.js";
-import { funds } from "./schema/control/funds.js";
+} from "./grants";
+import { assertFundKey } from "./ident";
+import { agentInstances } from "./schema/control/agent-instances";
+import { funds } from "./schema/control/funds";
 
 export class FundExistsError extends Error {
   readonly fundKey: string;

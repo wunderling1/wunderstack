@@ -4,8 +4,8 @@ import { describe, it } from "node:test";
 import {
   RETRIEVAL_STRONG_MIN_SCORE,
   deriveRetrievalStrength,
-} from "./retrieval-strength.js";
-import { strengthFromSignals } from "./outcomes.js";
+} from "./retrieval-strength";
+import { strengthFromSignals } from "./outcomes";
 
 describe("deriveRetrievalStrength", () => {
   it("returns none when nothing was retrieved", () => {

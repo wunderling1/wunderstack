@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { buildMistralRequestBody, DEFAULT_LLM_MODEL, DEFAULT_MAX_OUTPUT_TOKENS } from "./models.js";
+import { buildMistralRequestBody, DEFAULT_LLM_MODEL, DEFAULT_MAX_OUTPUT_TOKENS } from "./models";
 
 const messages = [{ role: "user" as const, content: "Hoeveel vakantie-uren heb ik?" }];
 

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { starterCategorySchema } from "../contracts/tenant-config.js";
+import { starterCategorySchema } from "../contracts/tenant-config";
 
 /**
  * Per-fund, per-agent tuning knobs stored in `agent_config.config` jsonb.

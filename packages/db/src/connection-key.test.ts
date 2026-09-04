@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { assertOpaqueConnectionKey, connectionEnvName, resolveConnection } from "./connection-key.js";
+import { assertOpaqueConnectionKey, connectionEnvName, resolveConnection } from "./connection-key";
 
 describe("assertOpaqueConnectionKey", () => {
   it("accepts null and empty as the shared addon", () => {

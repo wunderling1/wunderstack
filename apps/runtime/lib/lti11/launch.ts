@@ -7,9 +7,9 @@ import {
 } from "@wunderstack/db";
 import { env, roleplayScenarioSlugSchema } from "@wunderstack/shared";
 
-import { opaqueLtiRef } from "./opaque-ref.js";
-import { validateSignature } from "./oauth.js";
-import { mintLtiSessionToken } from "./session-token.js";
+import { opaqueLtiRef } from "./opaque-ref";
+import { validateSignature } from "./oauth";
+import { mintLtiSessionToken } from "./session-token";
 
 /** 90 minutes — clock skew between LMS and runtime. Same window as the nonce TTL. */
 export const LTI11_MAX_TIMESTAMP_SKEW_SECONDS = 90 * 60;

@@ -1,4 +1,4 @@
-import type { RetrievedChunk } from "./retrieve.js";
+import type { RetrievedChunk } from "./retrieve";
 
 /**
  * Union retrieved chunks from multiple queries, keeping the highest similarity score per chunk id.

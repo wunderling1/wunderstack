@@ -22,7 +22,7 @@ import { LEDGER_PATH, FUND_LEDGER_SCHEMA_VERSION } from "@wunderstack/agents/eva
 import type { FundGateRecord } from "@wunderstack/agents/evals/fund-ledger";
 import { z } from "zod";
 
-import { decide, type StructureReportRef, type Verdict } from "./decide.js";
+import { decide, type StructureReportRef, type Verdict } from "./decide";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const INGEST_REPORT_DIR = join(repoRoot, "docs", "eval", "ingest");

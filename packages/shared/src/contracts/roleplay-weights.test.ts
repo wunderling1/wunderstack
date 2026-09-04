@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { percentagesFromRatings } from "./roleplay-weights.js";
+import { percentagesFromRatings } from "./roleplay-weights";
 
 /**
  * Sum in integer hundredths. Adding 14.29 seven times in binary floating point yields

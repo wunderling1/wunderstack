@@ -6,7 +6,7 @@ import {
   generateLti11Credentials,
   LTI11_LAUNCH_TTL_MS,
   toPublicConsumer,
-} from "./lti11.js";
+} from "./lti11";
 
 describe("generateLti11Credentials", () => {
   it("returns an oauth-safe key and a secret long enough to not be guessable", () => {

@@ -1,4 +1,4 @@
-import { decideAccess, type SessionShape } from "./authz.js";
+import { decideAccess, type SessionShape } from "./authz";
 
 /** Sentinel value for the admin "Alle fondsen" platform overview. */
 export const ALL_FUNDS_KEY = "__all__";

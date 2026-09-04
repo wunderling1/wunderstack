@@ -4,14 +4,14 @@ import { describe, it } from "node:test";
 import {
   buildRoleplayResultEnvelope,
   roleplayResultEnvelopeSchema,
-} from "./roleplay-result.js";
+} from "./roleplay-result";
 import {
   roleplayExternalRefSchema,
   roleplayLti11TargetSchema,
   roleplayResultTargetSchema,
   roleplayWebhookTargetSchema,
-} from "./roleplay-scenario.js";
-import { webhookEventSchema } from "./webhook.js";
+} from "./roleplay-scenario";
+import { webhookEventSchema } from "./webhook";
 
 const SESSION_ID = "3f1a2b4c-5d6e-4f70-8192-a3b4c5d6e7f8";
 

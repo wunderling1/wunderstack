@@ -23,8 +23,8 @@ import {
   groupIntoConversations,
   isThreadedChannel,
   type ConversationGroup,
-} from "./conversation-boundary.js";
-import { loadOutcomeBreakdown, type OutcomeBreakdown } from "./outcomes.js";
+} from "./conversation-boundary";
+import { loadOutcomeBreakdown, type OutcomeBreakdown } from "./outcomes";
 
 /** Conversations (containers) listed on one page. */
 export const CONVERSATION_LIST_LIMIT = 50;

@@ -5,9 +5,9 @@ import {
   grantOwnerOnFundSchemaSql,
   grantReaderOnControlSql,
   grantReaderOnFundSchemaSql,
-} from "./grants.js";
-import { buildFundEnvironmentStatements } from "./fund-environment.js";
-import { provisionDdl, recordMigrationSql, revokePublicFundSchemaSql } from "./fund-ddl.js";
+} from "./grants";
+import { buildFundEnvironmentStatements } from "./fund-environment";
+import { provisionDdl, recordMigrationSql, revokePublicFundSchemaSql } from "./fund-ddl";
 
 describe("grantReaderOnControlSql / grantReaderOnFundSchemaSql", () => {
   it("matches the statements grant-reader used to inline", () => {

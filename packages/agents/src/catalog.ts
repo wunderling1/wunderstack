@@ -1,11 +1,11 @@
 import { z } from "zod";
 
-import { createGroundedAgent } from "./runtime/create-agent.js";
+import { createGroundedAgent } from "./runtime/create-agent";
 import {
   listAgentProfiles,
   resolveRegisteredProfile,
-} from "./runtime/registry.js";
-import type { GroundedAgent } from "./types.js";
+} from "./runtime/registry";
+import type { GroundedAgent } from "./types";
 
 /**
  * Agent catalog — control-plane listing derived from {@link AGENT_PROFILES}.

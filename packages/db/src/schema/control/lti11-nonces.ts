@@ -1,6 +1,6 @@
 import { primaryKey, text, timestamp } from "drizzle-orm/pg-core";
 
-import { control } from "./schema.js";
+import { control } from "./schema";
 
 /**
  * Replay store for LTI 1.1 OAuth nonces. A (consumer_key, nonce) pair may be used once. TTL is 90

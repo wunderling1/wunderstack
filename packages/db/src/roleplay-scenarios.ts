@@ -5,12 +5,12 @@ import {
 } from "@wunderstack/shared";
 import { and, desc, eq } from "drizzle-orm";
 
-import { getDb, getWriterDb } from "./client.js";
-import { assertFundKey } from "./ident.js";
+import { getDb, getWriterDb } from "./client";
+import { assertFundKey } from "./ident";
 import {
   roleplayScenarios,
   type RoleplayScenario,
-} from "./schema/control/roleplay-scenarios.js";
+} from "./schema/control/roleplay-scenarios";
 
 /**
  * Roleplay scenario data-access (`control.roleplay_scenarios`). Reads use the default connection;

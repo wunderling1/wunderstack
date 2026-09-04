@@ -9,7 +9,7 @@ import {
   type HTMLAttributes,
   type KeyboardEvent,
 } from "react";
-import { cn } from "../lib/cn.js";
+import { cn } from "../lib/cn";
 
 interface TabsContextValue {
   value: string;

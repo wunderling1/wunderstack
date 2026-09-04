@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { chunk } from "./chunk.js";
+import { chunk } from "./chunk";
 import {
   computeStructureMetrics,
   isAnchorableByChunker,
   startsMidSentence,
   type ReportChunk,
-} from "./report.js";
+} from "./report";
 
 /** Shape a real chunker output into what the report measures — the production path, not a stub. */
 function measure(text: string): ReturnType<typeof computeStructureMetrics> {

@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 
-import { getDb } from "./client.js";
-import { agentInstances, type AgentInstance } from "./schema/control/agent-instances.js";
+import { getDb } from "./client";
+import { agentInstances, type AgentInstance } from "./schema/control/agent-instances";
 
 /**
  * Control-plane resolution of one embeddable instance (ADR-multitenant-database, track B).

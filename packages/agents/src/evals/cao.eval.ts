@@ -63,23 +63,23 @@ import {
   requireRerankConfig,
 } from "@wunderstack/shared";
 
-import { detectClarification } from "../cao/clarify.js";
-import { caoProfile } from "../cao/profile.js";
-import { arboProfile } from "../arbo/profile.js";
-import type { AgentRuntimeProfile } from "../runtime/profile.js";
-import { condenseQuery, isElliptical, retrievalQueriesForFollowUp } from "../runtime/condense.js";
-import { generateAnswerWithRepair } from "../runtime/generate-answer.js";
-import { verifyAndBuild } from "../cao/agent.js";
-import { type RetrievalOutput } from "../cao/tools.js";
-import { agentQuestionSchema } from "../types.js";
-import { CAO_SYSTEM_INSTRUCTIONS, NOT_FOUND_MESSAGE, buildAnswerPrompt } from "../cao/prompt.js";
+import { detectClarification } from "../cao/clarify";
+import { caoProfile } from "../cao/profile";
+import { arboProfile } from "../arbo/profile";
+import type { AgentRuntimeProfile } from "../runtime/profile";
+import { condenseQuery, isElliptical, retrievalQueriesForFollowUp } from "../runtime/condense";
+import { generateAnswerWithRepair } from "../runtime/generate-answer";
+import { verifyAndBuild } from "../cao/agent";
+import { type RetrievalOutput } from "../cao/tools";
+import { agentQuestionSchema } from "../types";
+import { CAO_SYSTEM_INSTRUCTIONS, NOT_FOUND_MESSAGE, buildAnswerPrompt } from "../cao/prompt";
 import {
   type AnswerBaseline,
   type RetrievalBaseline,
   REL_TOLERANCE,
   readBaseline,
   updateBaselineSection,
-} from "./baseline.js";
+} from "./baseline";
 import {
   GOLDEN_CORPUS_VERSION,
   GOLDEN_FIXTURE_HASH,
@@ -93,8 +93,8 @@ import {
   passageById,
   passageToHit,
   passagesForCase,
-} from "./golden-set.js";
-import { ANSWER_THRESHOLDS, MULTI_TURN_SERVE_THRESHOLDS, answerFloorFailures } from "./answer-floors.js";
+} from "./golden-set";
+import { ANSWER_THRESHOLDS, MULTI_TURN_SERVE_THRESHOLDS, answerFloorFailures } from "./answer-floors";
 import {
   ANSWER_CHECK_KIND,
   contentGatesBlocking,
@@ -104,20 +104,20 @@ import {
   pathScopeAllowed,
   resolveTier,
   type CheckKind,
-} from "./content-policy.js";
-import { acquireEvalLock, EvalAlreadyRunningError } from "./eval-lock.js";
-import { appendFundRecords, fundRecordsFromReport, resolveCommitSha, verifyFundRecordsRecorded } from "./fund-ledger.js";
-import { unregisteredFundSetChecks } from "./fund-gate.js";
+} from "./content-policy";
+import { acquireEvalLock, EvalAlreadyRunningError } from "./eval-lock";
+import { appendFundRecords, fundRecordsFromReport, resolveCommitSha, verifyFundRecordsRecorded } from "./fund-ledger";
+import { unregisteredFundSetChecks } from "./fund-gate";
 import {
   chunksToPassages,
   fundAnswerLayerChecks,
   shouldRunFundAnswerLayer,
   type FundAnswerCaseServed,
-} from "./fund-answer-layer.js";
-import { extraPromptContractChecks } from "./agent-profile.js";
-import { corpusIsolationContractChecks, corpusIsolationLiveChecks } from "./corpus-isolation.js";
-import { createEvalHarness, type EvalCheck as Check, type GateGroup, type GateRunResult } from "./harness.js";
-import { GATE_SPECS, type GateId, type GateSpec } from "./gates.js";
+} from "./fund-answer-layer";
+import { extraPromptContractChecks } from "./agent-profile";
+import { corpusIsolationContractChecks, corpusIsolationLiveChecks } from "./corpus-isolation";
+import { createEvalHarness, type EvalCheck as Check, type GateGroup, type GateRunResult } from "./harness";
+import { GATE_SPECS, type GateId, type GateSpec } from "./gates";
 import {
   aggregateScores,
   assembleEvalContext,
@@ -125,7 +125,7 @@ import {
   JUDGE_MODEL,
   scoreAnswerCase,
   type AggregateScores,
-} from "./judge.js";
+} from "./judge";
 import {
   EVAL_REPORT_SCHEMA_VERSION,
   writeEvalReport,
@@ -138,11 +138,11 @@ import {
   type FundCaseDiagnosis,
   type RoleplayPersonaReport,
   type RoleplayReviewReport,
-} from "./report-writer.js";
-import { reportConfigFromEnv } from "./report-config.js";
-import { roleplayContractChecks } from "./roleplay-contract.js";
-import { runRoleplayPersonaGate, runRoleplayReviewGate } from "./roleplay-gates.js";
-import { retryWithBackoff, sleep } from "./retry.js";
+} from "./report-writer";
+import { reportConfigFromEnv } from "./report-config";
+import { roleplayContractChecks } from "./roleplay-contract";
+import { runRoleplayPersonaGate, runRoleplayReviewGate } from "./roleplay-gates";
+import { retryWithBackoff, sleep } from "./retry";
 
 /**
  * Generator model — the SAME model the production agent ships (`DEFAULT_LLM_MODEL`), so Gate C scores

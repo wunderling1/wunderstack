@@ -4,7 +4,7 @@ import {
   CONVERSATION_GAP_MINUTES,
   groupIntoConversations,
   isThreadedChannel,
-} from "./conversation-boundary.js";
+} from "./conversation-boundary";
 
 const NOON = Date.UTC(2026, 8, 1, 12, 0, 0);
 

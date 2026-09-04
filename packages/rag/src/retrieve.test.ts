@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { searchPathForRetrieve } from "./retrieve.js";
+import { searchPathForRetrieve } from "./retrieve";
 
 describe("searchPathForRetrieve (schemaName is the path that was searched)", () => {
   it("defaults to fund_<key>", () => {

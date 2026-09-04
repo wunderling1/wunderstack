@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
-import { cn } from "../lib/cn.js";
-import { Field } from "../primitives/field.js";
-import { IconButton } from "../primitives/icon-button.js";
-import type { DensitySize } from "./answer-card.js";
+import { cn } from "../lib/cn";
+import { Field } from "../primitives/field";
+import { IconButton } from "../primitives/icon-button";
+import type { DensitySize } from "./answer-card";
 
 export interface ComposerProps {
   /** Called with the trimmed message when the user submits. */

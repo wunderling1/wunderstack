@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { chatRequestSchema } from "./contract.js";
+import { chatRequestSchema } from "./contract";
 
 describe("chatRequestSchema", () => {
   it("rejects a client-supplied agentId (server resolves the agent)", () => {

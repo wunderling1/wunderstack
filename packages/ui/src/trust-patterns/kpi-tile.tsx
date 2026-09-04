@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { cn } from "../lib/cn.js";
-import { Card } from "../primitives/card.js";
+import { cn } from "../lib/cn";
+import { Card } from "../primitives/card";
 
 export interface KpiTileProps {
   /** What the number measures (e.g. "Beantwoord met geverifieerde citaties"). */

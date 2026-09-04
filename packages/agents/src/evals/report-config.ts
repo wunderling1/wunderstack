@@ -5,7 +5,7 @@
 
 import { env } from "@wunderstack/shared";
 
-import type { EvalReport } from "./report-writer.js";
+import type { EvalReport } from "./report-writer";
 
 export type EvalReportConfig = EvalReport["config"];
 

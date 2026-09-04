@@ -1,4 +1,4 @@
-import { defaultRoleplayModelCall } from "./model-call.js";
+import { defaultRoleplayModelCall } from "./model-call";
 import {
   buildJsonRetryUserMessage,
   buildOpeningSystemPrompt,
@@ -7,21 +7,21 @@ import {
   buildReviewUserMessage,
   buildTurnSystemPrompt,
   buildTurnUserMessage,
-} from "./prompts.js";
-import { computeWeightedScore, didPass } from "./rubric.js";
+} from "./prompts";
+import { computeWeightedScore, didPass } from "./rubric";
 import {
   extractJsonObject,
   normalizeReviewOutput,
   roleplayOpeningOutputSchema,
   roleplayReviewOutputSchema,
   roleplayTurnOutputSchema,
-} from "./schemas.js";
+} from "./schemas";
 import {
   formatHistoryForPrompt,
   formatTranscriptForReview,
   windowHistory,
-} from "./transcript.js";
-import type { AgentUsage as RoleplayUsage } from "../types.js";
+} from "./transcript";
+import type { AgentUsage as RoleplayUsage } from "../types";
 import type {
   RoleplayAgent,
   RoleplayCallOptions,
@@ -32,8 +32,8 @@ import type {
   RoleplayReviewResult,
   RoleplayTurnInput,
   RoleplayTurnResult,
-} from "./types.js";
-import { ROLEPLAY_PROMPT_VERSION, type RoleplayBranch } from "./version.js";
+} from "./types";
+import { ROLEPLAY_PROMPT_VERSION, type RoleplayBranch } from "./version";
 
 /**
  * The roleplay agent: three calls, no state.

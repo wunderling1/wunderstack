@@ -6,7 +6,7 @@ import {
   webhookSignatureHeaders,
   WEBHOOK_SIGNATURE_HEADER,
   WEBHOOK_TIMESTAMP_HEADER,
-} from "./webhook-sign.js";
+} from "./webhook-sign";
 
 describe("signWebhookBody", () => {
   it("is stable for the same timestamp and body", () => {

@@ -1,6 +1,6 @@
 import { jsonb, text, timestamp } from "drizzle-orm/pg-core";
 
-import { control } from "./schema.js";
+import { control } from "./schema";
 
 /**
  * Registry of funds known to the control plane. `schemaName` is the data-plane schema

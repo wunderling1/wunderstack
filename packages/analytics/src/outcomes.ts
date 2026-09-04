@@ -12,8 +12,8 @@ import {
 } from "@wunderstack/db";
 import { refusedReasons } from "@wunderstack/shared";
 
-import { RETRIEVAL_STRONG_MIN_SCORE } from "./retrieval-strength.js";
-import type { RetrievalStrength } from "./retrieval-strength.js";
+import { RETRIEVAL_STRONG_MIN_SCORE } from "./retrieval-strength";
+import type { RetrievalStrength } from "./retrieval-strength";
 
 export interface OutcomeWindow {
   /** Fund whose schema to open (`withFundSchema`). Not a column filter. */

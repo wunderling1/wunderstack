@@ -8,7 +8,7 @@ import {
   EvalAlreadyRunningError,
   acquireEvalLock,
   isProcessAlive,
-} from "./eval-lock.js";
+} from "./eval-lock";
 
 describe("eval-lock", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "wunderstack-eval-lock-"));

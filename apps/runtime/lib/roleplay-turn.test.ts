@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import type { RoleplayMessage, RoleplayScenarioPrompt, RoleplayTurnResult } from "@wunderstack/agents";
 import type { RoleplayEndReason, RoleplayEvent } from "@wunderstack/shared";
 
-import { roleplayTurnEvents, type RoleplayTurnDeps } from "./roleplay-turn.js";
+import { roleplayTurnEvents, type RoleplayTurnDeps } from "./roleplay-turn";
 
 const scenario = {
   partnerRole: "Medewerker",

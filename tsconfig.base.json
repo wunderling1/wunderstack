@@ -3,8 +3,13 @@
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022"],
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    // esnext + bundler, bewust niet NodeNext. Onze workspace-packages exporteren rauwe
+    // TypeScript (`exports` wijst naar `./src/*.ts`) en worden alleen geladen door bundlers
+    // (Next) en door tsx — nooit door kale node. NodeNext zou daarbovenop `.js`-suffixen op
+    // relatieve imports afdwingen, en die kan Turbopack niet naar `.ts` hermappen
+    // (vercel/next.js#82945), waardoor `next dev` erop breekt. Zie 100-stack.mdc -> Bundler.
+    "module": "esnext",
+    "moduleResolution": "bundler",
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,

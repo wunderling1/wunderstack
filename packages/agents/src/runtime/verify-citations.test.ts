@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import type { ModelCitation } from "@wunderstack/shared";
 
-import { verifyCitations, stripFailedMarkers } from "./verify-citations.js";
+import { verifyCitations, stripFailedMarkers } from "./verify-citations";
 
 const content = new Map<string, string>([
   ["vakantie-ouderen", "Oudere werknemers hebben recht op de volgende extra vakantiedagen: 55 t/m 59 jaar: twee dagen."],

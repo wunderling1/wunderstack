@@ -45,7 +45,7 @@ import {
   createSchemaSql,
   publicCorpusTablesSql,
   truncateFundTablesSql,
-} from "./provision-sql.js";
+} from "./provision-sql";
 
 const DEFAULT_FUND = "elektronische-detailhandel";
 

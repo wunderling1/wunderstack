@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { buildRoleplayCsp } from "./csp.js";
+import { buildRoleplayCsp } from "./csp";
 
 describe("buildRoleplayCsp", () => {
   const csp = buildRoleplayCsp({

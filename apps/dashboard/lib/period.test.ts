@@ -6,7 +6,7 @@ import {
   periodDays,
   periodHref,
   previousWindow,
-} from "./period.js";
+} from "./period";
 
 test("parsePeriod defaults to 30d and accepts 7d/90d", () => {
   assert.equal(parsePeriod(undefined), "30d");

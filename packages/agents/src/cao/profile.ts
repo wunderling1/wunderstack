@@ -1,8 +1,8 @@
-import type { AgentRuntimeProfile } from "../runtime/profile.js";
-import { agentQuestionSchema } from "../types.js";
-import { detectClarification } from "./clarify.js";
-import { CAO_SYSTEM_INSTRUCTIONS, NOT_FOUND_MESSAGE, UNVERIFIABLE_MESSAGE, buildAnswerPrompt } from "./prompt.js";
-import { runRetrieval } from "./tools.js";
+import type { AgentRuntimeProfile } from "../runtime/profile";
+import { agentQuestionSchema } from "../types";
+import { detectClarification } from "./clarify";
+import { CAO_SYSTEM_INSTRUCTIONS, NOT_FOUND_MESSAGE, UNVERIFIABLE_MESSAGE, buildAnswerPrompt } from "./prompt";
+import { runRetrieval } from "./tools";
 
 /**
  * CAO agent profile — specialisation for {@link createGroundedAgent}.

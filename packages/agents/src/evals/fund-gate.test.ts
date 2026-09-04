@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { unregisteredFundSetChecks } from "./fund-gate.js";
+import { unregisteredFundSetChecks } from "./fund-gate";
 
 describe("unregisteredFundSetChecks", () => {
   it("returns a failing check when no fund sets are registered", () => {

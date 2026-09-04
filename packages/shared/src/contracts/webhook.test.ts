@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { webhookEventRequiresFund, webhookEventSchema } from "./webhook.js";
+import { webhookEventRequiresFund, webhookEventSchema } from "./webhook";
 
 describe("webhookEventSchema", () => {
   it("accepts a ping without a fund", () => {

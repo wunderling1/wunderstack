@@ -1,6 +1,6 @@
 import { ChevronDown } from "lucide-react";
 import type { DetailsHTMLAttributes, HTMLAttributes } from "react";
-import { cn } from "../lib/cn.js";
+import { cn } from "../lib/cn";
 
 /**
  * Accordion built on native `<details>/<summary>`. Zero JS, fully accessible. Pass the same `name` to

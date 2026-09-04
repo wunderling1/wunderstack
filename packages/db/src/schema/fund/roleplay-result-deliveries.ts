@@ -11,7 +11,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-import { roleplaySessions } from "./roleplay-sessions.js";
+import { roleplaySessions } from "./roleplay-sessions";
 
 /**
  * Outbox for delivering a session result to the system that launched it: a signed webhook now,

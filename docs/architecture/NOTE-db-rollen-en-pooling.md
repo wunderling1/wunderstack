@@ -153,7 +153,7 @@ FROM eval_cases;
 
 Uitkomst: **`n = 0`**, geen rijen, geen brontekst, geen gebruikersvraag.
 
-Kolomvorm [feit] in [packages/db/src/schema.ts](../../packages/db/src/schema.ts) L104–109: `question` + `expected_passage` — dat *is* de vorm van fondsinhoud, maar de tabel is leeg. Golden sets leven in git (`packages/agents/src/evals/fixtures/*.jsonl`), niet hier.
+Kolomvorm [feit] in [packages/db/src/schema/control/eval-cases.ts](../../packages/db/src/schema/control/eval-cases.ts): `question` + `expected_passage` — dat *is* de vorm van fondsinhoud, maar de tabel is leeg. Golden sets leven in git (`packages/agents/src/evals/fixtures/*.jsonl`), niet hier.
 
 **Classificatie:** geen fondsinhoud aanwezig. In PR2 **parkeren in `control.eval_cases`** (ongebruikte seed-tabel). Als er later rijen mét CAO-/catalogustekst in landen, verhuizen naar het fondsschema — de ADR-lijn is de inhoud, niet de tabelnaam.
 

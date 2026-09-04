@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import type { RetrievedChunk } from "./retrieve.js";
-import { rerank } from "./rerank.js";
+import type { RetrievedChunk } from "./retrieve";
+import { rerank } from "./rerank";
 
 function makeChunk(id: string, score: number): RetrievedChunk {
   return {

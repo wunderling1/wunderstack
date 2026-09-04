@@ -1,6 +1,6 @@
 import { DEFAULT_LLM_MODEL, generateText } from "@wunderstack/ai";
 
-import type { AgentQuestion } from "../types.js";
+import type { AgentQuestion } from "../types";
 
 type HistoryMessage = NonNullable<AgentQuestion["history"]>[number];
 

@@ -6,7 +6,7 @@ import {
   GENERATED_PASSWORD_ALPHABET,
   hashPassword,
   verifyPassword,
-} from "./password.js";
+} from "./password";
 
 describe("generatePassword", () => {
   it("returns at least 20 chars from the unambiguous alphabet", () => {

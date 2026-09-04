@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
 
-import { getInstance, updateTenantConfig } from "./agent-instances.js";
-import { closeDb } from "./client.js";
+import { getInstance, updateTenantConfig } from "./agent-instances";
+import { closeDb } from "./client";
 
 /**
  * Texts stay per agent-instance: updating one must not change the other (PR-D DoD).

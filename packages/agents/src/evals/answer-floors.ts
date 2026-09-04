@@ -11,7 +11,7 @@
  * Pure (no env, no I/O): unit-tested in answer-floors.test.ts without running the eval.
  */
 
-import type { AggregateScores } from "./judge.js";
+import type { AggregateScores } from "./judge";
 
 /**
  * Answer-level gates. faithfulness is split: `hardHallucination` (deterministic — invented

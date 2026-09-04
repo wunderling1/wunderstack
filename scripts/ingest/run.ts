@@ -25,11 +25,11 @@ import { embed } from "@wunderstack/ai";
 import { and, chunks as chunksTable, closeDb, documents, ensureFundTables, eq, inArray, resolveInstanceByFundAgent, sql, withFundSchema } from "@wunderstack/db";
 import { EMBEDDING_CONFIG, env } from "@wunderstack/shared";
 
-import { chunk, type Chunk } from "./chunk.js";
-import { chunkArbo } from "./chunk-arbo.js";
-import { describeFailure } from "./diagnostics.js";
-import { parseFile, SUPPORTED_EXTENSIONS } from "./parse.js";
-import { reportAfterIngest } from "./report.js";
+import { chunk, type Chunk } from "./chunk";
+import { chunkArbo } from "./chunk-arbo";
+import { describeFailure } from "./diagnostics";
+import { parseFile, SUPPORTED_EXTENSIONS } from "./parse";
+import { reportAfterIngest } from "./report";
 
 const DEFAULT_INPUT_DIR = "input";
 const EMBED_BATCH_SIZE = 32;

@@ -17,12 +17,12 @@ import type {
   RoleplayOrigin,
 } from "@wunderstack/shared";
 
-import { resolveRubric } from "./rubric.js";
+import { resolveRubric } from "./rubric";
 import {
   parseScenarioSnapshot,
   type RoleplayScenarioSnapshot,
-} from "./snapshot.js";
-import type { RoleplayMessage } from "./types.js";
+} from "./snapshot";
+import type { RoleplayMessage } from "./types";
 
 /**
  * Persistence for roleplay sessions.

@@ -13,7 +13,7 @@ import {
   refusedSuspiciousRate,
   refusalRate,
   strengthFromSignals,
-} from "./outcomes.js";
+} from "./outcomes";
 
 test("only error turns yield no_measurable_turns for quality rates", () => {
   const counts = { answered: 0, refused: 0, clarified: 0, error: 5, unknown: 0 };

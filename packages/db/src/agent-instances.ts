@@ -2,8 +2,8 @@ import { randomBytes } from "node:crypto";
 import type { TenantTheme, TenantTexts } from "@wunderstack/shared";
 import { and, eq } from "drizzle-orm";
 
-import { getDb, getWriterDb } from "./client.js";
-import { agentInstances, type AgentInstance } from "./schema/control/agent-instances.js";
+import { getDb, getWriterDb } from "./client";
+import { agentInstances, type AgentInstance } from "./schema/control/agent-instances";
 
 /**
  * Agent-instance data-access (control.agent_instances). Each row is one embeddable instance

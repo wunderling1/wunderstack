@@ -6,7 +6,7 @@ import {
   corpusFingerprintDisplay,
   corpusFingerprintMatchesPinned,
   type CorpusDocRow,
-} from "./corpus.js";
+} from "./corpus";
 
 function doc(overrides: Partial<CorpusDocRow> = {}): CorpusDocRow {
   return {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { corsHeaders } from "./cors.js";
+import { corsHeaders } from "./cors";
 
 describe("corsHeaders", () => {
   it("allows the local marketing origin in development even when the tenant allowlist is empty", () => {

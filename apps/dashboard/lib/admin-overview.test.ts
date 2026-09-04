@@ -7,7 +7,7 @@ import {
   fundStatusFromInstancesAndActivity,
   fundStatusLabel,
   statusFromCounts,
-} from "./admin-overview.js";
+} from "./admin-overview";
 
 const empty = { answered: 0, refused: 0, clarified: 0, error: 0, unknown: 0 };
 

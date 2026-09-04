@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import { ProviderHttpError } from "@wunderstack/ai";
 
-import { isRetryableError, retryWithBackoff } from "./retry.js";
+import { isRetryableError, retryWithBackoff } from "./retry";
 
 /** Reproduce undici's `fetch failed` shape: a TypeError wrapping the real cause. */
 function fetchFailed(cause: Error): TypeError {

@@ -2,7 +2,7 @@ import type { ChatEvent } from "../app/api/chat/contract";
 import {
   pipeNdjsonStream,
   type PipeNdjsonResult,
-} from "./ndjson-stream.js";
+} from "./ndjson-stream";
 
 /**
  * Chat's slice of the NDJSON stream contract: the turn budget, the heartbeat interval, and which

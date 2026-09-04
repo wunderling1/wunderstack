@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { getAgent, listAgents, resetAgentCache } from "./catalog.js";
+import { getAgent, listAgents, resetAgentCache } from "./catalog";
 
 describe("agent catalog", () => {
   it("lists registered agents", () => {

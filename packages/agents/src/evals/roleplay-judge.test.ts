@@ -10,7 +10,7 @@ import {
   parseRoleplayJudgeOutput,
   type RoleplayReviewRun,
   type RoleplayTurnScore,
-} from "./roleplay-judge.js";
+} from "./roleplay-judge";
 
 /**
  * Offline tests for the roleplay scorers (`test:unit`, no keys). The detectors are the blocking half

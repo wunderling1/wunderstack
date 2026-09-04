@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import { answeredGrounded } from "@wunderstack/shared";
 
-import { interactionEventInputSchema } from "./event.js";
+import { interactionEventInputSchema } from "./event";
 
 describe("interaction event contract (Fase 1)", () => {
   it("accepts a minimal answered event and defaults citationCount", () => {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { rewriteArboQuery } from "./rewrite.js";
+import { rewriteArboQuery } from "./rewrite";
 
 describe("rewriteArboQuery", () => {
   it("expands ev, leerling and a bare 16 to catalog vocabulary", () => {

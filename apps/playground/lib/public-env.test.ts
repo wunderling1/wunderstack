@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { ARBO_KEY_MISSING_MESSAGE, arboSurfaceError, readArboTenantKey } from "./public-env.js";
+import { ARBO_KEY_MISSING_MESSAGE, arboSurfaceError, readArboTenantKey } from "./public-env";
 
 describe("arbo playground key (fail closed)", () => {
   it("reports a visible error when NEXT_PUBLIC_WUNDERSTACK_TENANT_KEY_ARBO is missing", () => {

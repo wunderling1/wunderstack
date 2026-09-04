@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { opaqueLtiRef } from "./opaque-ref.js";
+import { opaqueLtiRef } from "./opaque-ref";
 
 describe("opaqueLtiRef", () => {
   it("is stable, hex, and does not preserve an email-shaped input", () => {

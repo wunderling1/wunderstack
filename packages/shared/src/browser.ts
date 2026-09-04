@@ -13,7 +13,7 @@ export {
   type CitationSource,
   type Citation,
   type ModelCitation,
-} from "./contracts/citation.js";
+} from "./contracts/citation";
 
 export {
   chatHistoryMessageSchema,
@@ -24,7 +24,7 @@ export {
   type ChatCitation,
   type ChatStatusPhase,
   type ChatEvent,
-} from "./contracts/chat.js";
+} from "./contracts/chat";
 
 export {
   answeredGrounded,
@@ -44,13 +44,13 @@ export {
   type TurnOutcome,
   type TurnOutcomeValue,
   type WritableTurnOutcome,
-} from "./contracts/interaction-outcome.js";
+} from "./contracts/interaction-outcome";
 
 export {
   agentChannels,
   agentChannelSchema,
   type AgentChannel,
-} from "./contracts/channel.js";
+} from "./contracts/channel";
 
 export {
   tenantThemeSchema,
@@ -63,7 +63,7 @@ export {
   type TenantTexts,
   type TenantPublicConfig,
   type StarterCategory,
-} from "./contracts/tenant-config.js";
+} from "./contracts/tenant-config";
 
 export {
   ROLEPLAY_DIFFICULTIES,
@@ -109,11 +109,11 @@ export {
   type RoleplayWebhookTarget,
   type RoleplayLti11Target,
   type RoleplayResultTarget,
-} from "./contracts/roleplay-scenario.js";
+} from "./contracts/roleplay-scenario";
 
-export { percentagesFromRatings } from "./contracts/roleplay-weights.js";
+export { percentagesFromRatings } from "./contracts/roleplay-weights";
 
-export { publicationIssues } from "./contracts/roleplay-publication.js";
+export { publicationIssues } from "./contracts/roleplay-publication";
 
 export {
   roleplayCriterionScoreSchema,
@@ -134,14 +134,14 @@ export {
   type RoleplayReviewRequest,
   type RoleplayReviewPayload,
   type RoleplayReviewResponse,
-} from "./contracts/roleplay.js";
+} from "./contracts/roleplay";
 
 export {
   roleplayResultEnvelopeSchema,
   buildRoleplayResultEnvelope,
   type RoleplayResultEnvelope,
   type BuildRoleplayResultEnvelopeInput,
-} from "./contracts/roleplay-result.js";
+} from "./contracts/roleplay-result";
 
 export {
   WEBHOOK_EVENT_TYPES,
@@ -152,4 +152,4 @@ export {
   type WebhookEventType,
   type WebhookEvent,
   type WebhookAck,
-} from "./contracts/webhook.js";
+} from "./contracts/webhook";

@@ -13,7 +13,7 @@ import {
   roleplayScenarioSlugSchema,
   roleplayScenarioStatusSchema,
   rubricCriterionSchema,
-} from "./roleplay-scenario.js";
+} from "./roleplay-scenario";
 
 describe("rubricCriterionSchema", () => {
   it("fills the optional fields so a minimal criterion is complete", () => {

@@ -1,7 +1,7 @@
 import { getUnexpiredLti11Launch, type Lti11LaunchAuth } from "@wunderstack/db";
 import { roleplayLti11TargetSchema, type RoleplayLti11Target } from "@wunderstack/shared";
 
-import { verifyLtiSessionToken } from "./session-token.js";
+import { verifyLtiSessionToken } from "./session-token";
 
 export const LTI_TOKEN_HEADER = "x-lti-token";
 export const LTI_TOKEN_QUERY_PARAM = "ltiToken";

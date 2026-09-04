@@ -2,12 +2,12 @@ import type { TenantConfig } from "@wunderstack/db";
 import { env } from "@wunderstack/shared";
 import { getTenantId } from "@wunderstack/tenant";
 
-import { corsHeaders, preflight } from "./cors.js";
-import { resolveEmbedAuth } from "./embed-auth.js";
-import { readBodyBounded } from "./http.js";
-import { resolveLtiLaunch, type LtiLaunchBound } from "./lti11/request-auth.js";
-import { checkDailyCap, checkRateLimit, clientKey } from "./rate-limit.js";
-import { tenantCorsAllowlist } from "./tenant-cors.js";
+import { corsHeaders, preflight } from "./cors";
+import { resolveEmbedAuth } from "./embed-auth";
+import { readBodyBounded } from "./http";
+import { resolveLtiLaunch, type LtiLaunchBound } from "./lti11/request-auth";
+import { checkDailyCap, checkRateLimit, clientKey } from "./rate-limit";
+import { tenantCorsAllowlist } from "./tenant-cors";
 
 /**
  * The shared perimeter for the three roleplay routes.

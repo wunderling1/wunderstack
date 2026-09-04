@@ -7,8 +7,8 @@ import {
   withFundSchema,
 } from "@wunderstack/db";
 
-import { mapPool } from "./map-pool.js";
-import { countsFromRow, outcomeCountSelect, type OutcomeCounts } from "./outcomes.js";
+import { mapPool } from "./map-pool";
+import { countsFromRow, outcomeCountSelect, type OutcomeCounts } from "./outcomes";
 
 /**
  * Parallel fund-schema reads. Matches the dev reader-pool size (3); production has 10.

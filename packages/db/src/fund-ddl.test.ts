@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { canDropPublicCorpus } from "./drop-public-corpus.js";
+import { canDropPublicCorpus } from "./drop-public-corpus";
 import {
   createRoleplayTurnFunctionSql,
   dropPublicCorpusSql,
   provisionDdl,
   revokePublicFundSchemaSql,
   roleplayDdl,
-} from "./fund-ddl.js";
+} from "./fund-ddl";
 
 describe("provisionDdl (track B)", () => {
   it("never emits CREATE ROLE, PARTITION, hnsw, or a multi-schema transaction", () => {

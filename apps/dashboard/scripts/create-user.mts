@@ -1,5 +1,5 @@
 import { closeDb, eq, getDb, users } from "@wunderstack/db";
-import { hashPassword } from "../lib/password.js";
+import { hashPassword } from "../lib/password";
 
 /**
  * Seed / update a dashboard user. Run with the read-write DATABASE_URL (the dashboard itself connects

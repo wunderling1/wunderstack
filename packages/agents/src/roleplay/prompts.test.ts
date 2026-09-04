@@ -7,8 +7,8 @@ import {
   buildReviewUserMessage,
   buildTurnSystemPrompt,
   buildTurnUserMessage,
-} from "./prompts.js";
-import { scenarioFixture } from "./scenario-fixture.js";
+} from "./prompts";
+import { scenarioFixture } from "./scenario-fixture";
 
 describe("prompt hygiene (what must never reach the model)", () => {
   const scenario = scenarioFixture();

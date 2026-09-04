@@ -1,7 +1,7 @@
 import { bindClaimsToInstance, instanceFromRow, type TenantConfig } from "@wunderstack/db";
 import { parseCaoFunds } from "@wunderstack/shared";
 
-import { resolveFundScope } from "./fund-scope.js";
+import { resolveFundScope } from "./fund-scope";
 
 /**
  * Request-scoped fund for the roleplay routes.

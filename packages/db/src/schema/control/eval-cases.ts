@@ -1,6 +1,6 @@
 import { text, uuid } from "drizzle-orm/pg-core";
 
-import { control } from "./schema.js";
+import { control } from "./schema";
 
 /**
  * Labelled evaluation cases (question → expected passage). Currently empty (PR0). Parked in

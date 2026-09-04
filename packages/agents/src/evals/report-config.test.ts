@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { buildReportConfig, reportConfigFromEnv } from "./report-config.js";
+import { buildReportConfig, reportConfigFromEnv } from "./report-config";
 
 describe("reportConfigFromEnv", () => {
   it("records generationSamples in the artefact config (non-default value)", () => {

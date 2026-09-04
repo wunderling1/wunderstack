@@ -1,6 +1,6 @@
 import { ChevronRight } from "lucide-react";
 import type { AnchorHTMLAttributes, HTMLAttributes, LiHTMLAttributes } from "react";
-import { cn } from "../lib/cn.js";
+import { cn } from "../lib/cn";
 
 /** Breadcrumb navigation. Composable, shadcn-style: Breadcrumbs > BreadcrumbItem > BreadcrumbLink/Page. */
 export function Breadcrumbs({ className, children, ...props }: HTMLAttributes<HTMLElement>) {

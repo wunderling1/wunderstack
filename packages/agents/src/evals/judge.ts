@@ -3,12 +3,12 @@ import { assemble, type RetrievalTimings } from "@wunderstack/rag";
 import { env } from "@wunderstack/shared";
 import { z } from "zod";
 
-import { extractCitationMarkers } from "../runtime/build-citations.js";
-import { findUngroundedFacts, type HardFactAgentKey } from "../hard-facts.js";
-import { parseGenerationOutput } from "../runtime/parse-generation.js";
-import { verifyCitations } from "../runtime/verify-citations.js";
-import { passageToHit, type GoldenCase, type GoldenPassage } from "./golden-set.js";
-import { retryWithBackoff } from "./retry.js";
+import { extractCitationMarkers } from "../runtime/build-citations";
+import { findUngroundedFacts, type HardFactAgentKey } from "../hard-facts";
+import { parseGenerationOutput } from "../runtime/parse-generation";
+import { verifyCitations } from "../runtime/verify-citations";
+import { passageToHit, type GoldenCase, type GoldenPassage } from "./golden-set";
+import { retryWithBackoff } from "./retry";
 
 /**
  * LLM-as-judge and deterministic scorers for Gate C (answer-level eval).

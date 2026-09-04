@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import { DEFAULT_LLM_MODEL } from "@wunderstack/ai";
 
-import { JUDGE_MODEL } from "./judge.js";
+import { JUDGE_MODEL } from "./judge";
 
 /**
  * Eval/production coupling INVARIANT (see docs/eval/GATE-ARCHITECTURE.md).

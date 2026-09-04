@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { check, jsonb, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
-import { control } from "./schema.js";
+import { control } from "./schema";
 
 /**
  * One embeddable agent instance per (tenant_id, agent_key). Public key is a public identifier

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { groupIntoConversations } from "./conversation-boundary.js";
+import { groupIntoConversations } from "./conversation-boundary";
 import {
   breakdownCountForFilter,
   includeExerciseSessions,
@@ -9,8 +9,8 @@ import {
   mapQuestionRow,
   matchesOutcomeFilter,
   toGroundedConversation,
-} from "./conversations.js";
-import type { OutcomeBreakdown } from "./outcomes.js";
+} from "./conversations";
+import type { OutcomeBreakdown } from "./outcomes";
 
 const emptyBreakdown: OutcomeBreakdown = {
   byOutcome: { answered: 4, refused: 10, clarified: 1, error: 0, unknown: 2 },

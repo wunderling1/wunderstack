@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { readRoleplayInactivityMs } from "./public-env.js";
+import { readRoleplayInactivityMs } from "./public-env";
 
 describe("readRoleplayInactivityMs", () => {
   it("defaults to 20s when unset", () => {

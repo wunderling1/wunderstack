@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { decideAccess } from "./authz.js";
+import { decideAccess } from "./authz";
 
 test("anonymous is redirected to login for both areas", () => {
   assert.deepEqual(decideAccess(null, "fund"), { allow: false, redirectTo: "/login" });
