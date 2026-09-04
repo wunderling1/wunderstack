@@ -13,13 +13,18 @@ describe("tenant context (D15)", () => {
     assert.equal(getTenantId({ TENANT: "oomt" }), "oomt");
   });
 
-  it("maps an unknown tenant to a fund of the same name (1-to-1)", () => {
-    assert.equal(tenantFund("oomt", { TENANT: "oomt" }), "oomt");
+  it("maps every tenant to a fund of the same name (1-to-1)", () => {
+    assert.equal(tenantFund("oomt"), "oomt");
+    assert.equal(tenantFund("demo"), "demo");
   });
 
-  it("honours an explicit TENANT_FUND override", () => {
-    const env = { TENANT: "oomt", TENANT_FUND: "elektronische-detailhandel" };
-    assert.equal(defaultFund(env), "elektronische-detailhandel");
-    assert.deepEqual(resolveTenant(env), { tenant: "oomt", fund: "elektronische-detailhandel" });
+  it("ignores a legacy TENANT_FUND env key — override does not exist", () => {
+    const env = {
+      TENANT: "oomt",
+      TENANT_FUND: "elektronische-detailhandel",
+    } as NodeJS.ProcessEnv;
+    assert.equal(defaultFund(env), "oomt");
+    assert.deepEqual(resolveTenant(env), { tenant: "oomt", fund: "oomt" });
+    assert.equal(tenantFund("oomt"), "oomt");
   });
 });

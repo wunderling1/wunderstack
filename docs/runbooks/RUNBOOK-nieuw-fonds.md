@@ -45,11 +45,10 @@ NEXT_PUBLIC_WUNDERSTACK_TENANT_KEY_ARBO=<arbo public_key>   # alleen als arbo is
 EMBED_SCRIPT_BASE=<runtime origin, e.g. https://api.example.nl>
 ```
 
-Optioneel, alleen als de fondssleutel óf de corpus-naam afwijkt van 1-op-1:
-
-```
-TENANT_FUND=<fund-domeinnaam>
-```
+Zet alleen **`TENANT=<fundKey>`**. In v1 is de fondssleutel gelijk aan `TENANT`; het schema is
+`fund_<fundKey>` via `fundSchemaName` (enige assembler). `createFundEnvironment` schrijft die
+naam in `control.funds.schema_name` (denormalized copy). Er is geen `TENANT_FUND`-override
+meer (verwijderd na F1-01).
 
 Lokaal dashboard / provisioner:
 

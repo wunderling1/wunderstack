@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createStreamWatchdog } from "@wunderstack/ui";
 import type {
   RoleplayDifficulty,
   RoleplayReviewPayload,
@@ -192,22 +193,16 @@ export function useRoleplaySession(
       ]);
 
       let abortedForInactivity = false;
-      const inactivityMs = readRoleplayInactivityMs();
-      let inactivityTimer: ReturnType<typeof setTimeout> | null = null;
-      const clearInactivity = () => {
-        if (inactivityTimer !== null) {
-          clearTimeout(inactivityTimer);
-          inactivityTimer = null;
-        }
-      };
-      const armInactivity = () => {
-        clearInactivity();
-        inactivityTimer = setTimeout(() => {
+      // Liveness watchdog: signalled on every byte, so a stream that dies without an abort does not
+      // leave the learner waiting. Time the tab spends hidden or suspended does not count — the
+      // reader is not running then, so that silence says nothing (see createStreamWatchdog).
+      const watchdog = createStreamWatchdog({
+        timeoutMs: readRoleplayInactivityMs(),
+        onTimeout: () => {
           abortedForInactivity = true;
           controller.abort();
-        }, inactivityMs);
-      };
-      armInactivity();
+        },
+      });
 
       let ended = false;
 
@@ -216,7 +211,7 @@ export function useRoleplaySession(
           sessionId,
           message: trimmed,
           signal: controller.signal,
-          onByte: armInactivity,
+          onByte: watchdog.signal,
         })) {
           if (event.type === "text") {
             setMessages((prev) =>
@@ -258,7 +253,7 @@ export function useRoleplaySession(
           ended = true;
         } else {
           const messageText = abortedForInactivity
-            ? "Het duurde te lang om te reageren. Probeer je bericht opnieuw te versturen."
+            ? "De verbinding viel stil. Probeer je bericht opnieuw te versturen."
             : caught instanceof RoleplayApiError
               ? caught.message
               : roleplayErrorMessage("unknown");
@@ -272,7 +267,7 @@ export function useRoleplaySession(
           );
         }
       } finally {
-        clearInactivity();
+        watchdog.stop();
         sendingRef.current = false;
         setSending(false);
         setMessages((prev) =>

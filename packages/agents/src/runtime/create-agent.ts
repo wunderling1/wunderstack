@@ -91,6 +91,7 @@ async function retrieveTraced(
       query: primary,
       ...(additionalQueries.length === 0 ? {} : { additionalQueries }),
       fund: args.fund,
+      agentKey: profile.agentKey,
       topK: args.topK,
       minScore: args.minScore,
     });
@@ -99,11 +100,22 @@ async function retrieveTraced(
       embeddingDim: EMBEDDING_CONFIG.dim,
       hits: retrieval.hits,
       found: retrieval.hits.length > 0,
+      consideredCount: retrieval.consideredCount,
+      aboveThresholdCount: retrieval.aboveThresholdCount,
+      usedPassageCount: retrieval.usedPassageCount,
       timings: retrieval.timings,
     });
     return retrieval;
   } catch (error) {
-    span.end({ embeddingModel: EMBEDDING_CONFIG.model, embeddingDim: EMBEDDING_CONFIG.dim, hits: [], found: false });
+    span.end({
+      embeddingModel: EMBEDDING_CONFIG.model,
+      embeddingDim: EMBEDDING_CONFIG.dim,
+      hits: [],
+      found: false,
+      consideredCount: 0,
+      aboveThresholdCount: 0,
+      usedPassageCount: 0,
+    });
     throw error;
   }
 }

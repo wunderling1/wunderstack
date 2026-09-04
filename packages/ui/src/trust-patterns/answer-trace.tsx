@@ -28,9 +28,9 @@ const TONE_DOT: Record<AnswerTraceTone, string> = {
 
 /**
  * Trust-pattern: the wait is a log of what the runtime did, not a spinner. Each step is a measured
- * event; chips are the passages retrieval considered, struck through once the threshold check
- * lands. When the turn ends, the same log collapses into a grey summary line above the answer
- * card — still reachable, no longer in the way.
+ * event; chips are the fragments retrieval considered, struck through once the match check lands.
+ * When the turn ends, the same log collapses into a grey summary line above the answer card —
+ * still reachable, no longer in the way.
  *
  * Motion (B6 / A2): the sheen is on the head; the writing step gets three dots. Nothing else
  * animates. The rhythm comes from the progress queue, not from CSS. Inline SVG keeps the embed
@@ -120,11 +120,14 @@ function TraceSteps({
         const active = inFlight && isLast;
         const showDots = inFlight && step.pending;
         return (
-          <li key={step.id} className={cn("relative", isLast ? "pb-0.5" : "pb-4")}>
+          <li
+            key={step.id}
+            className={cn("relative", isLast ? "pb-0.5" : "pb-4", inFlight && "motion-enter")}
+          >
             {/*
              * While work is in flight the newest step is the one in progress, so "here we are" wins
              * over its verdict; once the turn is over every step shows the tone it earned. A step
-             * without a tone stays neutral: "9 passages gecontroleerd" is a fact, not a good outcome.
+             * without a tone stays neutral: "3 van de 9 sluiten aan" is a fact, not a good outcome.
              */}
             <span
               className={cn(
@@ -153,13 +156,19 @@ function TraceSteps({
                     className={cn(
                       "inline-flex items-center rounded-[var(--radius-badge)] bg-surface-sunk px-2.5 py-1.5 text-xs leading-none",
                       chip.struck ? "text-text-subtle line-through" : "text-text-muted",
+                      inFlight && "motion-enter",
                     )}
                   >
                     {chip.label}
                   </span>
                 ))}
                 {step.overflowLabel === null ? null : (
-                  <span className="inline-flex items-center px-1 py-1.5 text-xs leading-none text-text-subtle">
+                  <span
+                    className={cn(
+                      "inline-flex items-center px-1 py-1.5 text-xs leading-none text-text-subtle",
+                      inFlight && "motion-enter",
+                    )}
+                  >
                     {step.overflowLabel}
                   </span>
                 )}

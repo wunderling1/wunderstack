@@ -1,7 +1,7 @@
 import { agentKeySchema, env, type AgentKey } from "@wunderstack/shared";
 import { eq, sql } from "drizzle-orm";
 
-import { generateTenantKey, fundSchemaName } from "./agent-instances";
+import { generateTenantKey, fundSchemaName, assertStoredSchemaName } from "./agent-instances";
 import { recordAuditEvent } from "./audit-events";
 import { getProvisionerDb, type Database } from "./client";
 import { createFundUser } from "./dashboard-users";
@@ -107,7 +107,7 @@ export async function createFundEnvironment(
   }
   const uniqueKeys = [...new Set(agentKeys)];
 
-  const schemaName = fundSchemaName(fundKey);
+  const schemaName = assertStoredSchemaName(fundKey, fundSchemaName(fundKey));
   const db = getProvisionerDb();
 
   return db.transaction(async (tx) => {

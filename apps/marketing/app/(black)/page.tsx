@@ -13,7 +13,7 @@ export default function Home() {
     <div className="flex flex-col gap-16">
       <section className="flex flex-col gap-5">
         <Chip className="self-start">Soeverein · gegrond · insluitbaar</Chip>
-        <h1 className="font-display text-4xl font-semibold leading-tight md:text-5xl">
+        <h1 className="font-display text-4xl font-normal leading-[1.1] md:text-5xl">
           AI-agents voor O&amp;O fondsen die je één keer bouwt en per fonds configureert.
         </h1>
         <p className="max-w-2xl text-lg text-text-muted">

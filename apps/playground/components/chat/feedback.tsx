@@ -102,12 +102,12 @@ export function Feedback({ submitted, onSubmit }: FeedbackProps) {
               }}
               maxLength={2000}
               placeholder="Wat klopte er niet? (optioneel)"
-              className="flex-1 rounded-md border border-border bg-page px-2 py-1 text-xs outline-none placeholder:text-text-muted"
+              className="flex-1 rounded-[var(--radius-control)] border border-border bg-page px-2 py-1 text-xs outline-none placeholder:text-text-muted"
             />
             <button
               type="button"
               onClick={submitReason}
-              className="rounded-md bg-primary px-2 py-1 text-xs font-medium text-on-primary hover:opacity-90"
+              className="rounded-[var(--radius-control)] bg-primary px-2 py-1 text-xs font-medium text-on-primary hover:opacity-90"
             >
               Versturen
             </button>

@@ -14,9 +14,10 @@ Tunable via semantic layer only.
 
 ## D3 — Font
 
-**Default:** General Sans (display + body), self-hosted woff2 in `packages/ui/src/fonts/`.
-Place `GeneralSans-Medium.woff2` and `GeneralSans-Bold.woff2` from Fontshare (commercial use
-permitted). Until files are present, `ui-sans-serif` / `system-ui` fallback applies.
+**Default:** Inter (body) + Spectral (display), self-hosted latin woff2 in `packages/ui/src/fonts/`
+(SIL OFL 1.1). Spectral is the Google Fonts family, not loaded from Google's CDN — the default
+request path stays EU-sovereign. Fallback: Inter → `ui-sans-serif` / `system-ui`; Spectral →
+`"Times New Roman"` / `ui-serif`.
 
 ## D4 — Icons
 
@@ -29,7 +30,10 @@ permitted). Until files are present, `ui-sans-serif` / `system-ui` fallback appl
 
 ## D6 — Dark mode
 
-**Default:** `[data-mode="dark"]` seam in `theme.css`; full polish deferred.
+**Default:** `[data-mode="dark"]` seam in `theme.css` remaps the semantic canvas to warm ink/ivory
+(the black marketing canvas). Product apps omit the attribute and stay on the white `:root`
+default. Indigo `--color-primary` is not remapped. Marketing assigns the attribute per path
+(`apps/marketing/lib/page-theme.ts`).
 
 ## D7 — Per-fund theming
 

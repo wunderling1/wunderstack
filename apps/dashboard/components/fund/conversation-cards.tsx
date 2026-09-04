@@ -94,7 +94,7 @@ function GroundedCard({
     <CardShell
       meta={
         <>
-          {agentLabel(item.agentId)} · {dateTime.format(item.startedAt)}
+          {agentLabel(item.agentKey)} · {dateTime.format(item.startedAt)}
         </>
       }
       // Not a Chip: a question count is a quantity, and every chip variant here means a state.

@@ -4,7 +4,8 @@
 import { requireRerankConfig } from "@wunderstack/shared";
 
 import { assemble, type AssembledContext, type RetrievalTimings } from "./assemble";
-import { mergeRetrievedChunks } from "./merge-chunks";
+import { uniqueByPassageLabel, uniquePassageWindow } from "./heading";
+import { consideredChunkCount, excludeKeptChunks, mergeRetrievedChunks } from "./merge-chunks";
 import { rerank } from "./rerank";
 import { retrieveInputSchema, retrieveValidatedTimed, type RetrieveInput } from "./retrieve";
 import { rewriteQuery, type QueryExpansion } from "./rewrite";
@@ -65,17 +66,24 @@ export async function retrieveContext(input: RetrieveContextInput): Promise<Asse
       ? (retrieveLists[0]?.chunks ?? [])
       : mergeRetrievedChunks(retrieveLists.map((result) => result.chunks));
 
-  const consideredCount = retrieveLists.reduce((sum, result) => sum + result.consideredCount, 0);
-  const droppedChunks =
+  const consideredCount = consideredChunkCount(retrieveLists);
+  const mergedDropped =
     retrieveLists.length === 1
       ? (retrieveLists[0]?.droppedChunks ?? [])
       : mergeRetrievedChunks(retrieveLists.map((result) => result.droppedChunks));
+  // Dual-query: a chunk can clear the floor for one rewrite and miss it for another — keep wins.
+  const droppedChunks = excludeKeptChunks(mergedDropped, retrieved);
   const aboveThresholdCount = retrieved.length;
+  const { found: progressFound, dropped: progressDropped } = uniquePassageWindow(
+    retrieved,
+    droppedChunks,
+  );
 
   const embedMs = Math.max(...retrieveLists.map((result) => result.timings.embedMs));
   const searchMs = Math.max(...retrieveLists.map((result) => result.timings.searchMs));
 
   const { chunks: reranked, rerankMs } = await rerank({ query: primaryRewritten, chunks: retrieved, topK });
+  const usedPassageCount = uniqueByPassageLabel(reranked).length;
 
   const timings: RetrievalTimings = {
     rewriteMs,
@@ -90,6 +98,9 @@ export async function retrieveContext(input: RetrieveContextInput): Promise<Asse
     consideredCount,
     aboveThresholdCount,
     droppedChunks,
+    progressFound,
+    progressDropped,
+    usedPassageCount,
   };
 }
 
@@ -105,11 +116,17 @@ export {
   type RetrievedChunkSource,
   type RetrievedChunkStructure,
 } from "./retrieve";
-export { mergeRetrievedChunks } from "./merge-chunks";
+export { consideredChunkCount, excludeKeptChunks, mergeRetrievedChunks } from "./merge-chunks";
 export { rerank, type RerankInput, type RerankResult, type RerankStatus } from "./rerank";
 export { rewriteQuery, type RewriteResult, type QueryExpansion } from "./rewrite";
 export { assemble, type AssembledContext, type RetrievalTimings } from "./assemble";
-export { deriveChunkHeading } from "./heading";
+export {
+  deriveChunkHeading,
+  passageLabel,
+  passageUniquenessKey,
+  uniqueByPassageLabel,
+  uniquePassageWindow,
+} from "./heading";
 export {
   fetchParentPassage,
   listCorpora,

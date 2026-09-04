@@ -14,11 +14,22 @@ export interface ChatThreadProps {
  * App-local chat shell: scrollable message area + composer footer (D16: not a shared trust-pattern,
  * so it lives in the consuming app rather than `@wunderstack/ui`).
  */
-export function ChatThread({ children, composer, scrollRef, className }: ChatThreadProps) {
+export function ChatThread({
+  children,
+  composer,
+  scrollRef,
+  className,
+}: ChatThreadProps) {
   return (
     <div className={cn("flex h-full flex-col", className)}>
-      <div ref={scrollRef} className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-6">
-        {children}
+      <div className="relative min-h-0 flex-1">
+        <div
+          ref={scrollRef}
+          data-chat-scroll
+          className="absolute inset-0 flex flex-col overflow-y-auto px-4 py-6"
+        >
+          {children}
+        </div>
       </div>
       <div className="bg-page px-4 py-4">{composer}</div>
     </div>

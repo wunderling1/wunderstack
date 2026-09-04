@@ -63,6 +63,8 @@ export const chatEventSchema = z.discriminatedUnion("type", [
     query: z.string().optional(),
     considered: z.number().int().nonnegative(),
     aboveThreshold: z.number().int().nonnegative(),
+    /** Present on current runtimes; optional so an older bundle still accepts a newer stream. */
+    used: z.number().int().nonnegative().optional(),
     hits: z.array(
       z.object({
         label: z.string().min(1),

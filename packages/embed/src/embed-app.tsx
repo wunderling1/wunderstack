@@ -4,12 +4,14 @@ import {
   AnswerTrace,
   Card,
   CitationBlock,
+  createStreamWatchdog,
   Field,
   IconButton,
   RefusalNotice,
   traceItemsFromEvent,
   traceSummaryLabel,
   usePacedTrace,
+  useScrollAnchor,
   type AnswerTraceItem,
 } from "@wunderstack/ui";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
@@ -23,6 +25,12 @@ import {
   type EmbedLayout,
 } from "./types";
 
+/** Silence budget: three server heartbeats (10s). Embed is an IIFE — no NEXT_PUBLIC_* env. */
+const CHAT_INACTIVITY_MS = 30_000;
+const INACTIVITY_ERROR =
+  "De verbinding met de assistent viel stil. Probeer je vraag opnieuw te stellen.";
+const GENERIC_ERROR = "Er ging iets mis. Probeer het later opnieuw.";
+
 interface Turn {
   role: "user" | "agent";
   text: string;
@@ -35,6 +43,7 @@ interface Turn {
   retrieval?: {
     considered: number;
     aboveThreshold: number;
+    used?: number;
   } | null;
   /** Grounded follow-up chips from the `followups` stream event. */
   followUpQuestions?: string[];
@@ -60,8 +69,8 @@ const TRACE_HEADS: Record<string, string> = {
 
 /** Corpus wording for the finished summary line. */
 const SEARCHED_LABELS: Record<string, string> = {
-  cao: "Zocht in de CAO",
-  arbo: "Zocht in de Arbocatalogus",
+  cao: "Gezocht in de CAO",
+  arbo: "Gezocht in de Arbocatalogus",
 };
 
 function traceHead(agentId: string): string {
@@ -69,7 +78,7 @@ function traceHead(agentId: string): string {
 }
 
 function searchedLabel(agentId: string): string {
-  return SEARCHED_LABELS[agentId] ?? "Zocht in de bronnen";
+  return SEARCHED_LABELS[agentId] ?? "Gezocht in de bronnen";
 }
 
 /**
@@ -112,6 +121,7 @@ function TraceRecap({
     searchedLabel: searchedLabel(agentId),
     considered: turn.retrieval?.considered ?? 0,
     aboveThreshold: turn.retrieval?.aboveThreshold ?? 0,
+    ...(turn.retrieval?.used === undefined ? {} : { used: turn.retrieval.used }),
   });
   if (summary === null) {
     return null;
@@ -163,16 +173,18 @@ function readOrCreateSessionId(): string {
   return id;
 }
 
-/** Align a new turn to the top of the thread so the answer is readable from the start. */
-function scrollChildToStart(container: HTMLElement, child: HTMLElement): void {
-  const nextTop =
-    container.scrollTop + (child.getBoundingClientRect().top - container.getBoundingClientRect().top);
-  container.scrollTo({ top: Math.max(0, nextTop), behavior: "smooth" });
-}
-
 function lastUserTurnIndex(turns: Turn[]): number | undefined {
   for (let i = turns.length - 1; i >= 0; i--) {
     if (turns[i]?.role === "user") {
+      return i;
+    }
+  }
+  return undefined;
+}
+
+function lastAgentTurnIndex(turns: Turn[]): number | undefined {
+  for (let i = turns.length - 1; i >= 0; i--) {
+    if (turns[i]?.role === "agent") {
       return i;
     }
   }
@@ -226,17 +238,17 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
   }, [endpoint, agentKey]);
 
   const lastUserIndex = lastUserTurnIndex(turns);
-
-  // Scroll only when a new user turn starts (or the panel opens onto an existing thread).
-  // Stick-to-bottom would land on follow-up chips once the answer footer grows.
-  useEffect(() => {
-    if (!open) return;
-    if (lastUserIndex === undefined) return;
-    const container = scrollRef.current;
-    const target = container?.querySelector(`[data-turn-index="${String(lastUserIndex)}"]`);
-    if (!container || !(target instanceof HTMLElement)) return;
-    scrollChildToStart(container, target);
-  }, [lastUserIndex, open]);
+  const lastAgentIndex = lastAgentTurnIndex(turns);
+  const lastAgent = lastAgentIndex === undefined ? undefined : turns[lastAgentIndex];
+  useScrollAnchor({
+    containerRef: scrollRef,
+    lastUserId: lastUserIndex === undefined ? undefined : String(lastUserIndex),
+    lastAssistantId: lastAgentIndex === undefined ? undefined : String(lastAgentIndex),
+    assistantWaiting: lastAgent !== undefined && lastAgent.turnOutcome === undefined && busy,
+    assistantStreaming: busy,
+    itemAttr: "data-turn-index",
+    enabled: open,
+  });
 
   const article50 = config?.article50 ?? DEFAULT_ARTICLE_50;
   const tagline = config?.texts.tagline ?? "Stel je vraag";
@@ -271,6 +283,7 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
               retrieval: {
                 considered: event.considered,
                 aboveThreshold: event.aboveThreshold,
+                ...(event.used === undefined ? {} : { used: event.used }),
               },
             }
           : {}),
@@ -292,7 +305,11 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
     } else if (event.type === "followups") {
       updateLast((turn) => ({ ...turn, followUpQuestions: event.questions }));
     } else if (event.type === "error") {
-      updateLast((turn) => ({ ...turn, text: event.message }));
+      updateLast((turn) => ({
+        ...turn,
+        text: event.message,
+        turnOutcome: { outcome: "error", outcomeReason: "provider_error" },
+      }));
     }
   }
 
@@ -312,6 +329,16 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
     ]);
     setBusy(true);
 
+    const controller = new AbortController();
+    let abortedForInactivity = false;
+    const watchdog = createStreamWatchdog({
+      timeoutMs: CHAT_INACTIVITY_MS,
+      onTimeout: () => {
+        abortedForInactivity = true;
+        controller.abort();
+      },
+    });
+
     try {
       const res = await fetch(`${endpoint}/api/chat`, {
         method: "POST",
@@ -326,37 +353,53 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
           channel: "embed",
           ...(config?.fund ? { fund: config.fund } : {}),
         }),
+        signal: controller.signal,
       });
       if (!res.ok || !res.body) throw new Error("request_failed");
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-        for (const raw of lines) {
-          if (!raw.trim()) continue;
-          let json: unknown;
-          try {
-            json = JSON.parse(raw);
-          } catch {
-            continue; /* ignore a partial/garbled line */
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          watchdog.signal();
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+          for (const raw of lines) {
+            if (!raw.trim()) continue;
+            let json: unknown;
+            try {
+              json = JSON.parse(raw);
+            } catch {
+              continue; /* ignore a partial/garbled line */
+            }
+            // Validate each stream event at the boundary; skip anything off-contract.
+            const parsed = chatEventSchema.safeParse(json);
+            if (parsed.success) applyEvent(parsed.data);
           }
-          // Validate each stream event at the boundary; skip anything off-contract.
-          const parsed = chatEventSchema.safeParse(json);
-          if (parsed.success) applyEvent(parsed.data);
         }
+      } finally {
+        watchdog.stop();
       }
     } catch {
-      updateLast((turn) => ({
-        ...turn,
-        text: turn.text || "Er ging iets mis. Probeer het later opnieuw.",
-      }));
+      if (abortedForInactivity) {
+        updateLast((turn) => ({
+          ...turn,
+          text: turn.text || INACTIVITY_ERROR,
+          turnOutcome: turn.turnOutcome ?? { outcome: "error", outcomeReason: "timeout" },
+        }));
+      } else if (!controller.signal.aborted) {
+        updateLast((turn) => ({
+          ...turn,
+          text: turn.text || GENERIC_ERROR,
+          turnOutcome: turn.turnOutcome ?? { outcome: "error", outcomeReason: "provider_error" },
+        }));
+      }
     } finally {
+      watchdog.stop();
       setBusy(false);
     }
   }
@@ -385,7 +428,12 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
         )}
       </div>
 
-      <div ref={scrollRef} className="flex flex-1 flex-col gap-3 overflow-y-auto bg-page px-4 py-4">
+      <div className="relative min-h-0 flex-1">
+        <div
+          ref={scrollRef}
+          data-chat-scroll
+          className="absolute inset-0 overflow-y-auto bg-page px-4 py-4"
+        >
         {turns.length === 0 ? (
           <Starters
             categories={resolveStarterCategories(config?.texts)}
@@ -393,7 +441,8 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
             {...(config?.texts.tagline ? { title: config.texts.tagline } : {})}
             {...(config?.texts.intro ? { intro: config.texts.intro } : {})}
           />
-        ) : null}
+        ) : (
+        <div className="flex flex-col gap-3" data-message-list>
         {turns.map((turn, index) => {
           // Text can land before the citations event that carries the outcome. Keep the live
           // trace on the in-flight agent turn until that outcome arrives (A2 layout stability).
@@ -403,7 +452,15 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
             index === turns.length - 1 &&
             busy;
           return (
-          <div key={index} data-turn-index={index} className="flex flex-col gap-2">
+          <div
+            key={index}
+            data-turn-index={index}
+            className={
+              index === turns.length - 1
+                ? "flex min-h-[var(--turn-min-height,0px)] flex-col gap-2"
+                : "flex flex-col gap-2"
+            }
+          >
             {agentWaiting ? (
               <AgentWait head={traceHead(resolvedAgentId)} trace={turn.trace ?? []} />
             ) : turn.refused ? (
@@ -463,6 +520,9 @@ export function EmbedApp({ endpoint, agentKey, agentId, layout = "launcher" }: P
           </div>
           );
         })}
+        </div>
+        )}
+        </div>
       </div>
 
       <form

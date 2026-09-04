@@ -19,8 +19,9 @@ agents die je één keer bouwt en per fonds via configuratie uitrolt.
 - **Soeverein-by-default.** Het standaard request-pad blijft EU-soeverein. Fondsdata gaat
   nooit by default naar een niet-EU-model.
 - **Airlock voor niet-soevereine bronnen.** Facebook, US-SaaS en andere niet-EU-bronnen
-  koppelen via één geclassificeerde adapter per bron (`packages/connectors`). Downstream
-  van die grens blijft alles EU-soeverein; de bron zelf niet. Zie `600-connectors.mdc`.
+  koppelen via één geclassificeerde adapter per bron (gepland als `packages/connectors` —
+  **nog niet gebouwd** in v1). Downstream van die grens blijft alles EU-soeverein; de bron zelf
+  niet. Zie `.cursor/rules/600-connectors.mdc`.
 - **Alle code in het Engels** (identifiers, comments, bestandsnamen, commits; packages onder
   `@wunderstack/*`). Nederlands alleen in docs en user-facing tekst.
 
@@ -45,9 +46,21 @@ Wissel **nooit** van bundler om een fout te omzeilen — repareer de code of de 
 ## Repo-structuur
 `apps/runtime` (Next.js API-only: agent-API, webhook, hardening) · `apps/playground` (publieke
 tenant-zero-demo-UI) · `apps/roleplay` (leerling-UI rollenspel, HTTP-only) · `packages/ai` (model-naad) · `packages/agents`
-(agent-defs, Mastra erin) · `packages/rag` · `packages/connectors` (airlock naar niet-EU-bronnen)
-· `packages/db` (Drizzle) · `packages/shared`.
+(agent-defs, Mastra erin) · `packages/rag` · `packages/db` (Drizzle) · `packages/shared` ·
+`packages/analytics` · `packages/tenant` · `packages/ui` · `packages/embed`.
+(`packages/connectors` is gepland, nog geen map in de tree.)
 Pijl-regel: apps importeren uit packages, nooit andersom (CI-afgedwongen).
+Chat-scroll woont in `@wunderstack/ui` (`createScrollAnchor` + `useScrollAnchor`); playground,
+roleplay en embed importeren die hook en schrijven hem niet over.
+
+## Commando's (root)
+- `pnpm test` — `turbo run test:unit` (snelle unit-tests; **geen** eval-gates).
+- `pnpm turbo run test` — eval-suite (`@wunderstack/agents`); zonder keys: `Eval INCOMPLETE`.
+- `pnpm build` — volledige Next/embed-productiebuild (lokaal/release). **Niet** in CI in v1:
+  de verify-job draait typecheck, lint, depcruise, unit tests en eval — geen `next build`
+  (duur; productiebuild blijft een deploy/release-stap). `pnpm dev` bestaat niet in de root:
+  start per app (`pnpm --filter runtime dev`, enz.).
+- `pnpm check-docs` — markdown-links in `docs/**` en `**/AGENTS.md` moeten bestaande paden zijn.
 
 ## Repo-indeling (CI-afgedwongen)
 De root is allowlist-only: entry-docs, tooling-config en de code-/meta-mappen, verder niets.

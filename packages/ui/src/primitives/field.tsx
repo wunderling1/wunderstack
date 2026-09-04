@@ -4,7 +4,7 @@ import { cn } from "../lib/cn";
 
 const fieldVariants = cva(
   [
-    "w-full rounded-[var(--radius-pill)] border border-border bg-surface text-text",
+    "w-full rounded-[var(--radius-control)] border border-border bg-surface text-text",
     "placeholder:text-text-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-page",
     "disabled:cursor-not-allowed disabled:opacity-50",
   ],
@@ -26,7 +26,7 @@ export interface FieldProps
   extends Omit<InputHTMLAttributes<HTMLInputElement>, "size">,
     VariantProps<typeof fieldVariants> {}
 
-/** Pill-shaped text field. Density via `size` (D18); `md` matches the pre-density look. */
+/** Single-line text field. Control-radius. Density via `size` (D18); `md` is the default. */
 export function Field({ className, size, ...props }: FieldProps) {
   return <input className={cn(fieldVariants({ size }), className)} {...props} />;
 }

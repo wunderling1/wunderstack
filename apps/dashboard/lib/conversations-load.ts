@@ -1,6 +1,9 @@
 import {
   breakdownCountForFilter,
+  civilDateInZone,
+  FUND_DISPLAY_TIMEZONE,
   listConversations,
+  zonedStartOfDay,
   type ConversationItem,
 } from "@wunderstack/analytics";
 import { listInstancesCached } from "@/lib/fund-lookups";
@@ -32,11 +35,16 @@ export async function loadConversationsModel(
   const agents = instances.map((instance) => instance.agentKey);
   const filters = parseConversationFilters(search, agents);
   const window = currentWindow(filters.period, now);
+  const todayStart = zonedStartOfDay(civilDateInZone(now, FUND_DISPLAY_TIMEZONE), FUND_DISPLAY_TIMEZONE);
+  const since =
+    filters.sinceToday && todayStart.getTime() > window.since.getTime()
+      ? todayStart
+      : window.since;
   const query = {
     fundKey,
-    since: window.since,
+    since,
     until: window.until,
-    agentId: filters.agentId,
+    agentKey: filters.agentId,
     outcome: filters.outcome,
     outcomeReason: filters.reason,
   };

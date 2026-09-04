@@ -84,9 +84,9 @@ const FUND_THEMES: Record<string, Partial<FundTheme>> = {
     sourceLabel: "Demo",
   },
   "elektronische-detailhandel": {
-    logoText: "ED",
-    label: "CAO-assistent — Elektronische Detailhandel",
-    sourceLabel: "Elektronische Detailhandel",
+    logoText: "OFED",
+    label: "CAO-assistent — OFED",
+    sourceLabel: "OFED",
     starterCategories: [
       {
         label: "Veelgestelde vragen",
@@ -102,7 +102,7 @@ const FUND_THEMES: Record<string, Partial<FundTheme>> = {
   oomt: {
     logoText: "OOMT",
     label: "CAO-assistent — OOMT",
-    sourceLabel: "Mobiliteitsbranche (OOMT)",
+    sourceLabel: "OOMT",
     starterCategories: [
       {
         label: "Veelgestelde vragen",

@@ -11,9 +11,27 @@ import { agentInstances, type AgentInstance } from "./schema/control/agent-insta
  * writer connection.
  */
 
-/** Physical fund schema name for a tenant key (`fund_oomt`). */
+/**
+ * Physical fund schema name for a tenant/fund key (`fund_oomt`).
+ * Single assembler for `fund_<key>` — callers must not invent a second prefix formula.
+ */
 export function fundSchemaName(tenantId: string): string {
   return `fund_${tenantId}`;
+}
+
+/**
+ * Stored `control.funds.schema_name` / instance `schema_name` is a denormalized copy of
+ * `fundSchemaName(key)`, never a second formula. Throws when a row drifted.
+ */
+export function assertStoredSchemaName(fundKey: string, schemaName: string): string {
+  const expected = fundSchemaName(fundKey);
+  if (schemaName !== expected) {
+    throw new Error(
+      `Stored schema_name ${JSON.stringify(schemaName)} does not match ` +
+        `fundSchemaName(${JSON.stringify(fundKey)}) = ${JSON.stringify(expected)}.`,
+    );
+  }
+  return schemaName;
 }
 
 /** Generate a fresh public tenant-key (`pk_` + url-safe random). Public identifier, not a secret. */
@@ -32,12 +50,9 @@ export async function getInstance(tenantId: string, agentKey: string): Promise<A
 }
 
 /**
- * Back-compat: return the CAO instance for a tenant (most admin paths still target one row).
- * Prefer `getInstance` / `listInstances` when the agent matters.
+ * Back-compat aliases removed (F1-03): use `getInstance(tenantId, agentKey)` instead of a
+ * CAO-only `getTenantConfig` name that lied about "the" tenant config.
  */
-export async function getTenantConfig(tenantId: string): Promise<AgentInstance | null> {
-  return getInstance(tenantId, "cao");
-}
 
 /** Resolve an instance by its public embed key (unique across instances). */
 export async function getInstanceByPublicKey(publicKey: string): Promise<AgentInstance | null> {

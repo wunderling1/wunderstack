@@ -7,8 +7,9 @@
  * catalog of fund-crossing agents") is broader than what is wired today, so it lives as content here
  * and is honest about what is live versus what is a scripted walkthrough.
  *
- * INVARIANT: exactly the agents with `status: "live"` get a real embedded demo (today: CAO only, per
- * the plan). Everything else is a scripted walkthrough — no live demo for a non-existent agent.
+ * INVARIANT: `status: "live"` means the runtime registry serves the agent. The public marketing
+ * embed demo is still CAO-only (tenant-zero key); other live agents use a walkthrough on this site
+ * until their embed key is wired here.
  */
 
 export type AgentContentStatus = "live" | "binnenkort";
@@ -58,7 +59,7 @@ export const AGENTS: AgentContent[] = [
     summary:
       "De arbocatalogus-agent beantwoordt vragen over sectorale arbo-maatregelen en risico's. " +
       "Antwoorden komen uitsluitend uit de arbocatalogus van het fonds — niet uit de Arbowet of een CAO.",
-    status: "binnenkort",
+    status: "live",
     highlights: [
       "Bronvermelding per antwoord, geverifieerd tegen de catalogus.",
       "Weigert vragen over Arbowet, CAO-recht en individueel advies — met route naar de juiste plek.",

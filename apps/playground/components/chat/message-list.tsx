@@ -9,6 +9,7 @@ import {
 } from "@wunderstack/ui";
 import { memo, useMemo, useState } from "react";
 import type { PlaygroundAgent } from "@/lib/runtime-config";
+import { isRefusedTurn } from "@/lib/turn-outcome";
 import { Citations } from "./citation";
 import { Feedback } from "./feedback";
 import { FollowUps } from "./follow-ups";
@@ -28,10 +29,10 @@ const AGENT_TRACE_HEAD: Record<PlaygroundAgent, string> = {
   arbo: "Zoeken in de Arbocatalogus",
 };
 
-/** Corpus wording for the finished summary line ("Zocht in de CAO · …"). */
+/** Corpus wording for the finished summary line ("Gezocht in de CAO · …"). */
 const AGENT_SEARCHED_LABEL: Record<PlaygroundAgent, string> = {
-  cao: "Zocht in de CAO",
-  arbo: "Zocht in de Arbocatalogus",
+  cao: "Gezocht in de CAO",
+  arbo: "Gezocht in de Arbocatalogus",
 };
 
 interface MessageListProps {
@@ -54,9 +55,13 @@ export function MessageList({
   followUpsDisabled = false,
 }: MessageListProps) {
   return (
-    <div className="flex flex-col gap-6">
-      {messages.map((message) => (
-        <div key={message.id} data-message-id={message.id}>
+    <div className="flex flex-col gap-6" data-message-list>
+      {messages.map((message, index) => (
+        <div
+          key={message.id}
+          data-message-id={message.id}
+          className={index === messages.length - 1 ? "min-h-[var(--turn-min-height,0px)]" : undefined}
+        >
           <MessageBubble
             message={message}
             fund={fund}
@@ -107,6 +112,7 @@ const MessageBubble = memo(function MessageBubble({
       searchedLabel: AGENT_SEARCHED_LABEL[agent],
       considered: message.retrieval?.considered ?? 0,
       aboveThreshold: message.retrieval?.aboveThreshold ?? 0,
+      used: message.retrieval?.used ?? 0,
     });
   }, [message.turnOutcome, message.retrieval, agent]);
   const showFeedback = !isUser && !message.streaming && message.traceId !== null;
@@ -154,8 +160,8 @@ const MessageBubble = memo(function MessageBubble({
     return traceBlock;
   }
 
-  // Agent turn — refused: same card chrome as a regular answer, no chip (grounding bar comes later)
-  if (message.found === false) {
+  // Agent turn — refused only. Clarify (`found: false`, outcome clarified) uses the answer path.
+  if (isRefusedTurn(message.turnOutcome ?? undefined)) {
     return (
       <div className="flex flex-col">
         {traceBlock}

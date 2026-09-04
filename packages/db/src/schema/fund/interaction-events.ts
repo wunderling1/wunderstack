@@ -9,16 +9,20 @@ import { doublePrecision, index, integer, pgTable, text, timestamp, uuid } from 
  * Identity model (D15, track B): `tenantId` is the instance/deployment key, `fund` the
  * customer-domain word (1-to-1 per runtime process). `sessionId` is shared with the Langfuse trace.
  * `userId` is nullable — embed end-users are pseudonymous (no identification in v1, AVG). `question`
- * is logged to drive the "unanswered questions" corpus-roadmap signal; retention is 90 days (see
- * docs/decisions/DECISION-analytics-retention.md). `feedback` is filled in later by the feedback
- * endpoint, matched on `traceId`.
+ * is logged to drive the "unanswered questions" corpus-roadmap signal (see
+ * docs/decisions/DECISION-analytics-retention.md — 90-day policy, not yet automated). `feedback`
+ * is filled in later by the feedback endpoint, matched on `traceId`.
  */
 export const interactionEvents = pgTable(
   "interaction_events",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     tenantId: text("tenant_id").notNull(),
-    agentId: text("agent_id").notNull(),
+    /**
+     * Physical column remains `agent_id` (historical name). JS/Zod use `agentKey` — same string
+     * as `profile.agentKey` / grounded catalog keys. No migration; see DECISION-agent-id-column.md.
+     */
+    agentKey: text("agent_id").notNull(),
     // Data-plane key (the fund whose corpus answered). Kept alongside tenantId for per-fund KPIs.
     fund: text("fund").notNull(),
     sessionId: text("session_id").notNull(),
@@ -37,7 +41,8 @@ export const interactionEvents = pgTable(
     retrievedCount: integer("retrieved_count").notNull().default(0),
     /** Highest similarity among retrieved hits; null when retrievedCount is 0. */
     topScore: doublePrecision("top_score"),
-    // Potentially-sensitive free text; logged for the corpus-roadmap signal, 90-day retention.
+    // Potentially-sensitive free text; logged for the corpus-roadmap signal (retention policy
+    // in DECISION-analytics-retention.md — not automated in v1).
     question: text("question"),
     // Coarse theme metadata (roadmap signal). Null until a classifier exists (deferred, regel van drie).
     theme: text("theme"),
@@ -53,7 +58,7 @@ export const interactionEvents = pgTable(
     // The window reads every dashboard page makes: `occurred_at >= $1 and occurred_at < $2`,
     // optionally narrowed to one agent (fund ledger 0005).
     index("interaction_events_occurred_idx").on(table.occurredAt),
-    index("interaction_events_agent_occurred_idx").on(table.agentId, table.occurredAt),
+    index("interaction_events_agent_occurred_idx").on(table.agentKey, table.occurredAt),
     index("interaction_events_fund_idx").on(table.fund),
     index("interaction_events_session_idx").on(table.sessionId),
     index("interaction_events_trace_idx").on(table.traceId),

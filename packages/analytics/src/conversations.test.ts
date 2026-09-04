@@ -47,20 +47,20 @@ test("exercise sessions drop out of outcome/reason filters", () => {
     false,
   );
   assert.equal(
-    includeExerciseSessions({ fundKey: "demo", since: new Date(), agentId: "cao" }),
+    includeExerciseSessions({ fundKey: "demo", since: new Date(), agentKey: "cao" }),
     false,
   );
   assert.equal(
-    includeExerciseSessions({ fundKey: "demo", since: new Date(), agentId: "roleplay" }),
+    includeExerciseSessions({ fundKey: "demo", since: new Date(), agentKey: "roleplay" }),
     true,
   );
 });
 
 test("grounded turns follow the grounded profile, not a key switch in the card", () => {
-  assert.equal(includeGroundedTurns({ fundKey: "demo", since: new Date(), agentId: "cao" }), true);
-  assert.equal(includeGroundedTurns({ fundKey: "demo", since: new Date(), agentId: "arbo" }), true);
+  assert.equal(includeGroundedTurns({ fundKey: "demo", since: new Date(), agentKey: "cao" }), true);
+  assert.equal(includeGroundedTurns({ fundKey: "demo", since: new Date(), agentKey: "arbo" }), true);
   assert.equal(
-    includeGroundedTurns({ fundKey: "demo", since: new Date(), agentId: "roleplay" }),
+    includeGroundedTurns({ fundKey: "demo", since: new Date(), agentKey: "roleplay" }),
     false,
   );
 });
@@ -115,7 +115,7 @@ function turn(
   minutesFromNoon: number,
   overrides: {
     sessionId?: string;
-    agentId?: string;
+    agentKey?: string;
     outcome?: string;
     channel?: string | null;
   } = {},
@@ -123,7 +123,7 @@ function turn(
   return {
     id,
     sessionId: overrides.sessionId ?? "tab-1",
-    agentId: overrides.agentId ?? "cao",
+    agentKey: overrides.agentKey ?? "cao",
     occurredAt: new Date(Date.UTC(2026, 8, 1, 12, minutesFromNoon)),
     question: `vraag ${id}`,
     outcome: overrides.outcome ?? "answered",

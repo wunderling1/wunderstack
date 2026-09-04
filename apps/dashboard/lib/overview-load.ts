@@ -5,8 +5,10 @@ import {
   getAgentSnapshot,
   getRecentInteractions,
   type AgentOperationalStatus,
+  type DayCount,
   type InteractionLogRow,
   type OutcomeBreakdown,
+  type PulseTick,
   type WindowPair,
 } from "@wunderstack/analytics";
 import { isGroundedAgentKey } from "@wunderstack/shared";
@@ -70,19 +72,24 @@ export interface OverviewActivityModel {
   /** Questions in the window — the KPI unit (S22). */
   currentQuestions: number;
   previousQuestions: number;
-  /** Conversations those questions fall into, plus exercise sessions: both are containers (S22). */
+  /** Conversations those questions fall into — not including exercise sessions (S22). */
   currentConversations: number;
-  previousConversations: number;
   /** Questions on a channel that carries no thread id (mcp, api) — named, never bundled (A6). */
   unthreadedQuestions: number;
   /** Conversation volume hit the scan cap — Activity tile counts are a floor. */
   conversationVolumeTruncated: boolean;
   onboarding: boolean;
-  /** Groups the Signalen list holds for this window — what "N kennisgaten" counts (S11a). */
+  /** Unanswered questions in this window — same WHERE as Signalen (headline). */
   knowledgeGaps: number;
+  /** Same WHERE over the previous window of equal length. */
+  previousKnowledgeGaps: number;
   /** Exercise sessions in the window. Sessions carry no agent key, so this is the fund's total. */
   exerciseSessions: number;
   exerciseLastStartedAt: Date | null;
+  dailySeries: DayCount[];
+  pulse: PulseTick[];
+  pulseTruncated: boolean;
+  lastQuestionAt: Date | null;
 }
 
 export interface OverviewAgentsModel {
@@ -113,15 +120,12 @@ export const loadActivityModel = cache(
     });
 
     // Two numbers, two units (S22): questions come from the outcome breakdown, conversations from
-    // the boundary grouper. An exercise session is a container too, so it counts as a conversation
-    // and contributes no questions — that is why the tile reads "N vragen in M gesprekken" and not
-    // a sum.
+    // the boundary grouper. Exercise sessions are sessies, not gesprekken — they belong in Mix.
     const currentQuestions = totalQuestions(snapshot.outcomes.current.byOutcome);
     const previousQuestions = totalQuestions(snapshot.outcomes.previous.byOutcome);
-    const currentConversations =
-      snapshot.volume.current.conversations + snapshot.exercise.current.sessionCount;
-    const previousConversations =
-      snapshot.volume.previous.conversations + snapshot.exercise.previous.sessionCount;
+    const currentConversations = snapshot.volume.current.conversations;
+    const currentActivity = currentQuestions + snapshot.exercise.current.sessionCount;
+    const previousActivity = previousQuestions + snapshot.exercise.previous.sessionCount;
 
     return {
       period,
@@ -130,13 +134,17 @@ export const loadActivityModel = cache(
       currentQuestions,
       previousQuestions,
       currentConversations,
-      previousConversations,
       unthreadedQuestions: snapshot.volume.current.unthreadedQuestions,
       conversationVolumeTruncated: snapshot.volume.current.truncated,
-      onboarding: isOnboarding(currentConversations, previousConversations),
+      onboarding: isOnboarding(currentActivity, previousActivity),
       knowledgeGaps: snapshot.knowledgeGaps,
+      previousKnowledgeGaps: snapshot.previousKnowledgeGaps,
       exerciseSessions: snapshot.exercise.current.sessionCount,
       exerciseLastStartedAt: snapshot.exercise.current.lastStartedAt,
+      dailySeries: snapshot.dailySeries,
+      pulse: snapshot.pulse.ticks,
+      pulseTruncated: snapshot.pulse.truncated,
+      lastQuestionAt: snapshot.lastQuestionAt,
     };
   },
 );
@@ -152,7 +160,7 @@ export const loadAgentsModel = cache(
       loadActivityModel(fundKey, period, nowMs),
     ]);
 
-    const byAgent = new Map(snapshot.agents.map((row) => [row.agentId, row]));
+    const byAgent = new Map(snapshot.agents.map((row) => [row.agentKey, row]));
 
     const agents: OverviewAgentRow[] = instances.map((instance): OverviewAgentRow => {
       if (!isGroundedAgentKey(instance.agentKey)) {
