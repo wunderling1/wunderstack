@@ -1,6 +1,6 @@
 import type { Citation } from "@wunderstack/shared";
 
-import { deriveChunkHeading } from "./heading";
+import { deriveChunkHeading, uniqueByPassageLabel } from "./heading";
 import type { RetrievedChunk } from "./retrieve";
 
 export interface RetrievalTimings {
@@ -30,12 +30,21 @@ export interface AssembledContext {
   chunks: RetrievedChunk[];
   /** Per-phase wall-clock timings for Langfuse latency budgets. */
   timings: RetrievalTimings;
-  /** Candidates fetched from pgvector before the minScore filter (summed across retrieval queries). */
+  /** Unique chunk ids across retrieval queries in the pre–minScore window (kept + dropped). */
   consideredCount: number;
-  /** Unique chunks that cleared minScore before reranking. */
+  /** Chunks that cleared minScore before reranking (chunk-level, for evals/Langfuse). */
   aboveThresholdCount: number;
   /** Chunks that failed minScore — for progress reporting only, not fed to the model. */
   droppedChunks: RetrievedChunk[];
+  /**
+   * Unique headings above minScore, pre-rerank. Progress UI counts these, not `candidateK`.
+   * Distinct from `aboveThresholdCount`, which stays a chunk count for evals/Langfuse.
+   */
+  progressFound: RetrievedChunk[];
+  /** Unique below-threshold headings in the fetch window, excluding labels already in `progressFound`. */
+  progressDropped: RetrievedChunk[];
+  /** Unique headings in the reranked context the model saw. */
+  usedPassageCount: number;
 }
 
 /** Collapse whitespace and clip to a readable snippet for pre-generation placeholders. */
@@ -74,5 +83,16 @@ export function assemble(chunks: RetrievedChunk[], timings: RetrievalTimings): A
     })
     .join("\n\n");
 
-  return { context, citations, chunks, timings, consideredCount: 0, aboveThresholdCount: chunks.length, droppedChunks: [] };
+  return {
+    context,
+    citations,
+    chunks,
+    timings,
+    consideredCount: 0,
+    aboveThresholdCount: chunks.length,
+    droppedChunks: [],
+    progressFound: [],
+    progressDropped: [],
+    usedPassageCount: uniqueByPassageLabel(chunks).length,
+  };
 }

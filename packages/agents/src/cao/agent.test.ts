@@ -31,6 +31,9 @@ function retrievalWithGrounding(grounding: string): RetrievalOutput {
     consideredCount: 1,
     aboveThresholdCount: 0,
     droppedChunks: [],
+    progressFound: [],
+    progressDropped: [],
+    usedPassageCount: 0,
   };
 }
 
@@ -55,6 +58,9 @@ function retrievalWithChunk(chunkId: string, content: string): RetrievalOutput {
     consideredCount: 1,
     aboveThresholdCount: 1,
     droppedChunks: [],
+    progressFound: [chunk],
+    progressDropped: [],
+    usedPassageCount: 1,
   };
 }
 

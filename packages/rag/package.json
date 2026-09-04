@@ -19,6 +19,7 @@
     "@wunderstack/ai": "workspace:*",
     "@wunderstack/db": "workspace:*",
     "@wunderstack/shared": "workspace:*",
+    "@wunderstack/tenant": "workspace:*",
     "zod": "4.4.3"
   },
   "devDependencies": {

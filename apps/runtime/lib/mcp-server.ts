@@ -128,7 +128,7 @@ function buildServer(): McpServer {
           try {
             await recordInteractionEvent({
               tenantId,
-              agentId,
+              agentKey: agentId,
               fund: scope.fund,
               sessionId,
               channel: "mcp",
@@ -149,7 +149,7 @@ function buildServer(): McpServer {
           try {
             await recordInteractionEvent({
               tenantId,
-              agentId,
+              agentKey: agentId,
               fund: scope.fund,
               sessionId,
               channel: "mcp",
@@ -209,7 +209,7 @@ function buildServer(): McpServer {
           try {
             await recordInteractionEvent({
               tenantId,
-              agentId,
+              agentKey: agentId,
               fund: scope.fund,
               sessionId,
               channel: "mcp",
@@ -229,7 +229,7 @@ function buildServer(): McpServer {
           try {
             await recordInteractionEvent({
               tenantId,
-              agentId,
+              agentKey: agentId,
               fund: scope.fund,
               sessionId,
               channel: "mcp",

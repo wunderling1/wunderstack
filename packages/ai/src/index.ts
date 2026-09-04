@@ -4,6 +4,8 @@ export {
   streamText,
   getModelPricing,
   listModelPricing,
+  assertSovereignModel,
+  withTestModelRegistry,
   type ChatMessage,
   type ChatRole,
   type GenerateTextInput,
