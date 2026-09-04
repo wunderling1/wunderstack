@@ -1,23 +1,35 @@
 /**
- * General Sans — self-host woff2 in ./fonts/ when available (Fontshare, commercial use OK).
- * Uncomment @font-face blocks after adding GeneralSans-Medium.woff2 and GeneralSans-Bold.woff2.
- * Until then, --font-body / --font-display fall back to ui-sans-serif / system-ui.
+ * Inter + Spectral (SIL OFL 1.1) — self-hosted latin woff2 in ./fonts/.
+ * Body = Inter; display = Spectral. Do not load from a US CDN (Google Fonts).
+ * License: ./fonts/OFL.txt
  */
 
-/*
 @font-face {
-  font-family: "General Sans";
-  src: url("./fonts/GeneralSans-Medium.woff2") format("woff2");
-  font-weight: 500;
+  font-family: "Inter";
   font-style: normal;
   font-display: swap;
+  font-weight: 100 900;
+  src: url("./fonts/inter-latin-wght-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 @font-face {
-  font-family: "General Sans";
-  src: url("./fonts/GeneralSans-Bold.woff2") format("woff2");
-  font-weight: 700;
+  font-family: "Spectral";
   font-style: normal;
   font-display: swap;
+  font-weight: 400;
+  src: url("./fonts/spectral-latin-400-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
-*/
+
+@font-face {
+  font-family: "Spectral";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url("./fonts/spectral-latin-600-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}

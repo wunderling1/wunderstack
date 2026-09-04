@@ -12,11 +12,15 @@ a **content site**, not an app surface — no database, no auth, no agent/model 
 - **Catalog = content, decoupled from the runtime registry.** The catalog lives in `content/agents.ts`
   as hand-curated data. It is intentionally NOT `listAgents()` from the runtime, because the marketing
   story is broader than what is wired today and must stay honest about live vs. roadmap.
-- **Live demo only for real agents.** Only entries with `status: "live"` (today: CAO) mount a real
-  demo. That demo is the **Fase 4 embed** (`packages/embed`), loaded via the stable snippet against
-  tenant zero — no fork, no bespoke chat UI ("buildembed" decision). On the CAO detail page it uses
-  `data-mode="inline"` so the chat sits in the page; a fund's own site omits that and gets the
-  launcher. Everything else is a scripted walkthrough.
+- **Live vs demo.** `status: "live"` matches the runtime registry (CAO + arbo). The public marketing
+  embed demo remains CAO-only (tenant-zero key); other live agents show a walkthrough on this site.
+  That demo is the **Fase 4 embed** (`packages/embed`), loaded via the stable snippet — no fork, no
+  bespoke chat UI. On the CAO detail page it uses `data-mode="inline"`; a fund's own site omits that
+  and gets the launcher. Roadmap agents stay `binnenkort`.
+- **Canvas per page.** White is the product default (`:root`). Black is `[data-mode="dark"]` on
+  `<html>`, set by the static route-group layouts `(black)` / `(white)` (home vs agent pages).
+  `lib/page-theme.ts` remains the assignment table for tests. Do not load Google Fonts —
+  display/body come from `@wunderstack/ui` (Spectral + Inter, self-hosted).
 
 ## Live demo config
 
@@ -35,3 +39,13 @@ runtime already allowlists `http://localhost:3003`. Without both env vars the pa
 
 `pnpm --filter marketing dev` (port 3003). Runtime on 3000, playground on 3001, dashboard on 3002,
 roleplay on 3004.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
