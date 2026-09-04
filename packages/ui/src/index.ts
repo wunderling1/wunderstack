@@ -22,6 +22,22 @@ export {
   type AnswerTraceTone,
 } from "./lib/answer-trace";
 export { usePacedTrace } from "./lib/use-paced-trace";
+export {
+  createStreamWatchdog,
+  type StreamWatchdog,
+  type StreamWatchdogOptions,
+} from "./lib/stream-watchdog";
+export {
+  createScrollAnchor,
+  TALL_ANCHOR_RATIO,
+  type ScrollAnchor,
+  type ScrollAnchorAlign,
+  type ScrollAnchorMetrics,
+  type ScrollAnchorOptions,
+  type ScrollAnchorState,
+  type ScrollCommand,
+} from "./lib/scroll-anchor";
+export { useScrollAnchor, type UseScrollAnchorArgs } from "./lib/use-scroll-anchor";
 
 // Primitives
 export { Button, buttonVariants, type ButtonProps, type ButtonSize } from "./primitives/button";

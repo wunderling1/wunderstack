@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createProgressQueue, type ProgressGaps, type ProgressQueue } from "./progress-queue";
+import {
+  createProgressQueue,
+  type ProgressGaps,
+  type ProgressItemKind,
+  type ProgressQueue,
+} from "./progress-queue";
 import type { AnswerTraceItem } from "./answer-trace";
 
 /**
@@ -51,11 +56,16 @@ export function usePacedTrace(
     for (let index = enqueuedRef.current; index < items.length; index += 1) {
       const item = items[index];
       if (item !== undefined) {
-        queue.enqueue(item.kind, index);
+        queue.enqueue(paceKind(item), index);
       }
     }
     enqueuedRef.current = items.length;
   }, [items]);
 
   return useMemo(() => items.slice(0, releasedCount), [items, releasedCount]);
+}
+
+/** Overflow sits in the chip row, so it uses the chip gap rather than opening a new step beat. */
+function paceKind(item: AnswerTraceItem): ProgressItemKind {
+  return item.kind === "overflow" ? "chip" : item.kind;
 }

@@ -1,26 +1,30 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import { DEFAULT_THEME, type StarterCategory } from "@/lib/fund-theme";
 import type { PlaygroundAgent } from "@/lib/runtime-config";
+import { useScrollAnchor } from "@wunderstack/ui";
 import { Composer } from "./composer";
 import { MessageList } from "./message-list";
 import { Starters } from "./starters";
 import { ChatThread } from "./thread";
 import { useChat, type ChatMessage } from "./use-chat";
 
-/** Align a new turn to the top of the thread so the answer is readable from the start. */
-function scrollChildToStart(container: HTMLElement, child: HTMLElement): void {
-  const nextTop =
-    container.scrollTop + (child.getBoundingClientRect().top - container.getBoundingClientRect().top);
-  container.scrollTo({ top: Math.max(0, nextTop), behavior: "smooth" });
-}
-
 function lastUserMessageId(messages: ChatMessage[]): string | undefined {
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
     if (message?.role === "user") {
       return message.id;
+    }
+  }
+  return undefined;
+}
+
+function lastAssistant(messages: ChatMessage[]): ChatMessage | undefined {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message?.role === "assistant") {
+      return message;
     }
   }
   return undefined;
@@ -52,16 +56,14 @@ export function Chat({
   const { messages, isStreaming, send, sendFeedback } = useChat(fund, agent);
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastUserId = lastUserMessageId(messages);
-
-  // Scroll only when a new user turn starts. Stick-to-bottom would land on follow-up chips once the
-  // answer footer grows, so the user never sees the start of the reply they just got.
-  useEffect(() => {
-    if (lastUserId === undefined) return;
-    const container = scrollRef.current;
-    const target = container?.querySelector(`[data-message-id="${lastUserId}"]`);
-    if (!container || !(target instanceof HTMLElement)) return;
-    scrollChildToStart(container, target);
-  }, [lastUserId]);
+  const assistant = lastAssistant(messages);
+  useScrollAnchor({
+    containerRef: scrollRef,
+    lastUserId,
+    lastAssistantId: assistant?.id,
+    assistantWaiting: assistant !== undefined && assistant.streaming && assistant.turnOutcome === null,
+    assistantStreaming: assistant?.streaming === true,
+  });
 
   const empty = messages.length === 0;
 

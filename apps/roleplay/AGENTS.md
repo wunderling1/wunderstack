@@ -10,7 +10,10 @@ in een LMS-iframe (`?ltiToken=`, daarna `sessionStorage` + `x-lti-token`). Geen 
   `rewrites()` naar de runtime geproxyd (`RUNTIME_URL`, lokaal `:3000`).
 - **Geen fondsschema.** Sessies leven in het fondsschema; deze app ziet ze alleen via HTTP.
 - **UI uit `@wunderstack/ui`.** Semantische tokens; geen rauwe hex. Beurtenteller en doelstrip zijn
-  app-lokaal (regel van drie / D16: één consumer). Fetch-logica blijft hier.
+  app-lokaal (regel van drie / D16: één consumer). Fetch-logica blijft hier. Chat-scroll is
+  `useScrollAnchor` uit `@wunderstack/ui` — niet per app overschrijven. Korte beurten: de lege
+  "Antwoordt…"-regel is de statusfase; het eerste teken van het antwoord is `firstToken`, zodat een
+  groeiende replica het beeld niet meektrekt.
 - **Open toegang.** Geen auth-gate in v1; de runtime rate-limitt. De tenant-key is een publieke
   identifier (`NEXT_PUBLIC_WUNDERSTACK_TENANT_KEY`), hetzelfde model als playground/embed.
 - **CSP + frame-ancestors** staan in `proxy.ts`. Default `frame-ancestors 'self'`; LMS-origins via
