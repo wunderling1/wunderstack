@@ -32,8 +32,8 @@ Laagindeling (welk gegeven waar): `docs/decisions/DECISION-dashboard-ia.md`.
 - **Auth = Auth.js (NextAuth v5), Credentials + eigen `users`-tabel.** Rollen `admin` | `fund`;
   fund-users zijn tenant-scoped (D15). `mustChangePassword` forceert `/password` via `decideAccess`.
   Zie `docs/decisions/DECISION-dashboard-auth.md`.
-- **Middleware zet alleen `x-pathname`** op requests (voor page-widgets zoals `PeriodPicker`).
-  Auth loopt via `decideAccess` in de `(fund)` en `(admin)` layouts — niet in middleware.
+- **`proxy.ts` zet alleen `x-pathname`** op requests (voor page-widgets zoals `PeriodPicker`).
+  Auth loopt via `decideAccess` in de `(fund)` en `(admin)` layouts — niet in `proxy.ts`.
   De actieve sidebar/tab komt uit `usePathname()` in de client-chrome: layouts blijven bij
   client-navigatie staan, dus een `x-pathname` in de layout bevriest tot een refresh.
 - **UI uit `@wunderstack/ui`.** Trust-patterns + primitives. Alleen semantische tokens; geen
@@ -69,11 +69,18 @@ Het event-log heeft **geen antwoordtekst en geen citatiepayload** (D9: geen nieu
 
 `/signals` en `/admin/funds/[key]/signals`. Drie blokken:
 
-- **Kennisgaten:** `refused` + retrieval strength `none`, gegroepeerd op letterlijke vraag, gesorteerd op frequentie × recentheid.
-- **Verdachte weigeringen:** dezelfde groepering voor `refused` + strength `strong`. Alleen op het admin-gezicht (werk voor ons).
-- **Adoptie oefenagent:** `roleplay_sessions` per scenario (gekozen / afgebroken). Staat buiten de kennisgatlijst.
+- **Kennisgaten:** `refused` zonder sterke retrieval (`none` of `weak`), gegroepeerd op
+  genormaliseerde vraag + agent, gesorteerd op frequentie dan recentheid. Hoofdgetal =
+  aantal vragen (niet groepen). Geen drempel: elke onbeantwoorde vraag staat er. Corpusvorm
+  per regel: "geen enkele bron geraakt" of "raakt bronnen, maar te zwak".
+- **Verdachte weigeringen:** dezelfde groepering voor `refused` + strength `strong`. Alleen
+  op het admin-gezicht (werk voor ons).
+- **Adoptie oefenagent:** `roleplay_sessions` per scenario (gekozen / afgebroken). Staat
+  buiten de kennisgatlijst.
 
-Aggregatiedrempel `SIGNAL_MIN_OCCURRENCES = 3` zit in de query (`packages/analytics/src/signals.ts`, `.having(count(*) >= …)`). Versmallen op agent/periode/thema is een WHERE vóór die HAVING: eronder is de uitkomst leeg, geen losse rijen. Geen clustering, geen gegenereerde thema’s. Elke rij permalinkt naar het gesprek (laatste event- of sessie-id).
+Paginering via `?page=` (50 groepen per pagina). Geen clustering, geen gegenereerde thema's.
+Elke rij permalinkt naar het gesprek (laatste event-id). Besluit:
+`docs/decisions/DECISION-kennisgaten.md`.
 
 ## PR-5 — Agenttabs (S13)
 

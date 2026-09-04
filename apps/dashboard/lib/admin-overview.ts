@@ -22,14 +22,14 @@ export function answerRateDisplay(rate: Rate, total: number): string {
  */
 export function fundStatusFromInstancesAndActivity(
   instanceKeys: string[],
-  activity: Array<{ agentId: string; byOutcome: OutcomeCounts }>,
+  activity: Array<{ agentKey: string; byOutcome: OutcomeCounts }>,
 ): AgentOperationalStatus {
   const byAgent = new Map<string, AgentOperationalStatus>();
   for (const key of instanceKeys) {
     byAgent.set(key, deriveAgentStatus(0, 0));
   }
   for (const row of activity) {
-    byAgent.set(row.agentId, statusFromCounts(row.byOutcome));
+    byAgent.set(row.agentKey, statusFromCounts(row.byOutcome));
   }
   return fundStatusFromAgents([...byAgent.values()].map((status) => ({ status })));
 }

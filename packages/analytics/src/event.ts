@@ -20,7 +20,7 @@ export const interactionEventInputSchema = z.object({
    * is recorded in `roleplay_sessions`. Two concepts, two tables, so no reader has to subtract one
    * from the other.
    */
-  agentId: groundedAgentKeySchema,
+  agentKey: groundedAgentKeySchema,
   /** The fund (customer-domain word) whose corpus answered. */
   fund: z.string().min(1),
   /** Stable per-conversation id, shared with the Langfuse trace (one identity model). */
@@ -35,7 +35,7 @@ export const interactionEventInputSchema = z.object({
   /** Raw retrieval signals — strength label is derived in analytics, not persisted. */
   retrievedCount: z.number().int().nonnegative(),
   topScore: z.number().min(0).max(1).nullable(),
-  /** Potentially-sensitive query text; logged for the corpus-roadmap signal (90-day retention). */
+  /** Potentially-sensitive query text; logged for the corpus-roadmap signal (retention not automated). */
   question: z.string().min(1).max(4000).nullish(),
   /** Coarse theme metadata; null until a classifier exists (deferred). */
   theme: z.string().min(1).max(200).nullish(),

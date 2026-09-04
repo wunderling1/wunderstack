@@ -57,8 +57,11 @@ hierheen met een voorgevuld filter.
 **S17 — Rollenspelinput zit niet in de kennisgatlijst.** Adoptie (gekozen scenario's, waar
 afgebroken) staat in een eigen blok.
 
-**S18 — Aggregatiedrempel in de querylaag**, niet in de UI, en niet te omzeilen door te
-versmallen op agent, periode of thema.
+**S18 — Geamendeerd 4 september 2026 (kennisgaten).** De aggregatiedrempel van drie
+identieke vragen is vervallen. Het hoofdgetal telt **onbeantwoorde vragen** (rijen), niet
+groepen; de lijst bundelt alleen bijna-letterlijke woordvarianten. Zie
+`DECISION-kennisgaten.md`. De oude regel (drempel in de querylaag, niet in de UI) gold tot
+die amendement.
 
 **S19 — Geen gegenereerde labels of samenvattingen.** Elke getoonde regel is een letterlijke
 vraag of een groep letterlijke vragen, en is doorklikbaar naar het gesprek.
@@ -233,4 +236,5 @@ voordat de cijfers eronder kloppen.
 Dit document stond niet in de repo tijdens de implementatie en de audit van 1 september
 2026. De auditor heeft S9–S21 teruggehaald uit het implementatietranscript
 (sessie `9f44104e`, 9:48) en de verificatieprompt. S20 is niet teruggevonden. De
-amendementen A1–A5 zijn de weging van 1 september op die audit.
+amendementen A1–A5 zijn de weging van 1 september op die audit. S18 is geamendeerd op
+4 september 2026; zie `DECISION-kennisgaten.md`.

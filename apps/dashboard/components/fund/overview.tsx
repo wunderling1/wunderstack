@@ -2,7 +2,6 @@ import {
   AgentStatusBadge,
   Card,
   Chip,
-  KpiTile,
   Table,
   TableBody,
   TableCell,
@@ -12,13 +11,19 @@ import {
 } from "@wunderstack/ui";
 import Link from "next/link";
 import { Suspense } from "react";
-import { SIGNAL_MIN_OCCURRENCES, type OutcomeCounts, type Rate } from "@wunderstack/analytics";
-import { MeasurementNote, ScanTruncationNote } from "@/components/fund/measurement-note";
+import {
+  type OutcomeCounts,
+  type Rate,
+} from "@wunderstack/analytics";
+import type { AgentKey } from "@wunderstack/shared";
+import { ActivityCard } from "@/components/fund/activity-card";
+import { MeasurementNote } from "@/components/fund/measurement-note";
 import { SectionSkeleton } from "@/components/fund/panel-skeleton";
 import { PeriodPicker } from "@/components/fund/period-picker";
 import { UpdatedAt } from "@/components/fund/updated-at";
+import { comparisonLine, formatPeriodThrough } from "@/lib/activity-copy";
 import { formatCount, formatRate } from "@/lib/overview";
-import { outcomeChipVariant, outcomeLabel } from "@/lib/conversations";
+import { conversationListHref, outcomeChipVariant, outcomeLabel } from "@/lib/conversations";
 import { PERIOD_LABELS, type PeriodId } from "@/lib/period";
 import {
   loadActivityModel,
@@ -111,7 +116,7 @@ async function ActivitySection({ fundKey, period, nowMs, hrefs }: SectionProps) 
     loadAgentsModel(fundKey, period, nowMs),
   ]);
   if (model.onboarding) return <OnboardingCard hrefs={hrefs} period={model.period} />;
-  return <ActivityBlock model={model} agents={agents} hrefs={hrefs} />;
+  return <ActivityBlock model={model} agents={agents} hrefs={hrefs} nowMs={nowMs} />;
 }
 
 async function StatusSection({ fundKey, period, nowMs, hrefs }: SectionProps) {
@@ -155,42 +160,16 @@ function ActivityBlock({
   model,
   agents,
   hrefs,
+  nowMs,
 }: {
   model: OverviewActivityModel;
   agents: OverviewAgentsModel;
   hrefs: OverviewHrefs;
+  nowMs: number;
 }) {
   return (
     <section className="flex flex-col gap-4">
-      <h2 className="text-sm font-semibold text-text">Activiteit</h2>
-      {/* Two units, one destination (S11a, S22): questions are what the KPIs count, conversations
-          are what the list shows. Questions per conversation is the adoption signal — someone who
-          asks three follow-ups is using the instrument; someone who asks once and leaves is not. */}
-      <KpiTile
-        label="Vragen en gesprekken"
-        value={
-          <Link href={hrefs.conversations} className="hover:underline">
-            {formatCount(model.currentQuestions)} vragen{" "}
-            <span className="text-base font-normal text-text-muted">
-              in {formatCount(model.currentConversations)} gesprekken
-            </span>
-          </Link>
-        }
-        hint={
-          <>
-            Vorige {PERIOD_LABELS[model.period]}: {formatCount(model.previousQuestions)} vragen in{" "}
-            {formatCount(model.previousConversations)} gesprekken
-            {model.unthreadedQuestions > 0 ? (
-              <>
-                {" · "}
-                {formatCount(model.unthreadedQuestions)} losse vragen, want MCP en API leveren geen
-                gespreks-id
-              </>
-            ) : null}
-          </>
-        }
-      />
-      {model.conversationVolumeTruncated ? <ScanTruncationNote /> : null}
+      <ActivityCard model={model} nowMs={nowMs} conversationsPath={hrefs.conversations} />
       <div>
         <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-text-subtle">
           Mix per agent
@@ -219,7 +198,13 @@ function ActivityBlock({
                     </Link>
                   </TableCell>
                   <TableCell>
-                    <Link href={hrefs.agent(agent.agentKey)} className="hover:underline">
+                    <Link
+                      href={conversationListHref(hrefs.conversations, {
+                        period: model.period,
+                        agentId: agent.agentKey as AgentKey,
+                      })}
+                      className="hover:underline"
+                    >
                       {formatCount(agent.total)}{" "}
                       {agent.kind === "grounded"
                         ? agent.total === 1
@@ -336,32 +321,36 @@ function RecentBlock({ model, hrefs }: { model: OverviewRecentModel; hrefs: Over
 }
 
 function ActionsBlock({ model, hrefs }: { model: OverviewActivityModel; hrefs: OverviewHrefs }) {
-  const justified = model.current.rates.refusedJustified;
-  // The refused questions underneath the gaps — context for the count, never the count itself. A
-  // gap is a repeated question; a single refusal is not yet one.
-  const refusedQuestions = "kind" in justified ? 0 : justified.numerator;
   const gaps = model.knowledgeGaps;
+  const unit = gaps === 1 ? "onbeantwoorde vraag" : "onbeantwoorde vragen";
 
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="text-sm font-semibold text-text">Acties</h2>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-sm font-semibold text-text">Acties</h2>
+        <p className="text-sm text-text-muted">{formatPeriodThrough(model.period, new Date())}</p>
+      </div>
       <MeasurementNote startedAt={model.measurementStartedAt} />
       {gaps === 0 ? (
         <p className="text-sm text-text-subtle">
-          {refusedQuestions === 0
-            ? "Geen openstaande kennisgaten in deze periode."
-            : `Geen kennisgaten in deze periode: geen vraag kwam ${SIGNAL_MIN_OCCURRENCES}× terug (${formatRate(justified)} vragen geweigerd zonder retrieval).`}
+          Geen onbeantwoorde vragen in deze periode. Er zijn {formatCount(model.currentQuestions)}{" "}
+          vragen gesteld en {formatCount(model.current.byOutcome.answered)} beantwoord.
         </p>
       ) : (
-        <p className="text-sm text-text">
-          <Link href={hrefs.signals} className="text-primary hover:underline">
-            {formatCount(gaps)} kennisgaten
+        <div className="flex flex-col gap-2">
+          <Link
+            href={hrefs.signals}
+            className="block rounded-[var(--radius-badge)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <p className="font-display text-3xl font-semibold tabular-nums text-text">
+              {formatCount(gaps)}
+            </p>
+            <p className="mt-1 text-sm text-text-muted">{unit}</p>
           </Link>
-          <span className="text-text-muted">
-            {" "}
-            (uit {formatRate(justified)} vragen geweigerd zonder retrieval)
-          </span>
-        </p>
+          <p className="text-sm text-text-subtle">
+            {comparisonLine(gaps, model.previousKnowledgeGaps, formatCount)}
+          </p>
+        </div>
       )}
     </section>
   );
