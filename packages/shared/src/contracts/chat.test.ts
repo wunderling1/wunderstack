@@ -11,6 +11,7 @@ describe("chatEventSchema — retrieval", () => {
       query: "vakantie",
       considered: 3,
       aboveThreshold: 1,
+      used: 1,
       hits: [{ label: "Artikel 27", dropped: false }],
     });
     assert.equal(parsed.success, false);
@@ -20,6 +21,19 @@ describe("chatEventSchema — retrieval", () => {
     const parsed = chatEventSchema.safeParse({
       type: "retrieval",
       corpus: { label: "CAO Motor", version: "2025-2026" },
+      considered: 3,
+      aboveThreshold: 1,
+      used: 1,
+      hits: [{ label: "Artikel 27", dropped: false }],
+    });
+    assert.equal(parsed.success, false);
+  });
+
+  it("rejects a retrieval event without used", () => {
+    const parsed = chatEventSchema.safeParse({
+      type: "retrieval",
+      corpus: { label: "CAO Motor", version: "2025-2026" },
+      query: "vakantie",
       considered: 3,
       aboveThreshold: 1,
       hits: [{ label: "Artikel 27", dropped: false }],
@@ -34,6 +48,7 @@ describe("chatEventSchema — retrieval", () => {
       query: "hoeveel vakantiedagen",
       considered: 14,
       aboveThreshold: 3,
+      used: 2,
       hits: [
         { label: "Artikel 27", dropped: false },
         { label: "Artikel 12", dropped: true },
@@ -47,6 +62,7 @@ describe("chatEventSchema — retrieval", () => {
       query: "hoeveel vakantiedagen",
       considered: 14,
       aboveThreshold: 3,
+      used: 2,
       hits: Array.from({ length: 7 }, (_, index) => ({
         label: `Artikel ${String(index)}`,
         dropped: false,

@@ -1,15 +1,35 @@
 "use client";
 
 import type { RoleplayDifficulty } from "@wunderstack/shared/browser";
-import { Button, Card } from "@wunderstack/ui";
-import { useEffect, type ReactNode } from "react";
+import { Button, Card, useScrollAnchor } from "@wunderstack/ui";
+import { useEffect, useRef, type ReactNode } from "react";
 
-import { useRoleplaySession } from "./use-roleplay";
+import { useRoleplaySession, type TranscriptMessage } from "./use-roleplay";
 import { Briefing } from "./briefing";
 import { Composer } from "./composer";
 import { ReviewCard } from "./review";
 import { Transcript } from "./transcript";
 import { TurnCounter } from "./turn-counter";
+
+function lastUserMessageId(messages: TranscriptMessage[]): string | undefined {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message?.role === "user") {
+      return message.id;
+    }
+  }
+  return undefined;
+}
+
+function lastAssistant(messages: TranscriptMessage[]): TranscriptMessage | undefined {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message?.role === "assistant") {
+      return message;
+    }
+  }
+  return undefined;
+}
 
 export function Session({
   scenarioSlug,
@@ -115,34 +135,79 @@ export function Session({
           </Card>
         </div>
       ) : (
-        <>
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6">
-            <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-              {session.error ? (
-                <p role="alert" className="text-sm text-state-danger-fg">
-                  {session.error}
-                </p>
-              ) : null}
-              <Transcript
-                messages={session.messages}
-                partnerRole={session.started.partnerRole}
-              />
-            </div>
-          </div>
-          <div className="bg-page px-4 py-4">
-            <div className="mx-auto w-full max-w-3xl">
-              <Composer
-                disabled={session.sending || session.conversationEnded}
-                onSend={(message) => void session.send(message)}
-              />
-              <p className="mt-2 px-3 text-center text-xs text-text-subtle">
-                Je praat met een AI-gesprekspartner. Dit is een oefening, geen echt gesprek.
-              </p>
-            </div>
-          </div>
-        </>
+        <PlayingPane
+          messages={session.messages}
+          partnerRole={session.started.partnerRole}
+          error={session.error}
+          sending={session.sending}
+          conversationEnded={session.conversationEnded}
+          onSend={(message) => void session.send(message)}
+        />
       )}
     </main>
+  );
+}
+
+/**
+ * Mounted only during the conversation. The shared hook's opening layout then sees the
+ * partner greeting (no user turn yet) and jumps to the end without a reservation.
+ */
+function PlayingPane({
+  messages,
+  partnerRole,
+  error,
+  sending,
+  conversationEnded,
+  onSend,
+}: {
+  messages: TranscriptMessage[];
+  partnerRole: string;
+  error: string | null;
+  sending: boolean;
+  conversationEnded: boolean;
+  onSend: (message: string) => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const lastUserId = lastUserMessageId(messages);
+  const assistant = lastAssistant(messages);
+  // Short turns, tokens visible immediately. Treat the empty "Antwoordt…" spinner as the
+  // status phase; the first character of the partner reply is firstToken, so a growing
+  // reply never pulls the viewport.
+  useScrollAnchor({
+    containerRef: scrollRef,
+    lastUserId,
+    lastAssistantId: assistant?.id,
+    assistantWaiting: assistant !== undefined && assistant.streaming && assistant.text.length === 0,
+    assistantStreaming: assistant?.streaming === true,
+  });
+
+  return (
+    <>
+      <div className="relative min-h-0 flex-1">
+        <div
+          ref={scrollRef}
+          data-chat-scroll
+          className="absolute inset-0 overflow-y-auto px-4 py-6"
+        >
+          <div className="mx-auto w-full max-w-3xl">
+            {error ? (
+              <p role="alert" className="mb-6 text-sm text-state-danger-fg">
+                {error}
+              </p>
+            ) : null}
+            <Transcript messages={messages} partnerRole={partnerRole} />
+          </div>
+        </div>
+      </div>
+      <div className="bg-page px-4 py-4">
+        <div className="mx-auto w-full max-w-3xl">
+          <Composer disabled={sending || conversationEnded} onSend={onSend} />
+          <p className="mt-2 px-3 text-center text-xs text-text-subtle">
+            Je praat met een AI-gesprekspartner. Dit is een oefening, geen echt gesprek.
+          </p>
+        </div>
+      </div>
+    </>
   );
 }
 

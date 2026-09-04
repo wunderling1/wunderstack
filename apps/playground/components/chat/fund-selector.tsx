@@ -46,7 +46,7 @@ export function FundSelector({ funds, active }: { funds: string[]; active: strin
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={listId}
-        aria-label="Kies bron"
+        aria-label="Kies fonds"
         disabled={singleFund}
         onClick={() => setOpen((value) => !value)}
         className={cn(
@@ -62,7 +62,7 @@ export function FundSelector({ funds, active }: { funds: string[]; active: strin
         <ul
           id={listId}
           role="listbox"
-          aria-label="Bronnen"
+          aria-label="Fondsen"
           className="absolute z-20 mt-1 w-full overflow-hidden rounded-[var(--radius-control)] border border-border bg-surface py-1 shadow-[var(--elevation-raised)]"
         >
           {funds.map((fund) => {

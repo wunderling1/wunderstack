@@ -69,6 +69,8 @@ export const chatEventSchema = z.discriminatedUnion("type", [
     query: z.string().min(1),
     considered: z.number().int().nonnegative(),
     aboveThreshold: z.number().int().nonnegative(),
+    /** Unique headings in the reranked context the model saw. */
+    used: z.number().int().nonnegative(),
     hits: z.array(chatRetrievalHitSchema).max(6),
   }),
   z.object({ type: z.literal("text"), delta: z.string() }),

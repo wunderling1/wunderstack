@@ -2,7 +2,7 @@
  * The progress trace: one line per thing the runtime actually did, built from stream events.
  *
  * Every label here is derived from a measured field. There is no step for work we cannot observe
- * and no invented passage total. If a field is absent, the line is absent.
+ * and no invented fragment total. If a field is absent, the line is absent.
  *
  * Timeline (A2): searched → found (chips) → checked (chips strike through) → write.
  * Verbatim citation verification lives in the sources bar under the answer, not in this log.
@@ -12,7 +12,7 @@
  * mirror; both satisfy these shapes.
  */
 
-/** A retrieved passage, shown as a chip under the found step. */
+/** A retrieved fragment, shown as a chip under the found step. */
 export interface AnswerTraceChip {
   /** Stable key within the step. */
   id: string;
@@ -27,8 +27,8 @@ export interface AnswerTraceChip {
 }
 
 /**
- * Tone for a step that is itself a verdict. Green stays off this type: a passage above the
- * threshold is not a verified citation, and green-with-check belongs only to the sources bar (A2).
+ * Tone for a step that is itself a verdict. Green stays off this type: a fragment that matches the
+ * question is not a verified citation, and green-with-check belongs only to the sources bar (A2).
  */
 export type AnswerTraceTone = "refusal" | "danger";
 
@@ -39,7 +39,7 @@ export interface AnswerTraceStep {
   /** Set only when a measured field makes this step a verdict; otherwise the step is neutral. */
   tone: AnswerTraceTone | null;
   chips: AnswerTraceChip[];
-  /** Cap overflow behind the chip row, e.g. "+ 3 meer" / "+ 3 afgevallen". */
+  /** Cap overflow behind the chip row, e.g. "+ 3 meer" / "+ 3 sluiten niet aan". */
   overflowLabel: string | null;
   /** True on the write step while the answer is still being prepared — drives the dots. */
   pending: boolean;
@@ -47,7 +47,8 @@ export interface AnswerTraceStep {
 
 /**
  * One releasable unit of the trace. `kind` doubles as the pacing kind for the progress queue,
- * so a batch of chips is spread at the chip gap and a new step at the step gap.
+ * so a batch of chips is spread at the chip gap and a new step at the step gap. Overflow is
+ * paced as a chip: it belongs to the chip row and lands after the last chip, not with the step.
  */
 export type AnswerTraceItem =
   | {
@@ -56,15 +57,19 @@ export type AnswerTraceItem =
       label: string;
       detail: string | null;
       tone: AnswerTraceTone | null;
-      overflowLabel?: string | null;
       pending?: boolean;
-      /**
-       * When set, the overflow label switches to this wording once this step is released
-       * (found → checked: "+ N meer" becomes "+ N afgevallen").
-       */
-      overflowLabelAfterChecked?: string | null;
     }
-  | { kind: "chip"; on: string; chip: Omit<AnswerTraceChip, "struck"> };
+  | { kind: "chip"; on: string; chip: Omit<AnswerTraceChip, "struck"> }
+  | {
+      kind: "overflow";
+      on: string;
+      label: string;
+      /**
+       * Wording once `checked` is released ("+ N meer" becomes "+ N sluiten niet aan").
+       * Same as `label` when the overflow still hides kept hits.
+       */
+      labelAfterChecked: string;
+    };
 
 /** The stream events the trace can read. Extra fields on the caller's events are ignored. */
 export type AnswerTraceEvent =
@@ -76,6 +81,8 @@ export type AnswerTraceEvent =
       query?: string;
       considered: number;
       aboveThreshold: number;
+      /** Unique headings the model saw. Optional so an older embed mirror still type-checks. */
+      used?: number;
       hits: readonly { label: string; dropped: boolean }[];
     }
   | { type: "citations"; needsClarification: boolean };
@@ -96,7 +103,7 @@ const MAX_DROPPED_VISIBLE = 2;
 export const TRACE_SUMMARY = {
   clarified: "Niet gezocht · verduidelijking gevraagd",
   aborted: "Beurt afgebroken",
-  refusedNoCoverage: "geen passage boven de drempel",
+  refusedNoCoverage: "geen fragment sloot aan op je vraag",
   refusedOther: "geen antwoord gegeven",
 } as const;
 
@@ -106,10 +113,12 @@ export const TRACE_SUMMARY = {
  */
 export interface AnswerTraceSummaryInput {
   outcome: "answered" | "refused" | "clarified" | "error";
-  /** Caller-supplied corpus wording, e.g. "Zocht in de CAO". */
+  /** Caller-supplied corpus wording, e.g. "Gezocht in de CAO". */
   searchedLabel: string;
   considered: number;
   aboveThreshold: number;
+  /** Unique headings in the reranked context. Optional so an older embed bundle can omit it. */
+  used?: number;
 }
 
 /**
@@ -161,7 +170,7 @@ export function traceItemsFromEvent(event: AnswerTraceEvent): AnswerTraceItem[] 
     {
       kind: "step",
       id: SEARCH_STEP,
-      label: `${event.corpus.label} doorzocht`,
+      label: `In de ${event.corpus.label} gezocht`,
       detail: searchDetail(event.corpus.version, event.query),
       tone: null,
     },
@@ -176,11 +185,9 @@ export function traceItemsFromEvent(event: AnswerTraceEvent): AnswerTraceItem[] 
   items.push({
     kind: "step",
     id: FOUND_STEP,
-    label: `${String(event.considered)} ${passageWord(event.considered)} gevonden`,
+    label: `${String(event.considered)} ${fragmentWord(event.considered)} gevonden`,
     detail: null,
     tone: null,
-    overflowLabel: overflow > 0 ? overflowMore : null,
-    overflowLabelAfterChecked: overflow > 0 ? overflowDropped : null,
   });
 
   for (const [index, hit] of visible.entries()) {
@@ -191,11 +198,20 @@ export function traceItemsFromEvent(event: AnswerTraceEvent): AnswerTraceItem[] 
     });
   }
 
+  if (overflow > 0) {
+    items.push({
+      kind: "overflow",
+      on: FOUND_STEP,
+      label: overflowMore,
+      labelAfterChecked: overflowDropped,
+    });
+  }
+
   items.push({
     kind: "step",
     id: CHECKED_STEP,
-    label: `${String(event.considered)} ${passageWord(event.considered)} gecontroleerd`,
-    detail: thresholdDetail(event.considered, event.aboveThreshold),
+    label: matchLabel(event.considered, event.aboveThreshold),
+    detail: null,
     // An empty shortlist is where a refusal is decided, so this step carries the verdict.
     tone: event.aboveThreshold === 0 ? "refusal" : null,
   });
@@ -222,16 +238,18 @@ export function traceSummaryLabel(input: AnswerTraceSummaryInput | null): string
       input.aboveThreshold === 0 ? TRACE_SUMMARY.refusedNoCoverage : TRACE_SUMMARY.refusedOther;
     return `${input.searchedLabel} · ${reason}`;
   }
-  return `${input.searchedLabel} · ${String(input.aboveThreshold)} van ${String(input.considered)} passages gebruikt`;
+  const used = input.used ?? input.aboveThreshold;
+  return `${input.searchedLabel} · ${String(used)} ${fragmentWord(used)} gebruikt`;
 }
 
 /**
  * Folds released items into the steps to render. A step id that appears twice updates the existing
- * line in place (keeping its chips); a chip for an unknown step is dropped rather than inventing
- * a step to hang it under.
+ * line in place (keeping its chips); a chip or overflow for an unknown step is dropped rather than
+ * inventing a step to hang it under.
  *
- * Once the `checked` step is among the released items, chips under `found` take on their measured
- * `dropped` as `struck`, and the overflow label switches from "+ N meer" to "+ N afgevallen".
+ * Overflow is its own item, released after the chips, so the found step starts without a "+ N meer"
+ * label. Once the `checked` step is among the released items, chips under `found` take on their
+ * measured `dropped` as `struck`, and the overflow label switches from "+ N meer" to "+ N afgevallen".
  */
 export function accumulateTraceItems(items: readonly AnswerTraceItem[]): AnswerTraceStep[] {
   const steps: AnswerTraceStep[] = [];
@@ -243,9 +261,6 @@ export function accumulateTraceItems(items: readonly AnswerTraceItem[]): AnswerT
       if (item.id === CHECKED_STEP) {
         checkedReleased = true;
       }
-      if (item.id === FOUND_STEP && item.overflowLabelAfterChecked !== undefined) {
-        overflowAfterChecked = item.overflowLabelAfterChecked;
-      }
       const existing = steps.find((step) => step.id === item.id);
       if (existing === undefined) {
         steps.push({
@@ -254,7 +269,7 @@ export function accumulateTraceItems(items: readonly AnswerTraceItem[]): AnswerT
           detail: item.detail,
           tone: item.tone,
           chips: [],
-          overflowLabel: item.overflowLabel ?? null,
+          overflowLabel: null,
           pending: item.pending === true,
         });
       } else {
@@ -262,21 +277,24 @@ export function accumulateTraceItems(items: readonly AnswerTraceItem[]): AnswerT
         existing.detail = item.detail;
         existing.tone = item.tone;
         existing.pending = item.pending === true;
-        if (item.overflowLabel !== undefined) {
-          existing.overflowLabel = item.overflowLabel;
-        }
       }
       continue;
     }
     const host = steps.find((step) => step.id === item.on);
-    if (host !== undefined) {
-      host.chips.push({
-        id: item.chip.id,
-        label: item.chip.label,
-        dropped: item.chip.dropped,
-        struck: false,
-      });
+    if (host === undefined) {
+      continue;
     }
+    if (item.kind === "overflow") {
+      host.overflowLabel = item.label;
+      overflowAfterChecked = item.labelAfterChecked;
+      continue;
+    }
+    host.chips.push({
+      id: item.chip.id,
+      label: item.chip.label,
+      dropped: item.chip.dropped,
+      struck: false,
+    });
   }
 
   if (checkedReleased) {
@@ -297,8 +315,8 @@ export function accumulateTraceItems(items: readonly AnswerTraceItem[]): AnswerT
 }
 
 /**
- * All above-threshold chips, at most two struck-through ones, and an overflow count for the rest.
- * The overflow wording is chosen so we never call a kept passage "afgevallen".
+ * All matching chips, at most two struck-through ones, and an overflow count for the rest.
+ * The overflow wording is chosen so we never say a kept fragment does not match.
  */
 function selectVisibleHits(
   hits: readonly { label: string; dropped: boolean }[],
@@ -316,9 +334,11 @@ function selectVisibleHits(
   const visible = [...kept, ...visibleDropped];
   const overflow = Math.max(0, considered - visible.length);
   const overflowMore = `+ ${String(overflow)} meer`;
-  // If a kept passage did not fit in the hit cap, the overflow is not "dropped".
+  // If a kept fragment did not fit in the hit cap, the overflow is not all non-matching.
   const overflowDropped =
-    kept.length < aboveThreshold ? overflowMore : `+ ${String(overflow)} afgevallen`;
+    kept.length < aboveThreshold
+      ? overflowMore
+      : `+ ${String(overflow)} ${overflow === 1 ? "sluit" : "sluiten"} niet aan`;
   return { visible, overflow, overflowMore, overflowDropped };
 }
 
@@ -328,20 +348,27 @@ function searchDetail(version: string, query: string | undefined): string | null
     parts.push(`Versie ${version}`);
   }
   if (query !== undefined && query.length > 0) {
-    parts.push(query);
+    parts.push(`op je vraag "${query}"`);
   }
   return parts.length > 0 ? parts.join(" · ") : null;
 }
 
-function thresholdDetail(considered: number, aboveThreshold: number): string | null {
-  if (aboveThreshold === 0) {
-    return "Geen enkele passage haalde de drempel";
+/**
+ * How many of the fragments in the window clear the similarity floor, in plain language: the
+ * reader is told what matched their question, not where a threshold sat. The verb follows the
+ * count, and a window of nothing names no total it does not have.
+ */
+function matchLabel(considered: number, aboveThreshold: number): string {
+  if (considered === 0) {
+    return "Geen enkel fragment sluit aan op je vraag";
   }
-  const droppedCount = considered - aboveThreshold;
-  const above = `${String(aboveThreshold)} boven de drempel`;
-  return droppedCount > 0 ? `${above}, ${String(droppedCount)} afgevallen` : above;
+  if (aboveThreshold === 0) {
+    return `Geen van de ${String(considered)} sluit aan op je vraag`;
+  }
+  const verb = aboveThreshold === 1 ? "sluit" : "sluiten";
+  return `${String(aboveThreshold)} van de ${String(considered)} ${verb} aan op je vraag`;
 }
 
-function passageWord(count: number): string {
-  return count === 1 ? "passage" : "passages";
+function fragmentWord(count: number): string {
+  return count === 1 ? "fragment" : "fragmenten";
 }
