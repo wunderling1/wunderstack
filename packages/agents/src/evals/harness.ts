@@ -206,3 +206,58 @@ export function runEvalChecks(checks: EvalCheck[]): boolean {
   }
   return allPassed;
 }
+
+export type EvalVerdictKind = "PASSED" | "INCOMPLETE" | "FAILED";
+
+export interface EvalVerdict {
+  kind: EvalVerdictKind;
+  /** Gates that ran (passed, failed, or advisory-failed). */
+  run: number;
+  /** Gates skipped for missing credentials/DB (not required on this job). */
+  skipped: number;
+  /** Gates excluded by path-scope (not a skip). */
+  notApplicable: number;
+  /** Console line for the end of the run. */
+  line: string;
+}
+
+/**
+ * Final eval line. A run with skipped gates must never read as PASSED — that was F0-04:
+ * seven of nine gates SKIPPED and the script still printed "Eval PASSED".
+ * Exit code stays 0 on INCOMPLETE (fork PRs skip G2/G3 by design); FAILED keeps exit 1.
+ */
+export function formatEvalVerdict(
+  results: readonly Pick<GateReport, "status">[],
+  options: { allPassed: boolean; partialFilter?: boolean } = { allPassed: true },
+): EvalVerdict {
+  const skipped = results.filter((r) => r.status === "skipped").length;
+  const notApplicable = results.filter((r) => r.status === "not-applicable").length;
+  const run = results.length - skipped - notApplicable;
+  const incomplete = skipped > 0 || options.partialFilter === true;
+
+  if (!options.allPassed) {
+    return {
+      kind: "FAILED",
+      run,
+      skipped,
+      notApplicable,
+      line: "Eval FAILED — an accuracy gate regressed or a required gate could not run. See above.",
+    };
+  }
+  if (incomplete) {
+    return {
+      kind: "INCOMPLETE",
+      run,
+      skipped,
+      notApplicable,
+      line: `Eval INCOMPLETE — ${String(run)} run, ${String(skipped)} skipped.`,
+    };
+  }
+  return {
+    kind: "PASSED",
+    run,
+    skipped,
+    notApplicable,
+    line: `Eval PASSED — ${String(run)} run, 0 skipped.`,
+  };
+}
