@@ -14,8 +14,8 @@ describe("tenant context (D15)", () => {
   });
 
   it("maps every tenant to a fund of the same name (1-to-1)", () => {
-    assert.equal(tenantFund("oomt", { TENANT: "oomt" }), "oomt");
-    assert.equal(tenantFund("demo", {}), "demo");
+    assert.equal(tenantFund("oomt"), "oomt");
+    assert.equal(tenantFund("demo"), "demo");
   });
 
   it("ignores a legacy TENANT_FUND env key — override does not exist", () => {
@@ -25,6 +25,6 @@ describe("tenant context (D15)", () => {
     } as NodeJS.ProcessEnv;
     assert.equal(defaultFund(env), "oomt");
     assert.deepEqual(resolveTenant(env), { tenant: "oomt", fund: "oomt" });
-    assert.equal(tenantFund("oomt", env), "oomt");
+    assert.equal(tenantFund("oomt"), "oomt");
   });
 });

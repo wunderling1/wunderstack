@@ -14,7 +14,7 @@ describe("fund identity (tenant + schema + retrieval)", () => {
   it("keeps getTenantId, tenantFund, fundSchemaName, and searchPathForRetrieve on one string", () => {
     const env = { TENANT: "oomt" };
     const tenant = getTenantId(env);
-    const fund = tenantFund(tenant, env);
+    const fund = tenantFund(tenant);
     const schema = fundSchemaName(fund);
     const searchPath = searchPathForRetrieve({ fund });
 

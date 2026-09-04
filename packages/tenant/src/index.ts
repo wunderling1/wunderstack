@@ -45,18 +45,15 @@ export function getTenantId(env: NodeJS.ProcessEnv = process.env): TenantId {
   return parsed.TENANT ?? DEV_DEFAULT_TENANT;
 }
 
-/**
- * The fund a tenant serves. Always the tenant id itself (1-to-1). `env` is accepted for call-site
- * parity with `getTenantId` / `resolveTenant` but is not read — there is no fund override.
- */
-export function tenantFund(tenant: TenantId, _env: NodeJS.ProcessEnv = process.env): string {
+/** The fund a tenant serves. Always the tenant id itself (1-to-1); there is no fund override. */
+export function tenantFund(tenant: TenantId): string {
   return tenant;
 }
 
 /** Resolve the full tenant context for the current instance. */
 export function resolveTenant(env: NodeJS.ProcessEnv = process.env): TenantContext {
   const tenant = getTenantId(env);
-  return { tenant, fund: tenantFund(tenant, env) };
+  return { tenant, fund: tenantFund(tenant) };
 }
 
 /** The default fund for the current instance (used where a concrete fund is always required). */
