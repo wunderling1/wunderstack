@@ -89,7 +89,7 @@ export type AgentAnswer = z.infer<typeof agentAnswerSchema>;
 
 /**
  * Progress phases the agent passes through while answering. Emitted as `status` events so the UI can
- * show named progress ("CAO doorzoeken…" → "N passages gevonden" → "Antwoord formuleren…") instead
+ * show named progress ("CAO doorzoeken…" → "N fragmenten gevonden" → "Antwoord opstellen…") instead
  * of an undifferentiated spinner. The phase names are language-neutral; the app maps them to
  * user-facing (Dutch) labels. Only the normal answer path emits these; the clarify and not-found
  * paths return too fast for a phase flash to help.
@@ -113,6 +113,8 @@ export type AgentStreamEvent =
       query: string;
       considered: number;
       aboveThreshold: number;
+      /** Unique headings in the reranked context the model saw. */
+      used: number;
       hits: Array<{ label: string; dropped: boolean }>;
     }
   | { type: "text"; delta: string }

@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { PassThrough, type Readable } from "node:stream";
 
-import { agentKeySchema, env, type AgentKey } from "@wunderstack/shared";
+import { agentKeySchema, env, tenantThemeSchema, type AgentKey } from "@wunderstack/shared";
 import { and, count, desc, eq, sql } from "drizzle-orm";
 
 import { createAgentInstance, getInstance } from "./agent-instances";
@@ -12,6 +12,18 @@ import { SCHEMA_NAME_RE, assertFundKey } from "./ident";
 import { agentInstances } from "./schema/control/agent-instances";
 import { auditEvents } from "./schema/control/audit-events";
 import { funds, type Fund } from "./schema/control/funds";
+
+/**
+ * Parse stored fund theme jsonb. Corrupt / unknown shapes become `{}` so a bad row cannot crash
+ * the config route (F1-04).
+ */
+export function parseStoredFundTheme(raw: unknown): Record<string, unknown> {
+  const parsed = tenantThemeSchema.safeParse(raw ?? {});
+  if (!parsed.success) {
+    return {};
+  }
+  return parsed.data as Record<string, unknown>;
+}
 
 export class FundNotFoundError extends Error {
   readonly fundKey: string;
@@ -189,7 +201,7 @@ export async function updateFundDisplayName(input: { fundKey: string; name: stri
   return row;
 }
 
-/** Read fund-level theme (reader connection). Empty object when unset. */
+/** Read fund-level theme (reader connection). Empty object when unset or corrupt. */
 export async function getFundTheme(
   fundKey: string,
   db: Database = getDb(),
@@ -198,18 +210,19 @@ export async function getFundTheme(
   if (!fund) {
     throw new FundNotFoundError(assertFundKey(fundKey));
   }
-  return (fund.theme ?? {}) as Record<string, unknown>;
+  return parseStoredFundTheme(fund.theme);
 }
 
-/** Write fund-level theme (provisioner — control.*). Validated by the caller with tenantThemeSchema. */
+/** Write fund-level theme (provisioner — control.*). Validates with tenantThemeSchema. */
 export async function updateFundTheme(input: {
   fundKey: string;
   theme: Record<string, unknown>;
 }): Promise<Fund> {
   const key = assertFundKey(input.fundKey);
+  const theme = tenantThemeSchema.parse(input.theme);
   const [row] = await getProvisionerDb()
     .update(funds)
-    .set({ theme: input.theme })
+    .set({ theme })
     .where(eq(funds.key, key))
     .returning();
   if (!row) {

@@ -24,9 +24,8 @@ describe("agent runtime profiles — specialisation snapshot", () => {
     assert.equal(parsed.minScore, 0.35);
   });
 
-  it("runRetrieval is bound to the profile agentKey (via tools)", async () => {
-    // Structural check only — do not hit the DB. The tool modules hardcode agentKey.
-    assert.equal(caoProfile.runRetrieval.name, "runRetrieval");
+  it("runRetrieval is bound per profile (cao shares grounded helper; arbo wraps rewrite)", async () => {
+    assert.equal(caoProfile.runRetrieval.name, "runGroundedRetrieval");
     assert.equal(arboProfile.runRetrieval.name, "runRetrieval");
     assert.notEqual(caoProfile.runRetrieval, arboProfile.runRetrieval);
   });

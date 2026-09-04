@@ -23,13 +23,17 @@ const EMPTY_RETRIEVAL: RetrievalOutput = {
   consideredCount: 0,
   aboveThresholdCount: 0,
   droppedChunks: [],
+  progressFound: [],
+  progressDropped: [],
+  usedPassageCount: 0,
 };
 
 const EMPTY_RETRIEVAL_EVENT = {
   type: "retrieval" as const,
-  corpus: { label: "Corpus", version: "" },
+  corpus: { label: "bronnen", version: "" },
   considered: 0,
   aboveThreshold: 0,
+  used: 0,
   hits: [] as { label: string; dropped: boolean }[],
 };
 

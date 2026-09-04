@@ -22,6 +22,9 @@ function retrievalWithGrounding(grounding: string): RetrievalOutput {
     consideredCount: 0,
     aboveThresholdCount: 0,
     droppedChunks: [],
+    progressFound: [],
+    progressDropped: [],
+    usedPassageCount: 0,
   };
 }
 

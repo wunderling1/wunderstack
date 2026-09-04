@@ -16,6 +16,7 @@ import type {
   RoleplayEndReason,
   RoleplayOrigin,
 } from "@wunderstack/shared";
+import { roleplayEndReasonSchema } from "@wunderstack/shared";
 
 import { resolveRubric } from "./rubric";
 import {
@@ -182,7 +183,10 @@ export async function loadSession(
   return {
     id: row.id,
     status: row.status === "ended" ? "ended" : "active",
-    endReason: (row.endReason as RoleplayEndReason | null) ?? null,
+    endReason: (() => {
+      const parsed = roleplayEndReasonSchema.safeParse(row.endReason);
+      return parsed.success ? parsed.data : null;
+    })(),
     turnsUsed: row.turnsUsed,
     maxTurns: row.maxTurns,
     snapshot: parseScenarioSnapshot(row.scenarioSnapshot),

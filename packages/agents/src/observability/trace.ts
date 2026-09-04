@@ -53,6 +53,12 @@ export interface RetrievalEvidence {
   embeddingDim: number;
   hits: RetrievalHit[];
   found: boolean;
+  /** Candidates considered before the score floor (progress / Langfuse). */
+  consideredCount?: number;
+  /** Hits that cleared minScore before rerank trim. */
+  aboveThresholdCount?: number;
+  /** Unique passages fed to the model after rerank. */
+  usedPassageCount?: number;
   /** Per-phase wall-clock timings in milliseconds (Langfuse latency budget). */
   timings?: {
     rewriteMs: number;
@@ -233,6 +239,15 @@ export function startAgentTrace(mastra: Mastra, input: AgentTraceInput): AgentTr
                 hitCount: evidence.hits.length,
                 topScore: scores[0] ?? null,
                 scores,
+                ...(evidence.consideredCount === undefined
+                  ? {}
+                  : { consideredCount: evidence.consideredCount }),
+                ...(evidence.aboveThresholdCount === undefined
+                  ? {}
+                  : { aboveThresholdCount: evidence.aboveThresholdCount }),
+                ...(evidence.usedPassageCount === undefined
+                  ? {}
+                  : { usedPassageCount: evidence.usedPassageCount }),
                 ...(phaseTimings === undefined
                   ? {}
                   : {

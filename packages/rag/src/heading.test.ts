@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { deriveChunkHeading } from "./heading";
+import {
+  deriveChunkHeading,
+  passageLabel,
+  uniqueByPassageLabel,
+  uniquePassageWindow,
+} from "./heading";
 import type { RetrievedChunk } from "./retrieve";
 
 function chunk(overrides: {
@@ -74,5 +79,51 @@ describe("deriveChunkHeading", () => {
       }),
     );
     assert.equal(label, null);
+  });
+});
+
+describe("uniqueByPassageLabel", () => {
+  it("keeps the first chunk per heading and falls back to the document title for display", () => {
+    const first = chunk({ article: "27", content: "Artikel 27 — Vakantie\nA." });
+    const duplicate = chunk({ article: "27", content: "Artikel 27 — Vakantie\nB." });
+    const untitled = chunk({ content: "Algemene bepalingen zonder anker.", sourceRef: null });
+    const unique = uniqueByPassageLabel([first, duplicate, untitled]);
+    assert.equal(unique.length, 2);
+    assert.equal(unique[0], first);
+    assert.equal(passageLabel(untitled), "CAO Metalektro 2026");
+    assert.equal(unique[1], untitled);
+  });
+
+  it("keeps two untitled chunks with different ids instead of collapsing on the document title", () => {
+    const a = {
+      ...chunk({ content: "Fragment A zonder anker.", sourceRef: null }),
+      chunkId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    };
+    const b = {
+      ...chunk({ content: "Fragment B zonder anker.", sourceRef: null }),
+      chunkId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    };
+    const unique = uniqueByPassageLabel([a, b]);
+    assert.equal(unique.length, 2);
+    assert.equal(passageLabel(a), "CAO Metalektro 2026");
+    assert.equal(passageLabel(b), "CAO Metalektro 2026");
+  });
+});
+
+describe("uniquePassageWindow", () => {
+  it("does not count a below-threshold heading that already cleared the floor", () => {
+    const kept = chunk({ article: "27", content: "Artikel 27 — Vakantie\nA." });
+    const otherKept = chunk({ article: "28", content: "Artikel 28 — Verlof\nB." });
+    const droppedSame = chunk({ article: "27", content: "Artikel 27 — Vakantie\nC." });
+    const droppedOther = chunk({ article: "12", content: "Artikel 12 — Loon\nD." });
+    const window = uniquePassageWindow([kept, otherKept, kept], [droppedSame, droppedOther, droppedOther]);
+    assert.deepEqual(
+      window.found.map((item) => passageLabel(item)),
+      ["Artikel 27 — Vakantie", "Artikel 28 — Verlof"],
+    );
+    assert.deepEqual(
+      window.dropped.map((item) => passageLabel(item)),
+      ["Artikel 12 — Loon"],
+    );
   });
 });

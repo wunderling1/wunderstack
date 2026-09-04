@@ -16,6 +16,9 @@ const EMPTY_RETRIEVAL: RetrievalOutput = {
   consideredCount: 0,
   aboveThresholdCount: 0,
   droppedChunks: [],
+  progressFound: [],
+  progressDropped: [],
+  usedPassageCount: 0,
 };
 
 describe("turn outcome classification — pipeline paths", () => {
