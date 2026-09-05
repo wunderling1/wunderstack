@@ -33,6 +33,7 @@ describe("pipeline passes profile.agentKey into retrieval (F1-08)", () => {
       systemInstructions: "Fixture.",
       buildAnswerPrompt: (context, question) => `${context}\n${question}`,
       notFoundMessage: "Niet gevonden.",
+      outOfScopeMessage: null,
       unverifiableMessage: "Niet verifieerbaar.",
       questionSchema: agentQuestionSchema.extend({
         minScore: z.number().min(0).max(1).default(0.4),

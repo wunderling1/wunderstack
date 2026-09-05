@@ -31,4 +31,11 @@ describe("migrate-fund-schemas.ts", () => {
     assert.match(source, /FUND_MIGRATION_OUTCOME_CHECK/);
     assert.match(source, /outcomeCheckConstraintSql/);
   });
+
+  it("applies fund migration 0006_outcome_reason_check for the outcome/reason pair", () => {
+    assert.match(source, /FUND_MIGRATION_OUTCOME_REASON_CHECK/);
+    assert.match(source, /outcomeReasonCheckConstraintSql/);
+    assert.match(source, /outcomeReasonCheckViolationsSql/);
+    assert.match(source, /would fail 0006/);
+  });
 });

@@ -59,6 +59,11 @@ function arboEmptyHitStream(question: string): AgentStreamEvent[] {
     { type: "done", usage: ZERO_USAGE, traceId: null },
   ];
 }
+
+function eventsForCharacterization(events: AgentStreamEvent[]): AgentStreamEvent[] {
+  return events.map((event) => (event.type === "done" ? { ...event, traceId: null } : event));
+}
+
 describe("arbo characterization — empty retrieval stream", () => {
   it("emits the same events as the pre-refactor arbo agent (no clarify, catalog refusal)", async () => {
     const question = "Wat is de maximale tilnorm?";
@@ -74,7 +79,7 @@ describe("arbo characterization — empty retrieval stream", () => {
     })) {
       events.push(event);
     }
-    assert.deepEqual(events, arboEmptyHitStream(question));
+    assert.deepEqual(eventsForCharacterization(events), arboEmptyHitStream(question));
   });
 
   it("does not run clarify for a salary-shaped question (clarify: null)", async () => {
@@ -100,7 +105,65 @@ describe("arbo characterization — empty retrieval stream", () => {
       events.some((event) => event.type === "citations" && event.needsClarification === true),
       false,
     );
-    assert.deepEqual(events, arboEmptyHitStream(question));
+    assert.deepEqual(eventsForCharacterization(events), arboEmptyHitStream(question));
+  });
+});
+
+describe("arbo characterization — empty retrieval with droppedChunks (§7.1)", () => {
+  it("keeps the catalog refusal text and fills pre-threshold signals", async () => {
+    const question = "Wat is de maximale tilnorm?";
+    const profile: AgentRuntimeProfile = {
+      ...arboProfile,
+      runRetrieval: async () => ({
+        ...EMPTY_RETRIEVAL,
+        consideredCount: 1,
+        droppedChunks: [
+          {
+            chunkId: "below-1",
+            ordinal: 0,
+            content: "te zwak",
+            score: 0.22,
+            source: {
+              documentId: "doc",
+              title: "Catalogus",
+              sourceUri: "",
+              fund: "oomt",
+              agentKey: "arbo",
+              schemaName: "fund_oomt",
+              version: "1",
+            },
+            structure: {
+              chapter: null,
+              article: null,
+              lid: null,
+              sourceRef: null,
+              chunkType: "text",
+            },
+            metadata: {},
+          },
+        ],
+      }),
+    };
+    const agent = createGroundedAgent(profile);
+    const events: AgentStreamEvent[] = [];
+    for await (const event of agent.answerStream({
+      question,
+      fund: "oomt",
+    })) {
+      events.push(event);
+    }
+    const citations = events.find((event) => event.type === "citations");
+    assert.equal(citations?.type, "citations");
+    if (citations?.type !== "citations") return;
+    assert.equal(citations.answer, NOT_IN_CATALOG_MESSAGE);
+    assert.deepEqual(citations.turnOutcome, { outcome: "refused", outcomeReason: "no_coverage" });
+    assert.equal(citations.retrievedCount, 1);
+    assert.equal(citations.topScore, 0.22);
+    const text = events.find((event) => event.type === "text");
+    assert.equal(text?.type, "text");
+    if (text?.type === "text") {
+      assert.equal(text.delta, NOT_IN_CATALOG_MESSAGE);
+    }
   });
 });
 

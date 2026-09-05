@@ -9,11 +9,10 @@ export const NOT_IN_CATALOG_MESSAGE =
   "Ik kan dit niet terugvinden in de arbocatalogus waar ik toegang toe heb. " +
   "Neem voor zekerheid contact op met je fonds.";
 
-/** Refusal (b): outside this catalog (Arbowet, CAO, individual advice). */
+/** Refusal (b): outside this catalog. Scope of *this* corpus only — no claim about another (B6). */
 export const OUT_OF_SCOPE_MESSAGE =
-  "Deze vraag valt buiten de arbocatalogus waar ik toegang toe heb. Voor regels uit de Arbowet " +
-  "of je CAO kun je de CAO-agent of je fonds raadplegen. Voor individueel veiligheidsadvies: " +
-  "neem contact op met de bedrijfsarts of je fonds.";
+  "Deze vraag valt buiten deze catalogus. De catalogus gaat over maatregelen voor veilig werken, " +
+  "niet over arbeidsvoorwaarden, de Arbowet of individueel advies.";
 
 export const UNVERIFIABLE_MESSAGE =
   "Ik heb hier wel informatie over gevonden, maar kan mijn antwoord nu niet met een letterlijke " +

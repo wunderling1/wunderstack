@@ -47,6 +47,20 @@ export function retrievalSignalsFromHits(hits: { score: number }[]): {
   return { retrievedCount: hits.length, topScore };
 }
 
+/**
+ * Event-log retrieval signals. Hits that cleared minScore win; otherwise the pre-threshold
+ * window (`droppedChunks`) — §7.1. Clarify never retrieves and keeps {@link ZERO_RETRIEVAL}.
+ */
+export function retrievalSignalsFromRetrieval(retrieval: RetrievalOutput): {
+  retrievedCount: number;
+  topScore: number | null;
+} {
+  if (retrieval.hits.length > 0) {
+    return retrievalSignalsFromHits(retrieval.hits);
+  }
+  return retrievalSignalsFromHits(retrieval.droppedChunks);
+}
+
 const ZERO_RETRIEVAL = { retrievedCount: 0, topScore: null } as const;
 
 /**
@@ -225,6 +239,24 @@ export function verifyAndBuild(
       verificationFailed: true,
       hardFactGuardTriggered: false,
       unverifiable: true,
+    };
+  }
+
+  // Match the profile's out-of-scope sentence on the model output *before* serve-replace
+  // (DECISION-weigeringstypen §1.3 / Fase 1). Otherwise claimless prose — including this
+  // exact sentence — is overwritten with `notFoundMessage` and classified `no_coverage`.
+  if (
+    profile.outOfScopeMessage !== null &&
+    parsed.answerMarkdown.trim() === profile.outOfScopeMessage
+  ) {
+    return {
+      answer: profile.outOfScopeMessage,
+      citations: [],
+      found: false,
+      turnOutcome: refused("out_of_scope"),
+      verificationFailed,
+      hardFactGuardTriggered: false,
+      unverifiable: false,
     };
   }
 
@@ -523,7 +555,7 @@ export function createGroundedAgent(profile: AgentRuntimeProfile): GroundedAgent
             found: false,
             needsClarification: false,
             turnOutcome: refused("no_coverage"),
-            ...ZERO_RETRIEVAL,
+            ...retrievalSignalsFromRetrieval(retrieval),
             citations: [],
             traceId,
             usage: ZERO_USAGE,
@@ -665,14 +697,15 @@ export function createGroundedAgent(profile: AgentRuntimeProfile): GroundedAgent
         yield buildRetrievalStreamEvent(retrieval, query.retrievalQuery, options.corpusVersion);
 
         if (retrieval.hits.length === 0) {
+          const emptySignals = retrievalSignalsFromRetrieval(retrieval);
           yield { type: "text", delta: profile.notFoundMessage };
           yield {
             type: "citations",
             found: false,
             needsClarification: false,
             turnOutcome: refused("no_coverage"),
-            retrievedCount: 0,
-            topScore: null,
+            retrievedCount: emptySignals.retrievedCount,
+            topScore: emptySignals.topScore,
             citations: [],
             citationVerificationFailed: false,
             answer: profile.notFoundMessage,

@@ -5,6 +5,9 @@ import { canDropPublicCorpus } from "./drop-public-corpus";
 import {
   createRoleplayTurnFunctionSql,
   dropPublicCorpusSql,
+  INTERACTION_EVENTS_OUTCOME_REASON_CHECK,
+  INTERACTION_EVENTS_OUTCOME_REASON_PREDICATE,
+  outcomeReasonCheckViolationsSql,
   provisionDdl,
   revokePublicFundSchemaSql,
   roleplayDdl,
@@ -28,6 +31,26 @@ describe("provisionDdl (track B)", () => {
     assert.doesNotMatch(sql, /TO PUBLIC/i);
     assert.match(sql, /vector\(4096\)/);
     assert.match(sql, /CREATE TABLE IF NOT EXISTS "fund_oomt"\.documents/);
+    assert.match(sql, /interaction_events_outcome_reason_check/);
+  });
+});
+
+describe("INTERACTION_EVENTS_OUTCOME_REASON_CHECK", () => {
+  it("locks the Fase-1 pair and does not grow with unpublished types", () => {
+    assert.match(INTERACTION_EVENTS_OUTCOME_REASON_CHECK, /out_of_scope/);
+    assert.match(INTERACTION_EVENTS_OUTCOME_REASON_CHECK, /no_coverage/);
+    assert.match(INTERACTION_EVENTS_OUTCOME_REASON_CHECK, /guard_hard_fact/);
+    assert.match(INTERACTION_EVENTS_OUTCOME_REASON_CHECK, /guard_citation_coupling/);
+    assert.match(INTERACTION_EVENTS_OUTCOME_REASON_CHECK, /unknown' AND outcome_reason IS NULL/);
+    assert.doesNotMatch(INTERACTION_EVENTS_OUTCOME_REASON_CHECK, /out_of_domain/);
+    assert.doesNotMatch(INTERACTION_EVENTS_OUTCOME_REASON_CHECK, /partial_evidence/);
+    assert.doesNotMatch(INTERACTION_EVENTS_OUTCOME_REASON_CHECK, /needs_specification/);
+  });
+
+  it("preflight SELECT uses the same predicate as the CHECK", () => {
+    const sql = outcomeReasonCheckViolationsSql("fund_oomt");
+    assert.match(sql, /FROM "fund_oomt"\.interaction_events/);
+    assert.ok(sql.includes(`WHERE NOT ${INTERACTION_EVENTS_OUTCOME_REASON_PREDICATE}`));
   });
 });
 

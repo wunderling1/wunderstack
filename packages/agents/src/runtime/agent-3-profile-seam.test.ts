@@ -38,6 +38,7 @@ describe("agent-3-is-a-profile-row (not a third agent.ts)", () => {
       systemInstructions: "Antwoord alleen uit de fixture-context.",
       buildAnswerPrompt: (context, question) => `${context}\n\nVraag: ${question}`,
       notFoundMessage: "Niet in de fixture-catalogus.",
+      outOfScopeMessage: null,
       unverifiableMessage: "Antwoord niet verifieerbaar.",
       questionSchema: agentQuestionSchema.extend({
         minScore: z.number().min(0).max(1).default(0.4),

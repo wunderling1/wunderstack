@@ -1334,7 +1334,7 @@ async function fundLayerChecks(set: GoldenFundSet): Promise<Check[]> {
 
   const profile = GROUNDED_AGENT_PROFILES[set.agentKey as "cao" | "arbo"];
   const served = await serveFundAnswerCases(set);
-  return [...baseChecks, ...fundAnswerLayerChecks(set.key, set.agentKey, profile.notFoundMessage, served)];
+  return [...baseChecks, ...fundAnswerLayerChecks(set.key, set.agentKey, profile.notFoundMessage, served, profile.outOfScopeMessage)];
 }
 
 /** Condense an elliptical fund follow-up before retrieval, mirroring the production multi-turn path. */

@@ -27,6 +27,13 @@ describe("answerRefuses — grounded scope-refusal vs adjacent grant (etd-025 / 
     );
   });
 
+  it("treats the exact arbo out-of-scope sentence as a refusal when that template is passed", () => {
+    const scope =
+      "Deze vraag valt buiten deze catalogus. De catalogus gaat over maatregelen voor veilig werken, niet over arbeidsvoorwaarden, de Arbowet of individueel advies.";
+    assert.equal(answerRefuses(scope, NOT_FOUND_MESSAGE), false);
+    assert.equal(answerRefuses(scope, NOT_FOUND_MESSAGE, scope), true);
+  });
+
   it("recognises a grounded scope-refusal with a verified citation (etd-025)", () => {
     // PR #29 artefact (run 32737827106): finishReason=stop, 338 chars, hardHallucination=1.
     // The CAO's own referenceAnswer for this case is the same shape. Treating only the template

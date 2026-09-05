@@ -5,6 +5,7 @@ import { agentQuestionSchema } from "../types";
 import {
   ARBO_SYSTEM_INSTRUCTIONS,
   NOT_IN_CATALOG_MESSAGE,
+  OUT_OF_SCOPE_MESSAGE,
   UNVERIFIABLE_MESSAGE,
   buildAnswerPrompt,
 } from "./prompt";
@@ -29,6 +30,7 @@ export const arboProfile: AgentRuntimeProfile = {
   systemInstructions: ARBO_SYSTEM_INSTRUCTIONS,
   buildAnswerPrompt,
   notFoundMessage: NOT_IN_CATALOG_MESSAGE,
+  outOfScopeMessage: OUT_OF_SCOPE_MESSAGE,
   unverifiableMessage: UNVERIFIABLE_MESSAGE,
   questionSchema: arboQuestionSchema,
   runRetrieval,

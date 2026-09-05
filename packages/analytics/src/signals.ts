@@ -4,10 +4,12 @@ import {
   eq,
   gte,
   gt,
+  inArray,
   interactionEvents,
   isNotNull,
   lt,
   not,
+  or,
   roleplaySessions,
   sql,
   withFundSchema,
@@ -27,7 +29,7 @@ export interface SignalsQuery {
   since: Date;
   until?: Date;
   agentKey?: string;
-  /** Admin-only: load refused + retrieval strength `strong`. */
+  /** Admin-only: load guard refusals and strong `no_coverage` (A3'). */
   includeSuspicious?: boolean;
   /** 1-based page for the knowledge-gap list. Defaults to 1. */
   page?: number;
@@ -90,7 +92,12 @@ export interface SignalsResult {
   exerciseAdoption: ExerciseAdoptionRow[];
 }
 
-type RefusalStrengthFilter = "gap" | "strong";
+type RefusalStrengthFilter = "gap" | "admin";
+
+/** Typed coverage reasons — always on the fund list, even with strong retrieval (A3'). */
+const TYPED_COVERAGE_REASONS = ["out_of_domain", "out_of_scope", "partial_evidence"] as const;
+
+const GUARD_REASONS = ["guard_hard_fact", "guard_citation_coupling"] as const;
 
 /** Strong retrieval: hits exist and the top score clears the platform floor. */
 function isStrongRetrieval() {
@@ -98,6 +105,18 @@ function isStrongRetrieval() {
     gt(interactionEvents.retrievedCount, 0),
     gte(interactionEvents.topScore, RETRIEVAL_STRONG_MIN_SCORE),
   )!;
+}
+
+function isTypedCoverageReason() {
+  return inArray(interactionEvents.outcomeReason, [...TYPED_COVERAGE_REASONS]);
+}
+
+function isGuardReason() {
+  return inArray(interactionEvents.outcomeReason, [...GUARD_REASONS]);
+}
+
+function isNoCoverageReason() {
+  return eq(interactionEvents.outcomeReason, "no_coverage");
 }
 
 function toNumber(value: unknown): number {
@@ -166,11 +185,13 @@ function sessionWindowParts(query: SignalsQuery) {
 }
 
 function strengthParts(strength: RefusalStrengthFilter) {
-  // Gap = not strong — one predicate, negated, so the two filters cannot drift apart.
+  // A3': fund list = typed coverage (any strength) OR weak/zero `no_coverage`.
+  // Admin list = guards (any strength) OR strong `no_coverage`. The two filters are not
+  // negations of each other — typed coverage with strong retrieval is on the fund list.
   if (strength === "gap") {
-    return not(isStrongRetrieval());
+    return or(isTypedCoverageReason(), and(isNoCoverageReason(), not(isStrongRetrieval())))!;
   }
-  return isStrongRetrieval();
+  return or(isGuardReason(), and(isNoCoverageReason(), isStrongRetrieval()))!;
 }
 
 /** Frequency first, then recency. The primary sort the knowledge-gap page promises. */
@@ -423,7 +444,7 @@ export async function listSignals(query: SignalsQuery): Promise<SignalsResult> {
     });
     const totals = await loadWindowQuestionTotals(db, query);
     const suspiciousRefusals = query.includeSuspicious
-      ? await loadQuestionSignals(db, query, "strong")
+      ? await loadQuestionSignals(db, query, "admin")
       : [];
     const exerciseAdoption = includeExerciseAdoption(query)
       ? await loadExerciseAdoption(db, query)

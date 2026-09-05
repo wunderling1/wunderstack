@@ -122,7 +122,39 @@ describe("createFundEnvironment (integration)", { skip: !provisionerSet || !hasD
       } catch (error) {
         if (error instanceof assert.AssertionError) throw error;
         assert.ok(
-          isOutcomeCheckViolation(error),
+          isCheckConstraintViolation(error, "interaction_events_outcome_check"),
+          `expected CHECK violation, got: ${inspect(error, { depth: 8 })}`,
+        );
+      }
+    } finally {
+      await getDb().execute(sql.raw(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`));
+      await getDb().delete(funds).where(eq(funds.key, checkKey));
+    }
+  });
+
+  it("rejects unknown outcome_reason at the DB CHECK after provision", async () => {
+    const checkKey = `proef-reason-${Date.now().toString(36)}`;
+    const schema = `fund_${checkKey}`;
+    await createFundEnvironment({
+      fundKey: checkKey,
+      name: "reason CHECK test",
+      agentKeys: ["cao"],
+    });
+
+    try {
+      try {
+        await getDb().execute(
+          sql.raw(`
+            INSERT INTO "${schema}".interaction_events (
+              tenant_id, agent_id, fund, session_id, outcome, outcome_reason
+            ) VALUES ('t', 'cao', '${checkKey}', 's', 'refused', 'bogus_reason')
+          `),
+        );
+        assert.fail("INSERT of outcome_reason=bogus_reason should have been rejected");
+      } catch (error) {
+        if (error instanceof assert.AssertionError) throw error;
+        assert.ok(
+          isCheckConstraintViolation(error, "interaction_events_outcome_reason_check"),
           `expected CHECK violation, got: ${inspect(error, { depth: 8 })}`,
         );
       }
@@ -138,22 +170,19 @@ describe("createFundEnvironment (integration)", { skip: !provisionerSet || !hasD
  * (postgres.js: `code`, `constraint`; node-pg: `constraint_name`). Inspect the chain, not
  * the outer message.
  */
-function isOutcomeCheckViolation(error: unknown): boolean {
+function isCheckConstraintViolation(error: unknown, constraint: string): boolean {
   const seen = new Set<unknown>();
   let current: unknown = error;
   while (current !== null && current !== undefined && !seen.has(current)) {
     seen.add(current);
     if (typeof current === "object") {
       const record = current as Record<string, unknown>;
-      if (record.constraint === "interaction_events_outcome_check") return true;
-      if (record.constraint_name === "interaction_events_outcome_check") return true;
+      if (record.constraint === constraint) return true;
+      if (record.constraint_name === constraint) return true;
       if (record.code === "23514") return true;
     }
     const message = current instanceof Error ? current.message : String(current);
-    if (
-      message.includes("interaction_events_outcome_check") ||
-      message.includes("check constraint")
-    ) {
+    if (message.includes(constraint) || message.includes("check constraint")) {
       return true;
     }
     current =
@@ -163,9 +192,13 @@ function isOutcomeCheckViolation(error: unknown): boolean {
           ? current.cause
           : undefined;
   }
-  return /interaction_events_outcome_check|check constraint|\b23514\b/.test(
+  return new RegExp(`${constraint}|check constraint|\\b23514\\b`).test(
     inspect(error, { depth: 8, breakLength: Infinity }),
   );
+}
+
+function isOutcomeCheckViolation(error: unknown): boolean {
+  return isCheckConstraintViolation(error, "interaction_events_outcome_check");
 }
 
 describe("isOutcomeCheckViolation", () => {
