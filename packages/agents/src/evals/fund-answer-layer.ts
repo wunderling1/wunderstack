@@ -46,6 +46,7 @@ export function fundAnswerLayerChecks(
   agentKey: string,
   notFoundMessage: string,
   served: FundAnswerCaseServed[],
+  outOfScopeMessage?: string | null,
 ): ReportCheck[] {
   if (served.length === 0) {
     return [];
@@ -74,7 +75,7 @@ export function fundAnswerLayerChecks(
     if (scoreHardHallucination(prose, item.passages, item.userSupplied, hardFactKey).score === 0) {
       hardFactCaseCount += 1;
     }
-    if (item.testCase.category === "refusal" && !answerRefuses(prose, notFoundMessage)) {
+    if (item.testCase.category === "refusal" && !answerRefuses(prose, notFoundMessage, outOfScopeMessage)) {
       underRefusalCount += 1;
     }
   }

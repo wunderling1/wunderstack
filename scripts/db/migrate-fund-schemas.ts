@@ -21,6 +21,7 @@ import {
   FUND_MIGRATION_TURN_OUTCOME,
   FUND_MIGRATION_OUTCOME_CHECK,
   FUND_MIGRATION_WINDOW_INDEXES,
+  FUND_MIGRATION_OUTCOME_REASON_CHECK,
   getDb,
   listActiveFunds,
   listAppliedFundMigrations,
@@ -28,12 +29,33 @@ import {
   sql,
   turnOutcomeAlterSql,
   outcomeCheckConstraintSql,
+  outcomeReasonCheckConstraintSql,
+  outcomeReasonCheckViolationsSql,
   windowIndexesSql,
 } from "@wunderstack/db";
 
 interface MigrateResult {
   copied?: { documents: number; chunks: number; events: number };
   applied: string[];
+}
+
+interface PairCountRow {
+  outcome: string;
+  outcomeReason: string | null;
+  n: number;
+}
+
+function pairCountRows(result: unknown): PairCountRow[] {
+  const rows = Array.isArray(result) ? result : [];
+  return rows.map((row) => {
+    const record = row as Record<string, unknown>;
+    const reason = record.outcome_reason ?? record.outcomeReason;
+    return {
+      outcome: String(record.outcome ?? ""),
+      outcomeReason: reason === null || reason === undefined ? null : String(reason),
+      n: Number(record.n ?? 0),
+    };
+  });
 }
 
 async function migrateOne(fundKey: string): Promise<MigrateResult> {
@@ -83,6 +105,26 @@ async function migrateOne(fundKey: string): Promise<MigrateResult> {
     }
     await recordFundMigration(fund.schemaName, FUND_MIGRATION_WINDOW_INDEXES);
     result.applied.push(FUND_MIGRATION_WINDOW_INDEXES);
+  }
+
+  if (!already.includes(FUND_MIGRATION_OUTCOME_REASON_CHECK)) {
+    const db = getDb();
+    const violating = pairCountRows(
+      await db.execute(sql.raw(outcomeReasonCheckViolationsSql(fund.schemaName))),
+    );
+    if (violating.length > 0) {
+      const summary = violating
+        .map((row) => `${row.outcome}/${row.outcomeReason ?? "NULL"}×${String(row.n)}`)
+        .join(", ");
+      throw new Error(
+        `Fund ${fund.key} (${fund.schemaName}) has outcome/reason pairs that would fail 0006: ${summary}. Repair those rows before migrate-fund-schemas.`,
+      );
+    }
+    for (const statement of outcomeReasonCheckConstraintSql(fund.schemaName)) {
+      await db.execute(sql.raw(statement));
+    }
+    await recordFundMigration(fund.schemaName, FUND_MIGRATION_OUTCOME_REASON_CHECK);
+    result.applied.push(FUND_MIGRATION_OUTCOME_REASON_CHECK);
   }
 
   return result;

@@ -307,6 +307,81 @@ describe("fund environment ↔ analytics seam", { skip: !ready }, () => {
     assert.ok(withSuspicious.suspiciousRefusals.some((row) => row.question === strongQ));
   });
 
+  it("A3': strong out_of_scope lands on the fund list; strong no_coverage stays admin", async () => {
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const scopeQ = `buiten catalogus ${fundKey}`;
+    const strongCoverageQ = `sterke rest ${fundKey}`;
+    const weakGuardQ = `zwakke guard ${fundKey}`;
+
+    assert.equal(
+      (
+        await recordInteractionEvent({
+          tenantId: fundKey,
+          agentKey: "cao",
+          fund: fundKey,
+          sessionId: `sess-scope-${fundKey}`,
+          turnOutcome: refused("out_of_scope"),
+          citationCount: 0,
+          retrievedCount: 4,
+          topScore: 0.81,
+          question: scopeQ,
+        })
+      ).recorded,
+      true,
+    );
+    assert.equal(
+      (
+        await recordInteractionEvent({
+          tenantId: fundKey,
+          agentKey: "cao",
+          fund: fundKey,
+          sessionId: `sess-strong-nc-${fundKey}`,
+          turnOutcome: refused("no_coverage"),
+          citationCount: 0,
+          retrievedCount: 5,
+          topScore: 0.72,
+          question: strongCoverageQ,
+        })
+      ).recorded,
+      true,
+    );
+    assert.equal(
+      (
+        await recordInteractionEvent({
+          tenantId: fundKey,
+          agentKey: "cao",
+          fund: fundKey,
+          sessionId: `sess-weak-guard-${fundKey}`,
+          turnOutcome: refused("guard_citation_coupling"),
+          citationCount: 0,
+          retrievedCount: 2,
+          topScore: 0.41,
+          question: weakGuardQ,
+        })
+      ).recorded,
+      true,
+    );
+
+    const signals = await listSignals({ fundKey, since });
+    assert.ok(
+      signals.knowledgeGaps.some((row) => row.question === scopeQ),
+      "strong out_of_scope is a knowledge gap (A3')",
+    );
+    assert.ok(
+      signals.knowledgeGaps.every((row) => row.question !== strongCoverageQ),
+      "strong no_coverage stays off the fund list",
+    );
+    assert.ok(
+      signals.knowledgeGaps.every((row) => row.question !== weakGuardQ),
+      "guards stay off the fund list at any strength",
+    );
+
+    const withSuspicious = await listSignals({ fundKey, since, includeSuspicious: true });
+    assert.ok(withSuspicious.suspiciousRefusals.some((row) => row.question === strongCoverageQ));
+    assert.ok(withSuspicious.suspiciousRefusals.some((row) => row.question === weakGuardQ));
+    assert.ok(withSuspicious.suspiciousRefusals.every((row) => row.question !== scopeQ));
+  });
+
   it("R3: distinct actors count sessions on threaded channels and events on mcp/api", async () => {
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const sameSessionQ = `zelfde sessie ${fundKey}`;

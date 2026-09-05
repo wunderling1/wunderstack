@@ -25,9 +25,9 @@ describe("TurnOutcome helpers", () => {
       outcome: "refused",
       outcomeReason: "guard_hard_fact",
     });
-    assert.deepEqual(refused("guard_citation_coupling"), {
+    assert.deepEqual(refused("out_of_scope"), {
       outcome: "refused",
-      outcomeReason: "guard_citation_coupling",
+      outcomeReason: "out_of_scope",
     });
   });
 

@@ -19,6 +19,13 @@ export interface AgentRuntimeProfile {
   buildAnswerPrompt(context: string, question: string): string;
   /** Served on empty retrieval / hard-fact refuse. */
   notFoundMessage: string;
+  /**
+   * Exact model sentence for "this question is outside this catalog" (arbo (b)).
+   * `null` = no out-of-scope template; claimless fall-through stays `no_coverage`.
+   * Matched on parsed model output before serve-replace. Difference lives here, not in
+   * `if (agentKey === "arbo")`.
+   */
+  outOfScopeMessage: string | null;
   /** Served when a substantive answer has no verified citations. */
   unverifiableMessage: string;
   /** Carries the per-agent minScore default (0.48 CAO / 0.35 arbo). */

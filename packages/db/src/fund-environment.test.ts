@@ -76,6 +76,14 @@ describe("buildFundEnvironmentStatements", () => {
     assert.match(statements.join("\n"), /interaction_events_outcome_check/);
   });
 
+  it("includes interaction_events_outcome_reason_check in provision DDL", () => {
+    const statements = buildFundEnvironmentStatements({
+      schemaName: "fund_proefonds",
+      fundKey: "proefonds",
+    });
+    assert.match(statements.join("\n"), /interaction_events_outcome_reason_check/);
+  });
+
   it("omits owner and reader grants when roles are unset (createFundEnvironment logs instead)", () => {
     const statements = buildFundEnvironmentStatements({
       schemaName: "fund_proefonds",

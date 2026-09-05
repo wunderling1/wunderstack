@@ -358,9 +358,18 @@ function hasScopeNegation(text: string): boolean {
  * reimbursement from the same distractor) is NOT a refusal. Hard-hallucination stays absolute:
  * a fabricated fact in the pre-sentinel prose still fails that gate even when this returns true.
  */
-export function answerRefuses(answer: string, notFoundMessage: string): boolean {
+export function answerRefuses(
+  answer: string,
+  notFoundMessage: string,
+  outOfScopeMessage?: string | null,
+): boolean {
   if (answer.includes(notFoundMessage) || /niet terugvinden/i.test(answer)) {
     return true;
+  }
+  if (outOfScopeMessage !== undefined && outOfScopeMessage !== null && outOfScopeMessage.length > 0) {
+    if (answer.includes(outOfScopeMessage)) {
+      return true;
+    }
   }
   if (!hasScopeNegation(answer)) {
     return false;

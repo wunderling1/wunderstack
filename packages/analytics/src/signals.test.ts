@@ -120,9 +120,19 @@ test("listSignals pages groups in SQL (D10) — not by slicing a full ranking in
   assert.doesNotMatch(SOURCE, /knowledgeGapsGroupTotal: ranked\.length/);
 });
 
-test("gap filter is the negation of strong retrieval — one shared predicate", () => {
-  assert.match(SOURCE, /function isStrongRetrieval/);
-  assert.match(SOURCE, /not\(isStrongRetrieval\(\)\)/);
+test("knowledge-gap WHERE follows A3' — typed coverage vs rest vs guards", () => {
+  assert.match(SOURCE, /out_of_domain/);
+  assert.match(SOURCE, /out_of_scope/);
+  assert.match(SOURCE, /partial_evidence/);
+  assert.match(SOURCE, /no_coverage/);
+  assert.match(SOURCE, /guard_hard_fact/);
+  assert.match(SOURCE, /guard_citation_coupling/);
+  assert.match(SOURCE, /isTypedCoverageReason/);
+  assert.match(SOURCE, /isGuardReason/);
+  assert.match(SOURCE, /isNoCoverageReason/);
   assert.doesNotMatch(SOURCE, /theme\?:/);
   assert.doesNotMatch(SOURCE, /SIGNAL_MIN_OCCURRENCES/);
+  // Gap is no longer the negation of strong retrieval: typed coverage with strong
+  // retrieval stays on the fund list.
+  assert.doesNotMatch(SOURCE, /if \(strength === "gap"\) \{\s*return not\(isStrongRetrieval\(\)\)/);
 });

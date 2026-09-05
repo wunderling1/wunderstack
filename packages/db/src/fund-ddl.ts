@@ -3,7 +3,7 @@
  * owner object. Isolation remains D15, not a Postgres role. No PARTITION, no HNSW.
  */
 
-import { EMBEDDING_CONFIG } from "@wunderstack/shared";
+import { EMBEDDING_CONFIG, answeredReasons, clarifiedReasons, errorReasons, refusedReasons } from "@wunderstack/shared";
 
 import { quoteIdent, quoteLiteral } from "./ident";
 
@@ -36,8 +36,34 @@ export const FUND_MIGRATION_OUTCOME_CHECK = "0004_outcome_check";
  */
 export const FUND_MIGRATION_WINDOW_INDEXES = "0005_window_indexes";
 
+/**
+ * Ledger 0006: CHECK on the (`outcome`, `outcome_reason`) pair. Does not grow 0004
+ * (DECISION-weigeringstypen §1.4 / Fase 1 DoD). Reasons stay in lockstep with Zod
+ * (`refusedReasons` etc. in `@wunderstack/shared`).
+ */
+export const FUND_MIGRATION_OUTCOME_REASON_CHECK = "0006_outcome_reason_check";
+
 export const INTERACTION_EVENTS_OUTCOME_CHECK =
   "CHECK (outcome IN ('answered', 'refused', 'clarified', 'error', 'unknown'))";
+
+function sqlStringList(values: readonly string[]): string {
+  return values.map((value) => `'${value.replaceAll("'", "''")}'`).join(", ");
+}
+
+/**
+ * Boolean body of the pair CHECK (without `CHECK`). Shared by CREATE/ALTER and the
+ * preflight that refuses to add the constraint over rows that would fail it.
+ */
+export const INTERACTION_EVENTS_OUTCOME_REASON_PREDICATE = `(
+  (outcome = 'answered' AND outcome_reason IN (${sqlStringList(answeredReasons)}))
+  OR (outcome = 'refused' AND outcome_reason IN (${sqlStringList(refusedReasons)}))
+  OR (outcome = 'clarified' AND outcome_reason IN (${sqlStringList(clarifiedReasons)}))
+  OR (outcome = 'error' AND outcome_reason IN (${sqlStringList(errorReasons)}))
+  OR (outcome = 'unknown' AND outcome_reason IS NULL)
+)`;
+
+/** Pair CHECK: unknown `outcome_reason` fails at the database, not only in Zod. */
+export const INTERACTION_EVENTS_OUTCOME_REASON_CHECK = `CHECK ${INTERACTION_EVENTS_OUTCOME_REASON_PREDICATE}`;
 
 export function createSchemaSql(schemaName: string): string {
   return `CREATE SCHEMA IF NOT EXISTS ${quoteIdent(schemaName)}`;
@@ -197,7 +223,8 @@ export function createEventsExplicitSql(schemaName: string): string {
   theme text,
   channel text,
   feedback text,
-  CONSTRAINT interaction_events_outcome_check ${INTERACTION_EVENTS_OUTCOME_CHECK}
+  CONSTRAINT interaction_events_outcome_check ${INTERACTION_EVENTS_OUTCOME_CHECK},
+  CONSTRAINT interaction_events_outcome_reason_check ${INTERACTION_EVENTS_OUTCOME_REASON_CHECK}
 )`;
 }
 
@@ -410,6 +437,28 @@ export function outcomeCheckConstraintSql(schemaName: string): string[] {
     `ALTER TABLE ${q}.interaction_events DROP CONSTRAINT IF EXISTS interaction_events_outcome_check`,
     `ALTER TABLE ${q}.interaction_events ADD CONSTRAINT interaction_events_outcome_check ${INTERACTION_EVENTS_OUTCOME_CHECK}`,
   ];
+}
+
+/** Idempotent pair CHECK for (`outcome`, `outcome_reason`) (ledger 0006). */
+export function outcomeReasonCheckConstraintSql(schemaName: string): string[] {
+  const q = quoteIdent(schemaName);
+  return [
+    `ALTER TABLE ${q}.interaction_events DROP CONSTRAINT IF EXISTS interaction_events_outcome_reason_check`,
+    `ALTER TABLE ${q}.interaction_events ADD CONSTRAINT interaction_events_outcome_reason_check ${INTERACTION_EVENTS_OUTCOME_REASON_CHECK}`,
+  ];
+}
+
+/**
+ * Rows whose (`outcome`, `outcome_reason`) pair would fail 0006. Run before ADD CONSTRAINT —
+ * a failing ALTER on a schema with history is harder to read than this census.
+ */
+export function outcomeReasonCheckViolationsSql(schemaName: string): string {
+  const q = quoteIdent(schemaName);
+  return `SELECT outcome, outcome_reason, count(*)::int AS n
+FROM ${q}.interaction_events
+WHERE NOT ${INTERACTION_EVENTS_OUTCOME_REASON_PREDICATE}
+GROUP BY 1, 2
+ORDER BY 1, 2`;
 }
 
 /** Everything the roleplay agent needs in a fund schema. Idempotent. */

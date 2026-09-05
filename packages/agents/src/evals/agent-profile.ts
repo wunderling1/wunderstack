@@ -42,6 +42,10 @@ function arboPromptContractChecks(): EvalCheck[] {
       ok: ARBO_SYSTEM_INSTRUCTIONS.includes(OUT_OF_SCOPE_MESSAGE),
     },
     {
+      name: "arbo-prompt: OUT_OF_SCOPE_MESSAGE does not name another agent (B6)",
+      ok: !OUT_OF_SCOPE_MESSAGE.includes("CAO-agent"),
+    },
+    {
       name: "arbo-prompt: forbids Arbowet and CAO as sources",
       ok:
         ARBO_SYSTEM_INSTRUCTIONS.includes("NIET uit de Arbowet") &&

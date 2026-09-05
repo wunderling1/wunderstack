@@ -24,8 +24,11 @@ export {
   FUND_MIGRATION_TURN_OUTCOME,
   FUND_MIGRATION_OUTCOME_CHECK,
   FUND_MIGRATION_WINDOW_INDEXES,
+  FUND_MIGRATION_OUTCOME_REASON_CHECK,
   turnOutcomeAlterSql,
   outcomeCheckConstraintSql,
+  outcomeReasonCheckConstraintSql,
+  outcomeReasonCheckViolationsSql,
   windowIndexesSql,
   provisionDdl,
   roleplayDdl,
@@ -166,7 +169,7 @@ export {
 
 // Re-export the query operators consumers need, so the ORM stays behind this seam
 // (no package/script imports drizzle-orm directly). Extend as new operators are needed.
-export { eq, and, not, asc, desc, gte, gt, lt, lte, inArray, isNotNull, count, sql } from "drizzle-orm";
+export { eq, and, or, not, asc, desc, gte, gt, lt, lte, inArray, isNotNull, count, sql } from "drizzle-orm";
 // `SQL` is the type of a composed fragment — needed by callers that build one filter and reuse it
 // across several aggregate columns (see `breakdownCountSelect` in @wunderstack/analytics).
 export type { SQL } from "drizzle-orm";

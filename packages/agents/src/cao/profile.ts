@@ -15,6 +15,7 @@ export const caoProfile: AgentRuntimeProfile = {
   systemInstructions: CAO_SYSTEM_INSTRUCTIONS,
   buildAnswerPrompt,
   notFoundMessage: NOT_FOUND_MESSAGE,
+  outOfScopeMessage: null,
   unverifiableMessage: UNVERIFIABLE_MESSAGE,
   questionSchema: agentQuestionSchema,
   runRetrieval,

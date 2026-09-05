@@ -147,9 +147,9 @@ Bekende UI-gaten (uit `UI-AUDIT-v1.md`, nog open): `citationVerificationFailed` 
 
 | Agent | Purpose | Model/config | Tools | Eval-coverage (golden-set refs) | Status |
 |---|---|---|---|---|---|
-| **CAO-agent** (`cao`) | RAG-vraag→antwoord over CAO-tekst, met geverifieerde citaties en refusal onder drempel | Mistral via soevereine naad; generator `mistral-small-2603`, judge `mistral-large-2512`; temp 0 / maxTokens 1024 (`generation.ts`); embeddings qwen3-embedding-8b @4096 | Retrieval-tool (`cao/tools.ts`, Zod-contract) via `@wunderstack/rag`; hard-fact-guard, citation-verificatie | `golden-set.base.jsonl` (31 cases) + `golden-set.etd.jsonl` (26 cases); Gates A/B/B2/C/D/F | 🔵 Werkend maar eval **rood** (Gate B2/C/F falen, `eval-report.json`). `feit` |
+| **CAO-agent** (`cao`) | RAG-vraag→antwoord over CAO-tekst, met geverifieerde citaties en refusal onder drempel | Mistral via soevereine naad; generator `mistral-small-2603`, judge `mistral-large-2512`; temp 0 / maxTokens 1024 (`generation.ts`); embeddings qwen3-embedding-8b @4096 | Retrieval-tool (`cao/tools.ts`, Zod-contract) via `@wunderstack/rag`; hard-fact-guard, citation-verificatie | `golden-set.base.jsonl` (**38** cases, waarvan **10** refusal, corpus v5) + `golden-set.etd.jsonl` (26 cases) | 🔵 G2-answer groen op v5 (nightly 29 aug 2026). `feit` |
 
-Geen andere agents gevonden in `packages/agents/src` (alleen `cao/`). Geplande "tweede agent" / Supervisor: `❓ gepland, niet gevonden` (bewust buiten scope). `feit`.
+Geen Supervisor-pattern. Tweede grounded agent: **arbocatalogus** (`arbo/`). `feit`.
 
 ## 6. Golden sets (per bestand)
 
@@ -157,7 +157,7 @@ De golden sets zijn **handmatig gecureerd** (E10-beleid, review-log `fixtures/go
 
 | Bestand | # cases | Categorieën | Snapshot-versie |
 |---|---|---|---|
-| `packages/agents/src/evals/fixtures/golden-set.base.jsonl` | **31** | 22 in_scope · 3 refusal · 3 table · 3 derived | `GOLDEN_CORPUS_VERSION = "4"` |
+| `packages/agents/src/evals/fixtures/golden-set.base.jsonl` | **38** | 22 in_scope · **10 refusal** · 3 table · 3 derived | `GOLDEN_CORPUS_VERSION = "5"` |
 | `packages/agents/src/evals/fixtures/golden-set.etd.jsonl` (fund) | **26** | 22 in_scope · 3 refusal · 1 table | `FUND_SET_META.etd.corpusVersion = "etd-1"` |
 | `packages/agents/src/evals/fixtures/golden-passages.jsonl` | **31** passages | text/table | v4 |
 
